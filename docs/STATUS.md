@@ -39,7 +39,7 @@ O jogo roda no navegador (Chrome/Edge/Firefox recentes no desktop; Chrome/Safari
 
 - **Personagens**: gerados por `tools/blender/make_character.py` (Blender headless via `pip install bpy`) a partir de **dados CC0 do MakeHuman** vendorizados em `tools/blender/data/makehuman` — malha base hm08, targets (raça/sexo/idade/peso + detalhes faciais), rig Mixamo com pesos, máscaras de pele e olhos. Anatomia e rosto são reais; pele é procedural bakeada (2048 px Matias / 1024 px NPCs); cabelo é uma calota esculpida (sem fios); roupas são cascas conformadas ao corpo (sem rugas/tecido); acessórios (óculos, mochila, cinto, boné, lenço, jaleco, avental) são primitivas ou camadas do corpo. Sem marcas; sem a fotografia do criador (o rosto de Matias não tem semelhança com ele). Pré-visualizações em `docs/screenshots/characters/`. **Animações não são provisórias**: biblioteca CC0 da Quaternius (ver acima); vídeo de avaliação em `docs/videos/locomocao.mp4`.
 - **MPFB/asset packs**: o plugin MPFB foi clonado mas **não é executado** (o gerador é código próprio que lê só os dados CC0). Os pacotes de assets do MakeHuman (peles fotográficas, cabelos, roupas) **não estão instalados** — o site makehumancommunity.org é inacessível deste ambiente. Rodar o MPFB com `makehuman_system_assets` na máquina do criador é o próximo salto de qualidade.
-- **Cenário**: geometria em blocos e texturas procedurais (sem fotos/scans).
+- **Cenário**: a praça da Apuração ("hero corner" M1.1) usa o kit GLB `public/assets/environments/praca_hero.glb` (fachada da Central com vãos reais, sobrados com varandas/grades/varais, posto, banca, gerador, tambores, caixotes, poste, árvores com folhagem alpha-test) e materiais PBR fotográficos CC0 da ambientCG (reboco, pedra portuguesa, concreto, telha, ferrugem). O resto da rua ainda é geometria em blocos com texturas procedurais. Comparações A/B com câmera idêntica em `docs/screenshots/m1/` (`antes_*` vs `depois_*`); passeio pelo canto em `docs/videos/praca_hero.mp4`.
 - **Som**: passos e impactos gravados (Kenney, CC0); ambiente e interface sintetizados.
 - **Voz**: TTS do navegador.
 
@@ -68,6 +68,6 @@ O jogo roda no navegador (Chrome/Edge/Firefox recentes no desktop; Chrome/Safari
 1. Elevar os personagens: pele fotográfica/cabelo/roupas via MPFB + asset packs na máquina do criador (animações já resolvidas com a UAL; rig compatível com mais clipes dela e do Mixamo).
 2. Fechar os beats 4 e 5: mensageiro, multidão na fila com reações, Custódio pedindo calma, depósito com a pista física e a decisão final em tensão.
 3. Gravar/licenciar dublagem e SFX; lip-sync básico.
-4. Texturas PBR reais (Poly Haven/ambientCG), kit modular de fachadas, decals de sujeira; otimização (instâncias, KTX2, Draco).
+4. Estender o kit GLB + PBR da praça ao resto da rua (M1.2: fachadas da rua, oficina, carro queimado), decals de sujeira; Custódio com armadura segmentada (pendente do M1.1); otimização (instâncias, KTX2, Draco).
 5. Gamepad, acessibilidade (tamanho de legenda, daltonismo), WebGPU opcional; validar o toque em aparelhos reais (Android/iOS) e medir desempenho.
 6. Pipeline de CI (GitHub Actions: `npm run check` + teste visual com screenshots).

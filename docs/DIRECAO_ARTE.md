@@ -65,5 +65,12 @@ Eliminar aparência blocada/Minecraft no prólogo `A Apuração`, sem desrespeit
 - Uma captura do jogo em tempo real comprova ganho sobre `docs/screenshots/06-praca.jpg` de antes.
 - Se não houver Blender/assets PBR disponíveis, **declarar bloqueio**, não produzir mais caixas por padrão e declarar realismo atingido.
 
+## Resultado do M1.1 (25/10/2026)
+- Kit GLB `public/assets/environments/praca_hero.glb` gerado por `tools/blender/make_environment.py` (3,3 MB, 48 K tri, 24 assets): fachada da Central (16 m, vãos recuados 30 cm, pilastras, cornija, portão segmentado, placa, calhas, ar-condicionado, painéis solares), 2 variantes de sobrado residencial de 8 m (varandas com grade, varal com roupas, janela vedada com tábuas, AC, caixa d'água, escorridos), posto de distribuição, banca de feira, gerador, botijões, tambores, caixotes de ripas, banco, caixa elétrica, poste de luz com braço curvo, 2 árvores (tronco, raízes, galhos, folhagem alpha-test em 8 aglomerados).
+- 5 materiais PBR fotográficos CC0 (ambientCG): reboco pintado, pedra portuguesa, concreto, telha metálica, ferrugem; normal + roughness + AO; texturas procedurais só para madeira, listras, manchas, casca e folhas.
+- Antes/depois com câmera idêntica: `docs/screenshots/m1/antes_hero.jpg` → `depois_hero.jpg`, `antes_lateral.jpg` → `depois_lateral.jpg`, `antes_praca.jpg` → `depois_praca.jpg`. Vídeo de 11 s andando/correndo pelo canto: `docs/videos/praca_hero.mp4` (`node tools/capture-praca.mjs`).
+- Custo: +4,7 MB de download (GLB 3,3 MB + texturas 2,3 MB − procedurais), +60 K vértices na praça, ~146 materiais/120 texturas na cena (antes 112/75). Controles, física, missões e animações intocados (34 testes + teste visual).
+- Pendente do M1.1: Custódio com armadura segmentada (cerâmica/polímero, humano) — próximo passo, no `make_character.py`.
+
 ## Segurança de propriedade intelectual
 Warframe é somente referência de acabamento visual, iluminação, movimento e densidade. Não extrair modelos/texturas/músicas, nomes, ícones, armaduras ou mapas. Projetar linguagem própria coerente com o universo de EVA.
