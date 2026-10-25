@@ -41,7 +41,8 @@ async function loadVehicle(filename: string): Promise<void> {
   const seq = ++version;
   status.textContent = "Carregando " + filename + "...";
   try {
-    const next = await SceneLoader.LoadAssetContainerAsync("/assets-src/vehicles/", filename, scene);
+    const ext = (import.meta.env.VITE_CHARACTER_EXT as string | undefined) ?? ".glb";
+    const next = await SceneLoader.LoadAssetContainerAsync(`${import.meta.env.BASE_URL}assets/vehicles/`, filename.replace(/\.glb$/, ext), scene, undefined, ".glb");
     if (seq !== version) { next.dispose(); return; }
     loaded?.removeAllFromScene();
     loaded?.dispose();
@@ -66,7 +67,7 @@ async function loadVehicle(filename: string): Promise<void> {
       " triângulos · " + size.x.toFixed(1) + " × " + size.y.toFixed(1) + " × " + size.z.toFixed(1) + " m";
   } catch (error) {
     status.textContent = "Falha ao abrir modelo: " + String(error) +
-      ". Execute npm run dev e abra a prévia na raiz do projeto.";
+      ". Execute npm run dev (ou npm run build) e abra preview-veiculos.html.";
   }
 }
 select.addEventListener("change", () => { void loadVehicle(select.value); });

@@ -48,16 +48,18 @@ try {
         C["initialized"] = false; // corta direto para o enquadramento
       }
       for (let i = 0; i < 6; i++) g.captureFrame(0.5);
-      const dataUrl = g.captureFrame(0.92);
       const scene = g.scene;
+      scene.getEngine()._drawCalls?.fetchNewFrame(); // fora do render loop o contador não é zerado por quadro
+      const dataUrl = g.captureFrame(0.92);
+      const drawCalls = scene.getEngine()._drawCalls?.current ?? null;
       const bytes = performance.getEntriesByType("resource").filter((r) => /assets\//.test(r.name)).reduce((a, r) => a + (r.transferSize || r.encodedBodySize || 0), 0);
       g.captureStop();
-      return { dataUrl, activeMeshes: scene.getActiveMeshes().length, totalMeshes: scene.meshes.length, vertices: scene.getTotalVertices(), activeIndices: scene.getActiveIndices(), materials: scene.materials.length, textures: scene.textures.length, assetBytes: bytes };
+      return { dataUrl, activeMeshes: scene.getActiveMeshes().length, totalMeshes: scene.meshes.length, vertices: scene.getTotalVertices(), activeIndices: scene.getActiveIndices(), materials: scene.materials.length, textures: scene.textures.length, assetBytes: bytes, drawCalls };
     },
     [cam, at, player, follow],
   );
   await writeFile(OUT, Buffer.from(info.dataUrl.split(",")[1], "base64"));
-  console.log(`${OUT}: meshes ativos ${info.activeMeshes}/${info.totalMeshes} · vértices ${info.vertices} · índices ativos ${info.activeIndices} · materiais ${info.materials} · texturas ${info.textures} · assets baixados ${(info.assetBytes / 1048576).toFixed(1)} MB`);
+  console.log(`${OUT}: meshes ativos ${info.activeMeshes}/${info.totalMeshes} · vértices ${info.vertices} · índices ativos ${info.activeIndices} · draw calls ${info.drawCalls ?? "?"} · materiais ${info.materials} · texturas ${info.textures} · assets baixados ${(info.assetBytes / 1048576).toFixed(1)} MB`);
 } finally {
   await browser.close();
   close();

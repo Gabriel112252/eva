@@ -16,7 +16,11 @@
     "test:visual": "node tools/visual-test.mjs",
     "test:touch": "node tools/touch-test.mjs",
     "capture:video": "node tools/capture-video.mjs",
-    "check": "npm run typecheck && npm run test && npm run build"
+    "check": "npm run typecheck && npm run test && npm run build",
+    "assets:environment": "python3.11 tools/blender/make_environment.py",
+    "assets:vehicles": "node tools/validate-eva-vehicles.mjs && python3.11 tools/blender/refine_vehicles.py",
+    "test:vehicles": "node tools/vehicles-test.mjs && node tools/preview-test.mjs",
+    "capture:praca": "node tools/capture-praca.mjs"
   },
   "dependencies": {
     "@babylonjs/core": "^9.32.0",

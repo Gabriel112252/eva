@@ -12,6 +12,7 @@ import { enableHavok } from "@/physics/havok";
 import { Environment } from "@/world/environment";
 import { buildWorld, type World } from "@/world/worldBuilder";
 import { loadHeroAssets } from "@/world/heroAssets";
+import { loadEvaStaticVehicles } from "@/world/vehiclesPack";
 import { STREET } from "@/world/street";
 import { loadCharacter, type CharacterModel } from "@/characters/characterModel";
 import { Npc } from "@/characters/npc";
@@ -125,6 +126,13 @@ export class Game {
       heroCasters = hero.shadowCasters;
     } catch (err) {
       console.error("[heroAssets] falha ao carregar os módulos da praça", err);
+    }
+    progress(0.48, "Estacionando os veículos…");
+    try {
+      const vehicles = await loadEvaStaticVehicles(this.scene, this.world.ctx);
+      heroCasters = [...heroCasters, ...vehicles.shadowCasters];
+    } catch (err) {
+      console.error("[vehiclesPack] falha ao carregar os veículos", err);
     }
     progress(0.5, "Carregando Matias…");
     this.matias = await loadCharacter(this.scene, "matias");

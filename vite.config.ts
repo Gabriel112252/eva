@@ -22,6 +22,10 @@ export default defineConfig({
     sourcemap: false,
     chunkSizeWarningLimit: 6000,
     rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL("./index.html", import.meta.url)),
+        "preview-veiculos": fileURLToPath(new URL("./preview-veiculos.html", import.meta.url)),
+      },
       output: {
         manualChunks: (id) => {
           if (id.includes("@babylonjs/havok")) return "havok";
