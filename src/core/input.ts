@@ -83,7 +83,19 @@ export class InputManager {
   };
 
   private ignoreMouseUntil = 0;
+  /** Botão esquerdo pressionado sobre a cena sem pointer lock: arrastar gira a câmera. */
+  private dragLook = false;
+  /**
+   * Quando falso, o jogo nunca pede pointer lock (`?pointerlock=0`): o mouse gira a câmera
+   * arrastando. Útil em iframes sem permissão de pointer lock e em testes automatizados.
+   */
+  pointerLockAllowed = true;
+  /** Emitido quando o navegador recusa o pointer lock (iframe sem permissão, política do navegador). */
+  readonly onPointerLockError = new TypedEvent<void>();
 
+  private dragLast = { x: 0, y: 0 };
+
+  /** Com pointer lock: movimento relativo do mouse (mousemove, movementX/Y). */
   private readonly mouseMove = (e: MouseEvent) => {
     if (!this.isPointerLocked) return;
     // O Chromium dispara um mousemove com delta enorme logo após travar o cursor
@@ -91,14 +103,33 @@ export class InputManager {
     if (performance.now() < this.ignoreMouseUntil) return;
     // Um único evento com centenas de pixels é o "salto" do pointer lock, não movimento real.
     if (Math.abs(e.movementX) > 300 || Math.abs(e.movementY) > 300) return;
-    const dx = Math.max(-150, Math.min(150, e.movementX));
-    const dy = Math.max(-150, Math.min(150, e.movementY));
-    this.mouseDx += dx;
-    this.mouseDy += dy;
+    this.mouseDx += Math.max(-150, Math.min(150, e.movementX));
+    this.mouseDy += Math.max(-150, Math.min(150, e.movementY));
+  };
+
+  // Sem pointer lock: arrastar com o botão esquerdo gira a câmera. Usa Pointer Events porque o
+  // Babylon cancela o pointerdown na cena, o que suprime mousedown/mousemove/mouseup do navegador.
+  private readonly pointerDown = (e: PointerEvent) => {
+    if (e.pointerType !== "mouse" || e.button !== 0 || this.isPointerLocked) return;
+    this.dragLook = true;
+    this.dragLast = { x: e.clientX, y: e.clientY };
+  };
+
+  private readonly pointerMove = (e: PointerEvent) => {
+    if (!this.dragLook || e.pointerType !== "mouse" || this.isPointerLocked) return;
+    const mx = e.clientX - this.dragLast.x;
+    const my = e.clientY - this.dragLast.y;
+    this.dragLast = { x: e.clientX, y: e.clientY };
+    this.mouseDx += Math.max(-150, Math.min(150, mx));
+    this.mouseDy += Math.max(-150, Math.min(150, my));
+  };
+
+  private readonly pointerUp = (e: PointerEvent) => {
+    if (e.pointerType === "mouse") this.dragLook = false;
   };
 
   private readonly wheel = (e: WheelEvent) => {
-    if (!this.isPointerLocked) return;
+    // a cena ocupa a tela inteira: a roda sobre ela é sempre zoom da câmera, nunca rolagem
     e.preventDefault();
     const d = Math.sign(e.deltaY);
     this.wheelDelta += d;
@@ -108,14 +139,20 @@ export class InputManager {
   private readonly lockChange = () => {
     const locked = this.isPointerLocked;
     if (!locked) this.held.clear();
+    this.dragLook = false;
     this.mouseDx = 0;
     this.mouseDy = 0;
     this.ignoreMouseUntil = performance.now() + 200;
     this.onPointerLockChange.emit(locked);
   };
 
+  private readonly lockError = () => {
+    this.onPointerLockError.emit();
+  };
+
   private readonly blur = () => {
     this.held.clear();
+    this.dragLook = false;
   };
 
   attach(element: HTMLElement): void {
@@ -124,8 +161,13 @@ export class InputManager {
     window.addEventListener("keydown", this.keyDown);
     window.addEventListener("keyup", this.keyUp);
     window.addEventListener("mousemove", this.mouseMove);
+    element.addEventListener("pointerdown", this.pointerDown);
+    window.addEventListener("pointermove", this.pointerMove);
+    window.addEventListener("pointerup", this.pointerUp);
+    window.addEventListener("pointercancel", this.pointerUp);
     element.addEventListener("wheel", this.wheel, { passive: false });
     document.addEventListener("pointerlockchange", this.lockChange);
+    document.addEventListener("pointerlockerror", this.lockError);
     window.addEventListener("blur", this.blur);
   }
 
@@ -134,8 +176,13 @@ export class InputManager {
     window.removeEventListener("keydown", this.keyDown);
     window.removeEventListener("keyup", this.keyUp);
     window.removeEventListener("mousemove", this.mouseMove);
+    this.attachedTo.removeEventListener("pointerdown", this.pointerDown);
+    window.removeEventListener("pointermove", this.pointerMove);
+    window.removeEventListener("pointerup", this.pointerUp);
+    window.removeEventListener("pointercancel", this.pointerUp);
     this.attachedTo.removeEventListener("wheel", this.wheel);
     document.removeEventListener("pointerlockchange", this.lockChange);
+    document.removeEventListener("pointerlockerror", this.lockError);
     window.removeEventListener("blur", this.blur);
     this.attachedTo = null;
   }
@@ -144,16 +191,18 @@ export class InputManager {
     return !!this.attachedTo && document.pointerLockElement === this.attachedTo;
   }
 
+  /** Pede o pointer lock; resolve quando o pedido é aceito/recusado (sem lançar). */
   async requestPointerLock(): Promise<void> {
-    if (!this.attachedTo || this.isPointerLocked) return;
+    if (!this.attachedTo || this.isPointerLocked || !this.pointerLockAllowed) return;
     try {
       const p = this.attachedTo.requestPointerLock({ unadjustedMovement: true } as PointerLockOptions) as unknown;
       if (p instanceof Promise) await p;
     } catch {
       try {
-        this.attachedTo.requestPointerLock();
+        const p = this.attachedTo.requestPointerLock() as unknown;
+        if (p instanceof Promise) await p;
       } catch {
-        /* navegador sem suporte */
+        /* navegador sem suporte ou permissão: o arrastar do mouse assume (mouseDown/mouseMove) */
       }
     }
   }

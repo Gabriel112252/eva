@@ -92,8 +92,11 @@ export class Game {
     // celular/tablet sem configuração salva: começa em qualidade baixa (GPU móvel, bateria)
     if (this.touch.enabled && !hasSavedSettings) this.settings = { ...this.settings, quality: "baixa" };
     // ?quality=baixa|media|alta força a qualidade nesta sessão (útil em máquinas fracas e testes automatizados)
-    const q = new URLSearchParams(window.location.search).get("quality");
+    const params = new URLSearchParams(window.location.search);
+    const q = params.get("quality");
     if (q === "baixa" || q === "media" || q === "alta") this.settings = { ...this.settings, quality: q };
+    // ?pointerlock=0: nunca trava o cursor; o mouse gira a câmera arrastando (iframes sem permissão, testes)
+    if (params.get("pointerlock") === "0") this.input.pointerLockAllowed = false;
     this.menus = new Menus(this.settings);
     this.hud = new Hud(this.input);
     this.audio = new AudioEngine(this.settings);
@@ -190,7 +193,16 @@ export class Game {
       if (this.state === "playing" || this.state === "dialogue") {
         void this.audio.unlock().then(() => this.startAmbience());
         if (!this.touch.enabled) void this.input.requestPointerLock();
+        // clicou na cena: ou o cursor trava, ou arrastar com o mouse já gira a câmera — a dica cumpriu o papel
+        this.hud.setClickHint(false);
       }
+    });
+    let lockErrorShown = false;
+    this.input.onPointerLockError.on(() => {
+      if (lockErrorShown || this.touch.enabled) return;
+      lockErrorShown = true;
+      this.hud.setClickHint(false);
+      this.hud.showNotice("Cursor não travado pelo navegador: arraste com o mouse para olhar em volta", 4);
     });
     // toque curto na cena durante uma fala = avançar (como Espaço); nunca escolhe uma resposta por acidente
     this.touch.onTap.on(() => {
@@ -280,7 +292,7 @@ export class Game {
       await this.input.requestPointerLock();
     }
     window.setTimeout(() => this.hud.setFade(false), 150);
-    this.hud.setClickHint(!this.input.isPointerLocked && !this.touch.enabled);
+    this.hud.setClickHint(!this.input.isPointerLocked && !this.touch.enabled && this.input.pointerLockAllowed);
   }
 
   private pause(): void {

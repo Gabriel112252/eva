@@ -3,8 +3,12 @@
  * captura erros de console, inicia um novo jogo, simula WASD/Shift/C/E,
  * tira screenshots e valida estado do jogo via window.eva.
  *
- * Uso: node tools/visual-test.mjs [--headed] [--out docs/screenshots]
+ * Uso: node tools/visual-test.mjs [--headed] [--out docs/screenshots] [--quality baixa] [--lock]
  * Requer: npm run build (dist/) e Playwright + Chromium instalados.
+ *
+ * Por padrão abre o jogo com `?pointerlock=0` (câmera por arrastar do mouse): no Chromium headless
+ * com SwiftShader, o pointer lock ativo deixa cada frame 5–10× mais lento (artefato do ambiente,
+ * não do jogo), o que inviabiliza andar/correr no tempo do teste. `--lock` testa o caminho com pointer lock.
  */
 import { createServer } from "node:http";
 import { readFile, mkdir } from "node:fs/promises";
@@ -76,7 +80,8 @@ const check = (cond, label) => {
 };
 
 try {
-  await page.goto(base + "?quality=" + (process.argv.includes("--quality") ? process.argv[process.argv.indexOf("--quality") + 1] : "baixa"), { waitUntil: "load" });
+  const quality = process.argv.includes("--quality") ? process.argv[process.argv.indexOf("--quality") + 1] : "baixa";
+  await page.goto(`${base}?quality=${quality}${process.argv.includes("--lock") ? "" : "&pointerlock=0"}`, { waitUntil: "load" });
   await page.waitForFunction(() => document.getElementById("menu")?.classList.contains("visible"), null, { timeout: 120_000 });
   check(true, "carregou até o menu principal");
   await page.screenshot({ path: join(OUT, "01-menu.jpg"), type: "jpeg", quality: 82 });
@@ -132,6 +137,18 @@ try {
   check(mid.clip === "Walk", "clipe Walk durante a caminhada");
   check(Math.abs(p1.feet.x - p0.feet.x) < 0.1 && Math.abs(mid.cameraYaw) < 0.05, `anda em linha reta (câmera yaw ${mid.cameraYaw.toFixed(3)})`);
   await waitState((s) => s.moveState === "idle");
+
+  // Câmera com o mouse: com pointer lock (--lock) o movimento relativo gira; sem ele, arrastar com o botão esquerdo
+  const yawBefore = (await snap()).cameraYaw;
+  await page.mouse.move(640, 300);
+  await page.mouse.down();
+  await page.mouse.move(500, 300, { steps: 10 });
+  await page.mouse.up();
+  const turned = await waitState((s) => Math.abs(s.cameraYaw - yawBefore) > 0.15, 8000);
+  console.log("  câmera yaw com o mouse:", yawBefore.toFixed(3), "→", turned.cameraYaw.toFixed(3), "lock:", turned.pointerLocked);
+  check(Math.abs(turned.cameraYaw - yawBefore) > 0.15, "o mouse gira a câmera");
+  const hintVisible = await page.evaluate(() => document.getElementById("click-hint")?.classList.contains("visible"));
+  check(!hintVisible, "dica 'clique na cena' some após o clique");
 
   // Correr
   await page.keyboard.down("ShiftLeft");

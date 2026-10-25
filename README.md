@@ -38,13 +38,13 @@ npm run build        # gera dist/
 npm run preview      # http://localhost:4173
 ```
 
-Parâmetro opcional: `?quality=baixa|media|alta` força a qualidade gráfica (ex.: `http://localhost:5173/?quality=baixa` em máquinas fracas).
+Parâmetros opcionais na URL: `?quality=baixa|media|alta` força a qualidade gráfica (ex.: `http://localhost:5173/?quality=baixa` em máquinas fracas); `?pointerlock=0` nunca trava o cursor (câmera por arrasto do mouse); `?touch=1|0` força/desliga os controles de toque.
 
 ### Controles
 
 | Tecla | Ação |
 | --- | --- |
-| Mouse | Câmera (clique na cena para travar o cursor) · roda = distância |
+| Mouse | Câmera (clique na cena para travar o cursor; se o navegador recusar — p. ex. dentro de um iframe — arraste com o botão esquerdo) · roda = distância |
 | W A S D / setas | Andar |
 | Shift | Correr |
 | C (alterna) · Ctrl (segurar) | Agachar |
@@ -67,7 +67,7 @@ npm run test:visual   # abre dist/ em Chromium headless (teclado + mouse), joga 
 npm run test:touch    # emula um celular na horizontal (só toques) e salva docs/screenshots/1x-celular-*.jpg
 ```
 
-Os testes em navegador precisam do Playwright com Chromium (`npm i -D playwright && npx playwright install chromium`, ou um Playwright global). Sem GPU eles usam SwiftShader (poucos FPS, mas o fluxo completo é verificado).
+Os testes em navegador precisam do Playwright com Chromium (`npm i -D playwright && npx playwright install chromium`, ou um Playwright global). Sem GPU eles usam SwiftShader (poucos FPS, mas o fluxo completo é verificado). O teste visual abre o jogo com `?pointerlock=0` porque, no Chromium headless com SwiftShader, o pointer lock ativo deixa cada frame 5–10× mais lento (artefato do ambiente); `--lock` testa o caminho com cursor travado.
 
 ### Regenerar os personagens
 
