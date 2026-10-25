@@ -31,6 +31,7 @@ const MIME = {
   ".json": "application/json",
   ".png": "image/png",
   ".jpg": "image/jpeg",
+  ".ogg": "audio/ogg",
 };
 
 /** Serve `dist/` numa porta livre de 127.0.0.1 e devolve `{ base, close }`. */

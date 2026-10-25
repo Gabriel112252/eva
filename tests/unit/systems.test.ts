@@ -12,6 +12,9 @@ import { damp } from "@/player/thirdPersonCamera";
 import { pickInteractable, type Interactable } from "@/interaction/interactable";
 import { InputManager } from "@/core/input";
 import { joystickVector, detectTouchPreference, JOYSTICK_RADIUS, JOYSTICK_DEADZONE, JOYSTICK_RUN_THRESHOLD } from "@/ui/touchControls";
+import { surfaceAt, surfaceForHit } from "@/world/surfaces";
+import { STREET } from "@/world/street";
+import { WORKSHOP } from "@/world/workshop";
 import * as synth from "@/audio/synth";
 
 describe("QuestLog", () => {
@@ -174,6 +177,20 @@ describe("Movimento e interação (lógica pura)", () => {
     input.injectMouseDelta(12, -4);
     expect(input.consumeMouseDelta()).toEqual({ dx: 12, dy: -4 });
     expect(input.consumeMouseDelta()).toEqual({ dx: 0, dy: 0 });
+  });
+});
+
+describe("Superfícies (som de passo)", () => {
+  it("asfalto, calçadas, praça e oficina são duros; o resto é terra; caixotes são madeira", () => {
+    expect(surfaceAt(-27, 0)).toBe("concrete"); // rua
+    expect(surfaceAt(-27, STREET.halfWidth + 1)).toBe("concrete"); // calçada
+    expect(surfaceAt(STREET.plaza.x0 + 5, 0)).toBe("concrete"); // praça
+    expect(surfaceAt(WORKSHOP.doorX, (WORKSHOP.zFront + WORKSHOP.zBack) / 2)).toBe("concrete"); // oficina
+    expect(surfaceAt(-27, STREET.halfWidth + STREET.sidewalkDepth + 2)).toBe("grass"); // terreno atrás da calçada
+    expect(surfaceAt(-60, 0)).toBe("grass");
+    expect(surfaceForHit("entulho_caixa_dyn_2", -27, 0)).toBe("wood");
+    expect(surfaceForHit("col_chao", -27, 0)).toBe("concrete");
+    expect(surfaceForHit(null, 0, 30)).toBe("grass");
   });
 });
 

@@ -33,7 +33,7 @@ const { chromium } = loadPlaywright();
 
 const DIST = resolve("dist");
 const OUT = resolve(process.argv.includes("--out") ? process.argv[process.argv.indexOf("--out") + 1] : "docs/screenshots");
-const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".wasm": "application/wasm", ".glb": "model/gltf-binary", ".json": "application/json", ".png": "image/png" };
+const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".wasm": "application/wasm", ".glb": "model/gltf-binary", ".json": "application/json", ".png": "image/png", ".ogg": "audio/ogg" };
 
 if (!existsSync(DIST)) {
   console.error("dist/ não existe. Rode `npm run build` antes.");

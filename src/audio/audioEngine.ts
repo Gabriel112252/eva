@@ -1,5 +1,7 @@
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { GameSettings } from "@/core/settings";
+import { FOOTSTEP_VARIATIONS, SAMPLES, sampleUrl } from "@/data/sounds";
+import type { Surface } from "@/world/surfaces";
 import * as synth from "./synth";
 
 export type Bus = "ambience" | "sfx" | "voice";
@@ -17,7 +19,9 @@ interface Emitter {
 /**
  * Motor de áudio sobre a Web Audio API: barramentos (ambiente/efeitos/voz),
  * emissores espaciais (PannerNode) sincronizados com a câmera, passos e
- * feedback de interação. Todos os sons são sintetizados (ver synth.ts).
+ * feedback de interação. Passos e impactos são gravações CC0 (src/data/sounds.ts);
+ * ambiente e interface ainda são sintetizados (ver synth.ts), que também serve de
+ * fallback quando um arquivo não carrega.
  */
 export class AudioEngine {
   private ctx: AudioContext | null = null;
@@ -62,6 +66,29 @@ export class AudioEngine {
     this.unlocked = true;
     this.applySettings(this.settings);
     this.prepareBuffers();
+    void this.loadSamples();
+  }
+
+  /** Chaves de samples gravados já decodificados (para testes/diagnóstico). */
+  readonly loadedSamples = new Set<string>();
+
+  /** Baixa e decodifica os efeitos gravados; falhas mantêm o som sintetizado da mesma chave. */
+  private async loadSamples(): Promise<void> {
+    if (!this.ctx) return;
+    await Promise.all(
+      SAMPLES.map(async ({ key, file }) => {
+        try {
+          const res = await fetch(sampleUrl(file));
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.arrayBuffer();
+          const buffer = await this.ctx!.decodeAudioData(data);
+          this.buffers.set(key, buffer);
+          this.loadedSamples.add(key);
+        } catch (err) {
+          console.warn(`[audio] sample ${file} indisponível (${(err as Error).message}); mantendo síntese`);
+        }
+      }),
+    );
   }
 
   applySettings(settings: GameSettings): void {
@@ -126,12 +153,36 @@ export class AudioEngine {
     return src;
   }
 
-  /** Passo de Matias: variações aleatórias e tom levemente diferente a cada passo. */
-  playFootstep(kind: "walk" | "run" | "crouch"): void {
-    const i = this.stepCounter++ % 4;
-    const rate = 0.92 + ((this.stepCounter * 7) % 5) * 0.04;
-    const vol = kind === "run" ? 0.9 : kind === "crouch" ? 0.35 : 0.6;
-    this.playBuffer(`step_${kind}_${i}`, "sfx", vol, rate);
+  private lastStepIndex = -1;
+
+  /**
+   * Passo de Matias: gravação da superfície (concreto/terra/madeira) sorteada sem repetir a anterior,
+   * tom ±6 % e volume por marcha; correr soma um impacto surdo. Sem sample carregado, cai na síntese.
+   */
+  playFootstep(kind: "walk" | "run" | "crouch", surface: Surface = "concrete"): void {
+    this.stepCounter++;
+    let i = Math.floor(Math.random() * FOOTSTEP_VARIATIONS);
+    if (i === this.lastStepIndex) i = (i + 1) % FOOTSTEP_VARIATIONS;
+    this.lastStepIndex = i;
+    const key = `step_${surface}_${i}`;
+    const vol = kind === "run" ? 0.85 : kind === "crouch" ? 0.3 : 0.55;
+    if (this.buffers.has(key)) {
+      const rate = (kind === "run" ? 0.96 : kind === "crouch" ? 1.02 : 1.0) * (0.94 + Math.random() * 0.12);
+      this.playBuffer(key, "sfx", vol, rate);
+      return;
+    }
+    const synthIndex = this.stepCounter % 4;
+    this.playBuffer(`step_${kind}_${synthIndex}`, "sfx", vol, 0.92 + ((this.stepCounter * 7) % 5) * 0.04);
+  }
+
+  /** Sorteia uma variação gravada (`prefix_N`); devolve a chave sintetizada se nenhuma estiver carregada. */
+  pickVariation(prefix: string, count: number, fallback: string): string {
+    const i = Math.floor(Math.random() * count);
+    for (let k = 0; k < count; k++) {
+      const key = `${prefix}_${(i + k) % count}`;
+      if (this.loadedSamples.has(key)) return key;
+    }
+    return fallback;
   }
 
   /** Som pontual espacializado numa posição. */

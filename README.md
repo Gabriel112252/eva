@@ -19,7 +19,7 @@ Jogo **3D narrativo para navegador**, com exploração em terceira pessoa, mist�
 - **Babylon.js 9** + **TypeScript** (estrito) + **Vite 8** — WebGL 2.
 - **Havok** (`@babylonjs/havok`, WASM) — física, colisão e `PhysicsCharacterController`.
 - **glTF/GLB** — personagens rigados (rig Mixamo, 52 ossos) gerados em Blender headless a partir de dados CC0 do MakeHuman (`tools/blender/make_character.py`), com animações reais da **Quaternius Universal Animation Library** (CC0) retargeteadas por `tools/blender/retarget.py`.
-- **Web Audio** — áudio espacial (HRTF), passos, ambiente, interface; **Web Speech API** como voz provisória.
+- **Web Audio** — áudio espacial (HRTF); passos e impactos gravados (Kenney, CC0) por superfície, ambiente/interface sintetizados; **Web Speech API** como voz provisória.
 - **IndexedDB** — salvamento local com esquema versionado.
 - **Vitest** (lógica, GLB, física headless) + **Playwright/Chromium** (teste visual com screenshots).
 - **Docker** (Node build → Nginx) — pronto para Easypanel.
@@ -94,6 +94,8 @@ No Easypanel: serviço do tipo *App* apontando para este repositório com build 
 ```text
 public/assets/characters/   GLB rigados (humanos MakeHuman CC0 + animações UAL CC0) + manifesto
 assets-src/animations/      fonte das animações (Quaternius UAL Standard, CC0) e mapeamento
+assets-src/audio/           licença dos efeitos gravados (Kenney Impact Sounds, CC0)
+public/assets/audio/sfx/    passos por superfície e impactos (.ogg) + licença
 public/assets/licenses/     ASSETS.md — origem e licença de cada asset
 src/core/                   boot, loop, input, configurações, orquestração (game.ts)
 src/world/                  materiais e texturas procedurais, rua, prédios, oficina, praça, props, luz/céu
@@ -121,4 +123,4 @@ docs/                       bíblia canônica, prólogo, arquitetura, STATUS, sc
 
 ## Assets e licenças
 
-Os personagens são gerados pelo próprio projeto a partir de dados CC0 (MakeHuman) e animados com a Quaternius Universal Animation Library (CC0). Continuam **provisórios**: pele/cabelo/roupa procedurais, texturas e sons procedurais, voz por síntese do navegador. Nenhuma marca comercial nas roupas; a foto de referência do criador não está no repositório. Veja [`public/assets/licenses/ASSETS.md`](public/assets/licenses/ASSETS.md) para a tabela completa e [`docs/STATUS.md`](docs/STATUS.md) para as ferramentas externas previstas para substituí-los (Blender, Mixamo, Poly Haven, dublagem).
+Os personagens são gerados pelo próprio projeto a partir de dados CC0 (MakeHuman), animados com a Quaternius Universal Animation Library (CC0) e os passos/impactos são gravações Kenney (CC0). Continuam **provisórios**: pele/cabelo/roupa procedurais, texturas procedurais, sons de ambiente/interface sintetizados, voz por síntese do navegador. Nenhuma marca comercial nas roupas; a foto de referência do criador não está no repositório. Veja [`public/assets/licenses/ASSETS.md`](public/assets/licenses/ASSETS.md) para a tabela completa e [`docs/STATUS.md`](docs/STATUS.md) para as ferramentas externas previstas para substituí-los (Blender, Mixamo, Poly Haven, dublagem).

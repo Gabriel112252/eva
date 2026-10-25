@@ -121,7 +121,7 @@ export class Game {
     this.matias = await loadCharacter(this.scene, "matias");
     const spawn = this.world.spawns.get("oficina")!;
     this.player = new PlayerController(this.scene, this.matias, spawn.position, spawn.yaw);
-    this.player.onFootstep.on((kind) => this.audio.playFootstep(kind));
+    this.player.onFootstep.on((step) => this.audio.playFootstep(step.kind, step.surface));
     this.camera = new ThirdPersonCamera(this.scene, spawn.yaw);
     this.scene.activeCamera = this.camera.camera;
 
@@ -479,7 +479,7 @@ export class Game {
     this.radioOn = !this.radioOn;
     this.flags.set("radio.ligado", this.radioOn);
     led.isVisible = this.radioOn;
-    this.audio.playAt("switch", led.getAbsolutePosition(), 0.6);
+    this.audio.playAt(this.audio.pickVariation("switch", 3, "switch"), led.getAbsolutePosition(), 0.5);
     if (this.radioOn) {
       const e = this.world.emitters.find((x) => x.kind === "radio");
       if (e) this.audio.startEmitter("radio", "radio_static", e.position, e.volume * 0.5, e.radius);
@@ -495,7 +495,8 @@ export class Game {
     if (this.flags.getBool("cartao.pego")) return;
     this.flags.set("cartao.pego", true);
     card.isVisible = false;
-    this.audio.playUi("paper", 0.7);
+    this.audio.playUi(this.audio.pickVariation("pickup", 3, "paper"), 0.6);
+    this.audio.playUi("paper", 0.5);
     this.hud.showNotice("Cartão de Registro — Matias · Setor 17 · Apuração 15h", 4);
     this.quests.completeObjective(QUEST_APURACAO, "cartao");
   }

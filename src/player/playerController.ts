@@ -8,10 +8,15 @@ import { CLIP_REFERENCE_HEIGHT, CLIP_SPEEDS, type AnimationClip } from "@/data/c
 import type { InputManager } from "@/core/input";
 import { TypedEvent } from "@/core/events";
 import { COLLISION } from "@/world/context";
+import { surfaceForHit, type Surface } from "@/world/surfaces";
 import { GRAVITY } from "@/physics/havok";
 
 export type MoveState = "idle" | "walk" | "run" | "crouchIdle" | "crouchWalk";
 export type FootstepKind = "walk" | "run" | "crouch";
+export interface Footstep {
+  kind: FootstepKind;
+  surface: Surface;
+}
 
 /** Velocidades de deslocamento (m/s). Escolhidas perto da velocidade natural dos clipes para a reprodução ficar entre 0,8× e 1,4×. */
 export const PLAYER_SPEEDS = { walk: 1.3, run: 4.6, crouch: 0.8 } as const;
@@ -61,7 +66,9 @@ export function angleDelta(from: number, to: number): number {
  */
 export class PlayerController {
   readonly cc: PhysicsCharacterController;
-  readonly onFootstep = new TypedEvent<FootstepKind>();
+  readonly onFootstep = new TypedEvent<Footstep>();
+  /** Nome do nó físico sob os pés no último raio do chão (null = nada). */
+  private groundNodeName: string | null = null;
   readonly onStateChange = new TypedEvent<MoveState>();
   yaw = 0;
   crouched = false;
@@ -224,7 +231,7 @@ export class PlayerController {
       const kind: FootstepKind = this.crouched ? "crouch" : running ? "run" : "walk";
       if (this.distanceSinceStep >= STRIDE[kind]) {
         this.distanceSinceStep = 0;
-        this.onFootstep.emit(kind);
+        this.onFootstep.emit({ kind, surface: surfaceForHit(this.groundNodeName, this.feetPos.x, this.feetPos.z) });
       }
     } else if (planar <= 0.3) {
       this.distanceSinceStep = STRIDE.walk * 0.6; // primeiro passo soa rápido ao sair do lugar
@@ -282,6 +289,9 @@ export class PlayerController {
       if (this.groundRay.hasHit) {
         const hitY = this.groundRay.hitPointWorld.y;
         if (hitY <= bottom + 0.05 && hitY >= bottom - 0.4) groundY = hitY;
+        this.groundNodeName = this.groundRay.body?.transformNode?.name ?? null;
+      } else {
+        this.groundNodeName = null;
       }
     }
     if (this.modelY === null || dt <= 0 || Math.abs(groundY - this.modelY) > 0.6) this.modelY = groundY;
