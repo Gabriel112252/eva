@@ -1,0 +1,107 @@
+{
+  "units": "schematic",
+  "regions": [
+    {
+      "id": "sao_paulo_velha",
+      "name": "São Paulo Velha",
+      "x": -5,
+      "z": -13,
+      "type": "neutral"
+    },
+    {
+      "id": "nova_aurora",
+      "name": "Nova Aurora",
+      "x": 26,
+      "z": 14,
+      "type": "church"
+    },
+    {
+      "id": "serra_do_silencio",
+      "name": "Serra do Silêncio",
+      "x": 48,
+      "z": 38,
+      "type": "church"
+    },
+    {
+      "id": "vale_dos_sinos",
+      "name": "Vale dos Sinos",
+      "x": -13,
+      "z": 34,
+      "type": "industry"
+    },
+    {
+      "id": "estacao_nove",
+      "name": "Estação Nove",
+      "x": -34,
+      "z": 8,
+      "type": "neutral"
+    },
+    {
+      "id": "refugio_livre",
+      "name": "Refúgio Livre",
+      "x": -60,
+      "z": -28,
+      "type": "free"
+    },
+    {
+      "id": "cinturao_verde",
+      "name": "Cinturão Verde",
+      "x": -47,
+      "z": 41,
+      "type": "farmland"
+    },
+    {
+      "id": "pantano_da_luz",
+      "name": "Pântano da Luz",
+      "x": 20,
+      "z": -34,
+      "type": "free"
+    },
+    {
+      "id": "costa_afundada",
+      "name": "Costa Afundada",
+      "x": 66,
+      "z": -42,
+      "type": "water"
+    }
+  ],
+  "connections": [
+    [
+      "sao_paulo_velha",
+      "estacao_nove"
+    ],
+    [
+      "sao_paulo_velha",
+      "nova_aurora"
+    ],
+    [
+      "sao_paulo_velha",
+      "pantano_da_luz"
+    ],
+    [
+      "sao_paulo_velha",
+      "costa_afundada"
+    ],
+    [
+      "estacao_nove",
+      "vale_dos_sinos"
+    ],
+    [
+      "estacao_nove",
+      "refugio_livre"
+    ],
+    [
+      "vale_dos_sinos",
+      "cinturao_verde"
+    ],
+    [
+      "nova_aurora",
+      "serra_do_silencio"
+    ],
+    [
+      "nova_aurora",
+      "cinturao_verde"
+    ]
+  ],
+  "scope": "map overview, not playable level"
+}
