@@ -27,6 +27,7 @@ import { AudioEngine } from "@/audio/audioEngine";
 import { VoiceService } from "@/audio/voice";
 import { Hud } from "@/ui/hud";
 import { Menus } from "@/ui/menus";
+import { TouchControls } from "@/ui/touchControls";
 import { openStore } from "@/persistence/saveStore";
 import { SaveSystem, createEmptySave, type SaveData } from "@/persistence/saveSystem";
 
@@ -55,6 +56,7 @@ export class Game {
   private voice!: VoiceService;
   private hud!: Hud;
   private menus!: Menus;
+  touch!: TouchControls;
   private saves!: SaveSystem;
   private flickerLights: SpotLight[] = [];
   private radioOn = true;
@@ -71,7 +73,10 @@ export class Game {
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.engine = new Engine(canvas, true, { stencil: true, antialias: true, preserveDrawingBuffer: false, powerPreference: "high-performance" }, false);
     this.scene = new Scene(this.engine);
+    // a interação é por raio próprio (pickInteractable); o picking do Babylon em toques/cliques só custaria CPU
     this.scene.skipPointerMovePicking = true;
+    this.scene.skipPointerDownPicking = true;
+    this.scene.skipPointerUpPicking = true;
     this.scene.autoClear = true;
     window.addEventListener("resize", () => this.engine.resize());
   }
@@ -81,7 +86,11 @@ export class Game {
   // ---------------------------------------------------------------------
   async init(): Promise<void> {
     this.saves = new SaveSystem(await openStore());
+    const hasSavedSettings = await this.saves.hasSettings();
     this.settings = await this.saves.loadSettings();
+    this.touch = new TouchControls(this.input, this.canvas);
+    // celular/tablet sem configuração salva: começa em qualidade baixa (GPU móvel, bateria)
+    if (this.touch.enabled && !hasSavedSettings) this.settings = { ...this.settings, quality: "baixa" };
     // ?quality=baixa|media|alta força a qualidade nesta sessão (útil em máquinas fracas e testes automatizados)
     const q = new URLSearchParams(window.location.search).get("quality");
     if (q === "baixa" || q === "media" || q === "alta") this.settings = { ...this.settings, quality: q };
@@ -97,7 +106,8 @@ export class Game {
     await enableHavok(this.scene);
     progress(0.1, "Luz, céu e sombras…");
     this.env = new Environment(this.scene, this.settings.quality);
-    if (this.settings.quality === "baixa") this.engine.setHardwareScalingLevel(1.35);
+    // em telas de alta densidade o canvas já renderiza em px CSS (bem menos que os px físicos); não reduz mais
+    if (this.settings.quality === "baixa") this.engine.setHardwareScalingLevel(window.devicePixelRatio > 1.5 ? 1 : 1.35);
 
     let worldStep = 0;
     this.world = buildWorld(this.scene, this.settings.quality, (label) => {
@@ -169,7 +179,7 @@ export class Game {
   private wireEvents(): void {
     this.input.onAction.on((a) => this.handleAction(a));
     this.input.onPointerLockChange.on((locked) => {
-      if (this.state === "playing" || this.state === "dialogue") this.hud.setClickHint(!locked);
+      if (this.state === "playing" || this.state === "dialogue") this.hud.setClickHint(!locked && !this.touch.enabled);
       // Esc (ou alt-tab) solta o cursor: abre a pausa para o jogador não perder o controle
       if (!locked && (this.state === "playing" || this.state === "dialogue") && this.lockWasAcquired) {
         this.pause();
@@ -179,7 +189,20 @@ export class Game {
     this.canvas.addEventListener("click", () => {
       if (this.state === "playing" || this.state === "dialogue") {
         void this.audio.unlock().then(() => this.startAmbience());
-        void this.input.requestPointerLock();
+        if (!this.touch.enabled) void this.input.requestPointerLock();
+      }
+    });
+    // toque curto na cena durante uma fala = avançar (como Espaço); nunca escolhe uma resposta por acidente
+    this.touch.onTap.on(() => {
+      if (this.state === "dialogue" && this.advanceResolver && !this.hud.hasPendingChoice) this.handleAction("advance");
+    });
+    this.touch.onEnabledChange.on(() => {
+      // notebook com tela sensível: ao primeiro toque, deixa de exigir o cursor travado
+      if (this.state === "playing" || this.state === "dialogue") {
+        this.hud.setClickHint(false);
+        this.lockWasAcquired = false;
+        this.input.exitPointerLock();
+        this.touch.setMode(this.state === "dialogue" ? (this.hud.hasPendingChoice ? "choices" : "dialogue") : "play");
       }
     });
     this.menus.onNewGame.on(() => void this.startNewGame());
@@ -250,9 +273,14 @@ export class Game {
     this.input.clearHeld();
     await this.audio.unlock();
     this.startAmbience();
-    await this.input.requestPointerLock();
+    if (this.touch.enabled) {
+      this.touch.setMode("play");
+      void this.touch.requestImmersive();
+    } else {
+      await this.input.requestPointerLock();
+    }
     window.setTimeout(() => this.hud.setFade(false), 150);
-    this.hud.setClickHint(!this.input.isPointerLocked);
+    this.hud.setClickHint(!this.input.isPointerLocked && !this.touch.enabled);
   }
 
   private pause(): void {
@@ -266,6 +294,7 @@ export class Game {
     this.menus.show("pause");
     this.hud.setClickHint(false);
     this.hud.hide();
+    this.touch.setMode("hidden");
     void this.audio.suspend();
   }
 
@@ -276,13 +305,15 @@ export class Game {
     this.player.locked = this.state === "dialogue";
     this.hud.show();
     void this.audio.resume();
-    void this.input.requestPointerLock();
+    if (this.touch.enabled) this.touch.setMode(this.state === "dialogue" ? (this.hud.hasPendingChoice ? "choices" : "dialogue") : "play");
+    else void this.input.requestPointerLock();
   }
 
   private async quitToMenu(): Promise<void> {
     await this.saveGame(false);
     this.voice.cancel();
     this.state = "menu";
+    this.touch.setMode("hidden");
     this.hud.hide();
     this.hud.hideSubtitle();
     this.hud.setLetterbox(false);
@@ -371,6 +402,10 @@ export class Game {
       saveBackend: this.saves.backend,
       fps: Number(this.engine.getFps().toFixed(1)),
       audioReady: this.audio.isReady,
+      analog: this.input.analogAxis,
+      heldRun: this.input.isHeld("run"),
+      touch: this.touch.snapshot(),
+      quality: this.settings.quality,
     };
   }
 
@@ -443,6 +478,8 @@ export class Game {
     this.state = "dialogue";
     this.player.locked = true;
     this.hud.setPrompt(null);
+    this.touch.setInteractAvailable(false);
+    this.touch.setMode("dialogue");
     this.hud.setLetterbox(true);
     this.hud.setObjectiveVisible(false);
     this.audio.duck(true);
@@ -462,6 +499,7 @@ export class Game {
         if (isMatias) this.matias.animator.play("Talk");
         else this.matias.animator.play("Idle");
         this.frameShot(npc, speakerNpc ?? null, line.shot ?? "speaker", isMatias);
+        if (this.state === "dialogue") this.touch.setMode("dialogue");
         const profile = CHARACTERS[(line.speaker in CHARACTERS ? line.speaker : "matias") as CharacterVariant].voice;
         this.hud.showSubtitle(speakerName, line.text, false);
         const playback = this.voice.speak(line.text, profile, line.voice);
@@ -484,6 +522,7 @@ export class Game {
         for (const n of this.npcs) n.setTalking(false);
         this.hud.hideSubtitle();
         this.frameShot(npc, npc, "listener", false);
+        if (this.state === "dialogue") this.touch.setMode("choices");
         return this.hud.showChoices(choices);
       },
       end: () => {
@@ -506,6 +545,7 @@ export class Game {
     if (this.state === "dialogue") {
       this.state = "playing";
       this.player.locked = false;
+      this.touch.setMode("play");
     }
     await this.saveGame(false);
   }
@@ -685,6 +725,10 @@ export class Game {
       const pick = pickInteractable(this.interactables, { x: feet.x, z: feet.z }, this.player.forward, 0.2);
       this.currentPrompt = pick?.target ?? null;
       this.hud.setPrompt(pick ? pick.prompt : null);
+      if (this.touch.enabled) {
+        this.touch.setInteractAvailable(!!pick);
+        this.touch.setCrouched(this.player.crouched);
+      }
     } else {
       this.currentPrompt = null;
     }

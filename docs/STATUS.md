@@ -1,10 +1,10 @@
 # STATUS — O Último Veto / EVA
 
-Atualizado em 24/10/2026 (commit do protótipo M0).
+Atualizado em 25/10/2026 (personagens realistas + controles de toque).
 
 ## Marco atual: **M0 — primeiro protótipo jogável** ✅
 
-O jogo roda no navegador (Chrome/Edge/Firefox recentes, desktop) em Babylon.js 9 + Havok, com Matias em terceira pessoa num quarteirão de São Paulo Velha.
+O jogo roda no navegador (Chrome/Edge/Firefox recentes no desktop; Chrome/Safari no celular, de preferência na horizontal) em Babylon.js 9 + Havok, com Matias em terceira pessoa num quarteirão de São Paulo Velha.
 
 ### Operacional (verificado por testes automatizados e teste visual em Chromium)
 
@@ -13,7 +13,8 @@ O jogo roda no navegador (Chrome/Edge/Firefox recentes, desktop) em Babylon.js 9
 | Engine, build, Docker | ✅ | Vite 8 + TypeScript estrito; `npm run check` (tsc + vitest + build) passa; `Dockerfile` multi-stage (Node → Nginx) escrito e revisado — **a imagem ainda não foi construída neste ambiente** (sem daemon Docker disponível); validar com `docker build` antes do deploy no Easypanel. |
 | Física Havok | ✅ | `PhysicsCharacterController` (cápsula), colisores estáticos para chão, calçadas (degrau 12 cm), prédios, props; caixas/barris dinâmicos empurráveis. |
 | Matias (3ª pessoa) | ✅ | Modelo GLB **rigado** (rig Mixamo, 52 ossos, skinning) com anatomia/rosto do MakeHuman (CC0), pele bakeada, cabelo, óculos, roupa de trabalho; clipes Idle/Walk/Run/CrouchIdle/CrouchWalk/Talk/Interact com cross-fade por peso. WASD, Shift (correr), C/Ctrl (agachar, com verificação de teto por raio físico), E (interagir), Esc (pausa). |
-| Câmera | ✅ | Terceira pessoa sobre o ombro, mouse com pointer lock, roda para distância, oclusão por raio físico (não atravessa paredes), enquadramentos de diálogo (over-the-shoulder/two-shot) com letterbox e DOF. |
+| Controles de toque | ✅ | Celular/tablet detectado automaticamente (ponteiro grosso; notebook com tela sensível ativa no 1º toque; `?touch=1/0` força): joystick virtual flutuante (zona morta, anel externo = correr), arrastar à direita gira a câmera sem pointer lock, botões E/Agachar/Correr/Pausa, toque curto avança falas (nunca escolhe resposta por acidente), tela cheia + orientação horizontal quando o navegador permite, qualidade baixa por padrão sem configuração salva. Verificado por `npm run test:touch` (Chromium emulando celular, só toques). |
+| Câmera | ✅ | Terceira pessoa sobre o ombro, mouse com pointer lock (ou arrastar no toque), roda para distância, oclusão por raio físico (não atravessa paredes), enquadramentos de diálogo (over-the-shoulder/two-shot) com letterbox e DOF. |
 | Cenário | ✅ (procedural) | Rua de 62 m com 10 fachadas (janelas vedadas/acesas, sacadas, toldos, pichações, varais, caixas d'água, painéis solares), oficina de Matias (interior jogável), praça com posto de distribuição, fila, quadro de avisos, estandarte da Igreja, fonte seca, árvores, mato, carro queimado, entulho, barraca de mercado, gerador, portão da Central de Suprimentos. Placas e cartazes em PT-BR. Vegetação e sinais de ocupação humana (roupas, luzes acesas, energia parcial). |
 | Iluminação | ✅ | Sol direcional + hemisférica + sombras em cascata (CSM, 3 cascatas) ou simples (qualidade baixa), céu procedural (`SkyMaterial`), névoa seca, IBL procedural, postes (um aceso, um piscando com zumbido), lâmpada da oficina; pós-processamento ACES, vinheta, grão, bloom, aberração cromática leve. |
 | NPCs 3D | ✅ (provisórios) | Miriam, Custódio, Comerciante, Raquel e Ana: humanos MakeHuman rigados (Mixamo), malha reduzida (decimate 0,6), colisão (cápsula), viram-se para o jogador, gesto ocasional, animação Talk em diálogo. |
@@ -23,7 +24,7 @@ O jogo roda no navegador (Chrome/Edge/Firefox recentes, desktop) em Babylon.js 9
 | Salvamento | ✅ | IndexedDB (fallback em memória), esquema versionado com migração, autosave em eventos e a cada 45 s, botão Salvar/Continuar, configurações persistidas. Verificado: a escolha persiste após recarregar a página. |
 | Áudio | ⚠️ sintetizado | Web Audio: vento, gerador, multidão, estática do rádio, lâmpada falhando (emissores espaciais HRTF), passos (andar/correr/agachado), cliques e sinos de interface, ducking em diálogos, mute/volumes. **Nenhuma gravação real ainda.** |
 | Interface | ✅ | Menu principal, pausa, opções (sensibilidade, inverter Y, volumes, legendas, voz, qualidade), sobre; HUD discreto (objetivo, prompt contextual, legendas, escolhas, letterbox, fade). |
-| Testes | ✅ | 26 testes Vitest: validador glTF da Khronos nos 6 GLB, carregamento no Babylon (NullEngine), física Havok real headless (andar/correr/colidir/degrau/agachar/NPC/câmera), diálogos, missões, save IndexedDB, áudio sintetizado. `tools/visual-test.mjs` abre o build em Chromium, joga o fluxo (andar, correr, agachar, cartão, praça, diálogo, escolha, refresh, pausa) e salva screenshots JPEG em `docs/screenshots/`. |
+| Testes | ✅ | 30 testes Vitest: validador glTF da Khronos nos 6 GLB, carregamento no Babylon (NullEngine) com caixa envolvente que acompanha o personagem (regressão: personagens sumiam longe da origem), física Havok real headless (andar/correr/colidir/degrau/agachar/NPC/câmera), diálogos, missões, save IndexedDB, áudio sintetizado, joystick virtual e detecção de toque. `tools/visual-test.mjs` abre o build em Chromium, joga o fluxo (andar, correr, agachar, cartão, praça, diálogo, escolha, refresh, pausa) e salva screenshots JPEG em `docs/screenshots/`; `tools/touch-test.mjs` repete o fluxo num celular emulado usando só toques. |
 
 ### Beats do prólogo cobertos
 
@@ -54,11 +55,11 @@ O jogo roda no navegador (Chrome/Edge/Firefox recentes, desktop) em Babylon.js 9
 
 ## Limitações conhecidas
 
-- Sem suporte a touch/gamepad (apenas teclado + mouse).
-- Sem LOD/streaming: a cena inteira é carregada de uma vez (~140 meshes, ~2 K triângulos por personagem); roda bem em GPU integrada moderna, mas não foi medido em hardware fraco.
+- Sem gamepad (teclado + mouse no desktop; toque no celular/tablet). No celular, o toque foi verificado em Chromium emulado — não em aparelhos reais; iOS Safari não permite tela cheia em páginas (o jogo segue na aba normal).
+- Sem LOD/streaming: a cena inteira é carregada de uma vez (~140 meshes, 22–35 K triângulos por personagem); roda bem em GPU integrada moderna; em celular começa em qualidade baixa, sem medição em aparelhos fracos.
 - WebGL 2 apenas (WebGPU não habilitado ainda).
-- Renderização por software (sem GPU) fica em ~4–6 FPS — só para testes automatizados.
-- A voz sintetizada depende das vozes instaladas no sistema do jogador (Chrome tem vozes pt-BR online; Firefox depende do SO).
+- Renderização por software (sem GPU) fica em ~4 FPS — só para testes automatizados.
+- A voz sintetizada depende das vozes instaladas no sistema do jogador (Chrome tem vozes pt-BR online; Firefox depende do SO; no celular costuma haver uma voz pt-BR).
 - O caminho até a praça não tem ainda a "área inacessível" para o tutorial de agachar.
 
 ## Próxima etapa (M1)
@@ -67,5 +68,5 @@ O jogo roda no navegador (Chrome/Edge/Firefox recentes, desktop) em Babylon.js 9
 2. Fechar os beats 4 e 5: mensageiro, multidão na fila com reações, Custódio pedindo calma, depósito com a pista física e a decisão final em tensão.
 3. Gravar/licenciar dublagem e SFX; lip-sync básico.
 4. Texturas PBR reais (Poly Haven/ambientCG), kit modular de fachadas, decals de sujeira; otimização (instâncias, KTX2, Draco).
-5. Gamepad + touch, acessibilidade (tamanho de legenda, daltonismo), WebGPU opcional.
+5. Gamepad, acessibilidade (tamanho de legenda, daltonismo), WebGPU opcional; validar o toque em aparelhos reais (Android/iOS) e medir desempenho.
 6. Pipeline de CI (GitHub Actions: `npm run check` + teste visual com screenshots).

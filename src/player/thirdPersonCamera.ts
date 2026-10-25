@@ -69,6 +69,11 @@ export class ThirdPersonCamera {
 
   /** Atualiza a câmera; `pivot` = posição dos pés do jogador. */
   update(dt: number, input: InputManager, pivot: Vector3, eyeHeight: number, lookYaw?: number): void {
+    if (this.mode !== "follow") {
+      // descarta mouse/roda acumulados fora do modo seguir, senão a câmera salta ao voltar do diálogo/menu
+      input.consumeMouseDelta();
+      input.consumeWheel();
+    }
     switch (this.mode) {
       case "follow":
         this.updateFollow(dt, input, pivot, eyeHeight);

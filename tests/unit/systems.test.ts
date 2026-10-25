@@ -10,6 +10,7 @@ import { cameraRelativeDirection, resolveMoveState, angleDelta } from "@/player/
 import { damp } from "@/player/thirdPersonCamera";
 import { pickInteractable, type Interactable } from "@/interaction/interactable";
 import { InputManager } from "@/core/input";
+import { joystickVector, detectTouchPreference, JOYSTICK_RADIUS, JOYSTICK_DEADZONE, JOYSTICK_RUN_THRESHOLD } from "@/ui/touchControls";
 import * as synth from "@/audio/synth";
 
 describe("QuestLog", () => {
@@ -128,6 +129,73 @@ describe("Movimento e interação (lógica pura)", () => {
     input.enabled = true;
     input.simulate("forward", false);
     expect(input.moveAxis().y).toBe(0);
+  });
+
+  it("InputManager combina eixo analógico (joystick) com teclas e limpa em clearHeld", () => {
+    const input = new InputManager();
+    input.setAnalogAxis(0, 0.6);
+    expect(input.moveAxis()).toEqual({ x: 0, y: 0.6 });
+    // analógico + tecla: soma e normaliza
+    input.simulate("right", true);
+    const both = input.moveAxis();
+    expect(Math.hypot(both.x, both.y)).toBeCloseTo(1);
+    expect(both.x).toBeGreaterThan(0);
+    expect(both.y).toBeGreaterThan(0);
+    // fora do círculo unitário é normalizado; NaN vira zero
+    input.simulate("right", false);
+    input.setAnalogAxis(3, 4);
+    expect(input.moveAxis()).toEqual({ x: 0.6, y: 0.8 });
+    input.setAnalogAxis(Number.NaN, 1);
+    expect(input.moveAxis()).toEqual({ x: 0, y: 1 });
+    input.clearHeld();
+    expect(input.moveAxis()).toEqual({ x: 0, y: 0 });
+    // movimento de câmera injetado (arrastar na tela) é consumido como mouse
+    input.injectMouseDelta(12, -4);
+    expect(input.consumeMouseDelta()).toEqual({ dx: 12, dy: -4 });
+    expect(input.consumeMouseDelta()).toEqual({ dx: 0, dy: 0 });
+  });
+});
+
+describe("Controles de toque (lógica pura)", () => {
+  it("joystick: zona morta, direção normalizada e anel de corrida", () => {
+    const r = JOYSTICK_RADIUS;
+    expect(joystickVector(0, 0)).toEqual({ x: 0, y: 0, magnitude: 0, run: false });
+    // dentro da zona morta não anda
+    const dead = joystickVector(r * JOYSTICK_DEADZONE * 0.5, 0);
+    expect(dead.x).toBe(0);
+    expect(dead.y).toBe(0);
+    // polegar para cima na tela (dy negativo) = frente; meio curso anda, não corre
+    const walk = joystickVector(0, -r * 0.5);
+    expect(walk.x).toBeCloseTo(0);
+    expect(walk.y).toBeCloseTo(1);
+    expect(walk.magnitude).toBeCloseTo(0.5);
+    expect(walk.run).toBe(false);
+    // diagonal além do limiar: direção unitária e corrida
+    const run = joystickVector(r * 1.4, -r * 1.4);
+    expect(Math.hypot(run.x, run.y)).toBeCloseTo(1);
+    expect(run.x).toBeCloseTo(Math.SQRT1_2);
+    expect(run.y).toBeCloseTo(Math.SQRT1_2);
+    expect(run.magnitude).toBe(1);
+    expect(run.run).toBe(true);
+    const edge = joystickVector(0, r * JOYSTICK_RUN_THRESHOLD);
+    expect(edge.y).toBeCloseTo(-1);
+    expect(edge.run).toBe(true);
+    // entrada inválida não propaga NaN
+    expect(joystickVector(Number.NaN, 0).x).toBe(0);
+  });
+
+  it("detecta preferência por toque pelo ponteiro grosso e pelo parâmetro ?touch", () => {
+    const fake = (search: string, maxTouchPoints: number, coarse: boolean) =>
+      ({
+        location: { search },
+        navigator: { maxTouchPoints },
+        matchMedia: (q: string) => ({ matches: coarse && q.includes("coarse") }),
+      }) as unknown as Window;
+    expect(detectTouchPreference(fake("", 5, true))).toBe(true); // celular
+    expect(detectTouchPreference(fake("", 0, false))).toBe(false); // desktop
+    expect(detectTouchPreference(fake("", 10, false))).toBeNull(); // notebook com tela sensível: decide no 1º toque
+    expect(detectTouchPreference(fake("?touch=1", 0, false))).toBe(true);
+    expect(detectTouchPreference(fake("?touch=0", 5, true))).toBe(false);
   });
 });
 

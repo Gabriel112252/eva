@@ -54,6 +54,9 @@ export class InputManager {
   readonly onWheel = new TypedEvent<number>();
 
   private held = new Set<GameAction>();
+  /** Eixo analógico (joystick virtual/gamepad): x direita, y frente, módulo ≤ 1. */
+  private analogX = 0;
+  private analogY = 0;
   private mouseDx = 0;
   private mouseDy = 0;
   private wheelDelta = 0;
@@ -163,11 +166,11 @@ export class InputManager {
     return this.enabled && this.held.has(action);
   }
 
-  /** Vetor de movimento no plano (x: direita, y: frente), normalizado. */
+  /** Vetor de movimento no plano (x: direita, y: frente): teclas digitais + eixo analógico, módulo ≤ 1. */
   moveAxis(): { x: number; y: number } {
     if (!this.enabled) return { x: 0, y: 0 };
-    let x = 0;
-    let y = 0;
+    let x = this.analogX;
+    let y = this.analogY;
     if (this.held.has("forward")) y += 1;
     if (this.held.has("back")) y -= 1;
     if (this.held.has("right")) x += 1;
@@ -178,6 +181,27 @@ export class InputManager {
       y /= len;
     }
     return { x, y };
+  }
+
+  /**
+   * Define o eixo analógico de movimento (joystick virtual de toque ou gamepad).
+   * Valores fora do círculo unitário são normalizados; NaN é tratado como zero.
+   */
+  setAnalogAxis(x: number, y: number): void {
+    const ax = Number.isFinite(x) ? x : 0;
+    const ay = Number.isFinite(y) ? y : 0;
+    const len = Math.hypot(ax, ay);
+    if (len > 1) {
+      this.analogX = ax / len;
+      this.analogY = ay / len;
+    } else {
+      this.analogX = ax;
+      this.analogY = ay;
+    }
+  }
+
+  get analogAxis(): { x: number; y: number } {
+    return { x: this.analogX, y: this.analogY };
   }
 
   /** Consome o delta do mouse acumulado desde a última chamada. */
@@ -196,6 +220,8 @@ export class InputManager {
 
   clearHeld(): void {
     this.held.clear();
+    this.analogX = 0;
+    this.analogY = 0;
   }
 
   /** Simula pressionar/soltar uma ação (testes, controles virtuais/touch). */

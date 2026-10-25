@@ -2,8 +2,12 @@
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
     <meta name="color-scheme" content="dark" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#0b0a09" />
     <title>O Último Veto — EVA</title>
     <meta name="description" content="Jogo 3D narrativo para navegador. Prólogo: A Apuração — São Paulo Velha, 2072." />
   </head>
@@ -33,7 +37,7 @@
               <button id="btn-options" class="menu-btn">Opções</button>
               <button id="btn-about" class="menu-btn">Sobre o protótipo</button>
             </nav>
-            <p class="muted small">WASD mover · Shift correr · C agachar · E interagir · Esc pausar</p>
+            <p id="menu-controls-hint" class="muted small">WASD mover · Shift correr · C agachar · E interagir · Esc pausar</p>
           </div>
         </section>
 
@@ -84,13 +88,39 @@
         <section id="about" class="screen">
           <div class="menu-inner about-inner">
             <h2 class="title small-title">SOBRE O PROTÓTIPO</h2>
-            <p>Protótipo jogável M0 do prólogo <em>A Apuração</em>. Mundo 3D em Babylon.js com física Havok, personagens rigados provisórios (manequins gerados proceduralmente), diálogos em português com escolhas persistentes, áudio sintetizado e salvamento local (IndexedDB).</p>
+            <p>Protótipo jogável M0 do prólogo <em>A Apuração</em>. Mundo 3D em Babylon.js com física Havok, personagens humanos rigados gerados em Blender a partir de dados CC0 do MakeHuman (provisórios), diálogos em português com escolhas persistentes, áudio sintetizado e salvamento local (IndexedDB). Teclado e mouse no computador; joystick virtual e toque no celular.</p>
             <p class="muted small">Vozes: síntese de fala do navegador (provisória). Nenhum ator foi gravado ainda. Texturas e sons são procedurais. Detalhes e licenças em <code>docs/STATUS.md</code> e <code>public/assets/licenses/ASSETS.md</code>.</p>
             <nav class="menu-list">
               <button id="btn-about-back" class="menu-btn">Voltar</button>
             </nav>
           </div>
         </section>
+
+        <!-- Controles de toque (ativados em celular/tablet ou no primeiro toque) -->
+        <div id="touch" class="touch" aria-hidden="true">
+          <div id="joystick" class="joystick" aria-hidden="true">
+            <div class="joystick-ring"></div>
+            <div id="joystick-knob" class="joystick-knob"></div>
+          </div>
+          <div class="touch-actions">
+            <button id="tc-run" class="tc-btn tc-small" type="button" aria-label="Correr (alternar)">
+              <svg class="tc-glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5l7 7-7 7M12 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
+              <span class="tc-label">Correr</span>
+            </button>
+            <button id="tc-crouch" class="tc-btn tc-small" type="button" aria-label="Agachar (alternar)">
+              <svg class="tc-glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9l7 7 7-7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" /></svg>
+              <span class="tc-label">Agachar</span>
+            </button>
+            <button id="tc-interact" class="tc-btn tc-big" type="button" aria-label="Interagir">
+              <span class="tc-glyph tc-letter">E</span>
+              <span class="tc-label">Interagir</span>
+            </button>
+          </div>
+          <button id="tc-pause" class="tc-btn tc-pause" type="button" aria-label="Pausa">
+            <svg class="tc-glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>
+          </button>
+        </div>
+        <div id="rotate-hint" class="rotate-hint">Gire o celular para a horizontal para jogar melhor</div>
 
         <!-- HUD -->
         <div id="hud" class="hidden">

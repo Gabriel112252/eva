@@ -101,6 +101,11 @@ export class SaveSystem {
     return raw ? sanitizeSettings(raw) : { ...DEFAULT_SETTINGS };
   }
 
+  /** O jogador já salvou configurações alguma vez? (senão o jogo pode escolher padrões por dispositivo) */
+  async hasSettings(): Promise<boolean> {
+    return (await this.store.get<unknown>(SETTINGS_KEY)) !== undefined;
+  }
+
   async saveSettings(settings: GameSettings): Promise<void> {
     await this.store.set(SETTINGS_KEY, sanitizeSettings(settings));
   }

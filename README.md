@@ -54,17 +54,20 @@ Parâmetro opcional: `?quality=baixa|media|alta` força a qualidade gráfica (ex
 | Tab | Mostrar descrição da missão |
 | Esc | Pausa (salvar, opções, voltar ao menu) |
 
+**Celular/tablet** (detectado automaticamente; `?touch=1` força, `?touch=0` desliga): joystick virtual flutuante na metade esquerda da tela (empurrar até a borda = correr), arrastar na metade direita gira a câmera, botões **E** (interagir — acende quando há algo à frente), **Agachar** (alterna), **Correr** (trava) e **Pausa**; toque curto na tela avança as falas; tocar no objetivo mostra a descrição da missão. Sem configuração salva, o celular começa em qualidade **baixa** (mude em Opções). Jogue na horizontal; o navegador tenta entrar em tela cheia ao iniciar.
+
 ### Validação
 
 ```bash
 npm run typecheck         # tsc --noEmit
-npm test                  # 26 testes (Vitest): GLB, Havok headless, diálogo, missões, save, áudio
+npm test                  # 30 testes (Vitest): GLB, Havok headless, diálogo, missões, save, áudio, joystick
 npm run build
 npm run check             # os três acima
-npm run test:visual   # abre dist/ em Chromium headless, joga o fluxo e salva docs/screenshots/*.jpg
+npm run test:visual   # abre dist/ em Chromium headless (teclado + mouse), joga o fluxo e salva docs/screenshots/*.jpg
+npm run test:touch    # emula um celular na horizontal (só toques) e salva docs/screenshots/1x-celular-*.jpg
 ```
 
-O teste visual precisa do Playwright com Chromium (`npm i -D playwright && npx playwright install chromium`, ou um Playwright global). Sem GPU ele usa SwiftShader (poucos FPS, mas o fluxo completo é verificado).
+Os testes em navegador precisam do Playwright com Chromium (`npm i -D playwright && npx playwright install chromium`, ou um Playwright global). Sem GPU eles usam SwiftShader (poucos FPS, mas o fluxo completo é verificado).
 
 ### Regenerar os personagens
 
@@ -88,7 +91,7 @@ No Easypanel: serviço do tipo *App* apontando para este repositório com build 
 ## Estrutura
 
 ```text
-public/assets/characters/   GLB rigados (placeholders) + manifesto
+public/assets/characters/   GLB rigados (humanos MakeHuman CC0, provisórios) + manifesto
 public/assets/licenses/     ASSETS.md — origem e licença de cada asset
 src/core/                   boot, loop, input, configurações, orquestração (game.ts)
 src/world/                  materiais e texturas procedurais, rua, prédios, oficina, praça, props, luz/céu
@@ -98,10 +101,10 @@ src/characters/             carregamento de GLB, animador (cross-fade), NPC
 src/narrative/              flags, diálogos, missões
 src/data/                   diálogos PT-BR, missões, metadados de personagens
 src/audio/                  motor Web Audio, sintetizador de sons, voz
-src/ui/                     HUD e menus
+src/ui/                     HUD, menus e controles de toque
 src/persistence/            IndexedDB e sistema de save
 tests/                      unit, assets, integration (física headless)
-tools/                      gerador/validador de personagens, teste visual
+tools/                      gerador/validador de personagens, testes em navegador (visual e toque)
 docs/                       bíblia canônica, prólogo, arquitetura, STATUS, screenshots
 ```
 
