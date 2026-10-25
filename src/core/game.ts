@@ -173,6 +173,7 @@ export class Game {
     this.interactables.push({
       id: "cartao",
       radius: 1.8,
+      clip: "PickUp",
       getPosition: () => cardPos,
       getPrompt: () => (this.flags.getBool("cartao.pego") ? null : "Pegar o cartão de registro"),
       interact: () => this.pickUpCard(card),
@@ -369,7 +370,7 @@ export class Game {
     const target = this.currentPrompt;
     if (!target) return;
     this.audio.playUi("ui_select", 0.5);
-    this.matias.animator.playOneShot("Interact");
+    this.matias.animator.playOneShot(target.clip ?? "Interact");
     target.interact();
   }
 
@@ -393,6 +394,56 @@ export class Game {
     this.player.teleport(feet, yaw);
     this.camera.snapBehind(yaw);
     return true;
+  }
+
+  /**
+   * Modo de captura determinística (vídeos de avaliação): para o loop de renderização e passa a
+   * avançar o jogo com dt fixo a cada `captureFrame()`, devolvendo o quadro como JPEG (data URL).
+   * Assim a gravação sai a `fps` reais mesmo num renderizador lento (SwiftShader).
+   */
+  private captureDtMs: number | null = null;
+  private captureScaling = 1;
+  captureStart(fps = 30): void {
+    if (this.captureDtMs !== null) return;
+    this.captureDtMs = 1000 / fps;
+    this.engine.stopRenderLoop();
+    // resolução cheia do canvas (qualidade baixa reduz a escala) para o vídeo não sair pequeno
+    this.captureScaling = this.engine.getHardwareScalingLevel();
+    this.engine.setHardwareScalingLevel(1);
+    // física e lógica usam engine.getDeltaTime(): fixa-o
+    (this.engine as unknown as { getDeltaTime: () => number }).getDeltaTime = () => this.captureDtMs ?? 16;
+    // as animações esqueléticas usam o relógio de parede (Scene._animate): força o mesmo dt fixo
+    const scene = this.scene as unknown as { _animate: (customDeltaTime?: number) => void };
+    const original = scene._animate;
+    this.captureRestoreAnimate = () => {
+      scene._animate = original;
+    };
+    scene._animate = () => original.call(this.scene, this.captureDtMs ?? 16);
+  }
+
+  private captureRestoreAnimate: (() => void) | null = null;
+
+  captureFrame(quality = 0.9): string {
+    this.frame();
+    return this.canvas.toDataURL("image/jpeg", quality);
+  }
+
+  /** Posição mundial dos dedos dos pés de Matias (métrica de deslizamento em testes). */
+  captureFeet(): { l: number[]; r: number[] } {
+    const find = (name: string) => this.matias.root.getChildTransformNodes(false, (n) => n.name === name)[0]?.getAbsolutePosition();
+    const l = find("mixamorig:LeftToeBase");
+    const r = find("mixamorig:RightToeBase");
+    return { l: l ? [l.x, l.y, l.z] : [0, 0, 0], r: r ? [r.x, r.y, r.z] : [0, 0, 0] };
+  }
+
+  captureStop(): void {
+    if (this.captureDtMs === null) return;
+    this.captureDtMs = null;
+    delete (this.engine as unknown as { getDeltaTime?: () => number }).getDeltaTime;
+    this.captureRestoreAnimate?.();
+    this.captureRestoreAnimate = null;
+    this.engine.setHardwareScalingLevel(this.captureScaling);
+    this.engine.runRenderLoop(() => this.frame());
   }
 
   /** Estado resumido para testes automatizados. */

@@ -1,6 +1,7 @@
 {
   "generator": "tools/blender/make_character.py",
   "source": "MakeHuman hm08 (CC0) + Blender headless",
+  "animations": "Quaternius Universal Animation Library v3 Standard (CC0), retarget tools/blender/retarget.py",
   "fps": 30,
   "rig": "mixamo",
   "bones": [
@@ -27,32 +28,52 @@
   ],
   "clips": {
     "Idle": {
-      "duration": 4.0,
-      "loop": true
+      "duration": 2.5333,
+      "loop": true,
+      "source": "Idle_Loop",
+      "frames": 76
     },
     "Walk": {
-      "duration": 1.05,
-      "loop": true
+      "duration": 1.3333,
+      "loop": true,
+      "source": "Walk_Loop",
+      "frames": 40
     },
     "Run": {
-      "duration": 0.62,
-      "loop": true
+      "duration": 0.9667,
+      "loop": true,
+      "source": "Jog_Fwd_Loop",
+      "frames": 29
     },
     "CrouchIdle": {
-      "duration": 3.5,
-      "loop": true
+      "duration": 2.9333,
+      "loop": true,
+      "source": "Crouch_Idle_Loop",
+      "frames": 88
     },
     "CrouchWalk": {
-      "duration": 1.1,
-      "loop": true
+      "duration": 2.0,
+      "loop": true,
+      "source": "Crouch_Fwd_Loop",
+      "frames": 60
     },
     "Talk": {
-      "duration": 4.0,
-      "loop": true
+      "duration": 2.9333,
+      "loop": true,
+      "source": "Idle_Talking_Loop",
+      "frames": 88
     },
     "Interact": {
-      "duration": 1.2,
-      "loop": false
+      "duration": 2.0333,
+      "loop": false,
+      "source": "Interact",
+      "frames": 61
+    },
+    "PickUp": {
+      "duration": 0.8667,
+      "loop": false,
+      "source": "PickUp_Table",
+      "frames": 26
     }
   },
   "characters": {

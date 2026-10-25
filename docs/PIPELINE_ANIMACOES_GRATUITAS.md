@@ -59,3 +59,12 @@ O pedido original continha oito nomes Mixamo, mas “Idle” e “Standing Idle�
 
 ## Critérios de conclusão
 Não declarar “animação realista integrada” até ter arquivos reais (origem auditável), retarget executado, personagens reexportados, build validado e vídeo de movimento inspecionado. Se houver bloqueio de acesso, documentar exatamente o que falta sem culpar o jogador por baixar manualmente.
+
+## Resultado (25/10/2026)
+
+- **Obtenção**: o ambiente de build não alcança itch.io; o download gratuito foi feito pelo navegador do computador do criador (site oficial, sem login/pagamento) e o ZIP enviado ao projeto. Arquivo: `Universal Animation Library[Standard].zip` (15 MB, v3 de 16/06/2026), licença CC0 confirmada em `License.txt`. Mantido só `assets-src/animations/ual-standard/standard/Unreal-Godot/UAL1_Standard.glb` (in-place) + licença/README.
+- **Rig da biblioteca**: 65 juntas com nomes estilo Unreal (`pelvis`, `spine_01..03`, `neck_01`, `Head`, `clavicle_l`, `upperarm_l`, `lowerarm_l`, `hand_l`, dedos `index/middle/ring/pinky/thumb_01..03` + folhas, `thigh/calf/foot/ball`), T-pose, 30 fps, 43 animações; todas com canais de posição/rotação/escala amostrados.
+- **Retarget** (`tools/blender/retarget.py`, chamado por `make_character.py`): mapa de 52 ossos; para cada osso, quadro canônico (direção anatômica até a junta filha + referência mundial frente/cima) nos dois rigs → alinhamento `S_can·T_can⁻¹`; a rotação relativa de cada osso é transferida no espaço do mundo (`S_pose·S_rest⁻¹·align·T_rest`), independente de roll e proporções; translação do quadril escalada pela altura do quadril; último quadro duplicado dos loops removido. 8 clipes: Idle, Walk, Run (`Jog_Fwd_Loop`), CrouchIdle, CrouchWalk, Talk, Interact e PickUp (`PickUp_Table`, cartão).
+- **Pés**: velocidades naturais medidas pelo pé apoiado (Walk 0,98 m/s, Jog ≈5,6 m/s, Crouch 0,70 m/s); o jogo reproduz os clipes a `velocidade real / (natural × altura/1,80)` e as velocidades passaram a andar 1,3 / correr 4,6 / agachado 0,8 m/s. Métrica de deslizamento no vídeo (`npm run capture:video`): pé apoiado parado no chão.
+- **Validação**: Khronos (0 erros), Babylon headless (31 testes; um deles falha se os clipes procedurais voltarem ao build), teste visual e de toque, folhas antes/depois (`docs/screenshots/characters/`) e vídeo `docs/videos/locomocao.mp4`.
+- **Vozes**: nada gerado; Web Speech API continua como fallback (sem créditos consumidos).

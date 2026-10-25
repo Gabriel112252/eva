@@ -27,11 +27,19 @@ describe("Personagens GLB (modelos rigados reais)", () => {
   });
 
   it("o manifesto lista os mesmos clipes e ossos usados pelo jogo", () => {
-    const manifest = JSON.parse(readFileSync(resolve(ROOT, "public/assets/characters/characters.json"), "utf8")) as { bones: string[]; clips: Record<string, unknown>; characters: Record<string, { height: number }> };
+    const manifest = JSON.parse(readFileSync(resolve(ROOT, "public/assets/characters/characters.json"), "utf8")) as { animations: string; bones: string[]; clips: Record<string, { source: string; frames?: number; duration: number }>; characters: Record<string, { height: number }> };
     expect(Object.keys(manifest.clips).sort()).toEqual([...ANIMATION_CLIPS].sort());
     expect(manifest.bones).toContain("mixamorig:Hips");
     expect(manifest.bones).toContain("mixamorig:Head");
     for (const v of variants) expect(manifest.characters[v]?.height).toBeCloseTo(CHARACTERS[v].height, 2);
+    // os clipes vêm da biblioteca CC0 retargeteada, nunca dos procedurais provisórios
+    expect(manifest.animations).toMatch(/Universal Animation Library/);
+    for (const [name, clip] of Object.entries(manifest.clips)) {
+      expect(clip.source, name).not.toBe("procedural");
+      expect(clip.frames ?? 0, name).toBeGreaterThan(20);
+    }
+    expect(manifest.clips.Walk!.source).toBe("Walk_Loop");
+    expect(manifest.clips.PickUp!.source).toBe("PickUp_Table");
   });
 
   it("carrega no Babylon com esqueleto Mixamo (52 ossos), 7 clipes e olhando para +Z; a animação move os ossos", async () => {

@@ -1,5 +1,5 @@
 import type { AnimationGroup } from "@babylonjs/core/Animations/animationGroup";
-import type { AnimationClip } from "@/data/characters";
+import { ONE_SHOT_CLIPS, type AnimationClip } from "@/data/characters";
 
 interface Track {
   group: AnimationGroup;
@@ -24,7 +24,7 @@ export class CharacterAnimator {
   constructor(groups: AnimationGroup[]) {
     for (const g of groups) {
       const name = g.name as AnimationClip;
-      const loop = name !== "Interact";
+      const loop = !ONE_SHOT_CLIPS.includes(name);
       g.stop();
       g.reset();
       this.tracks.set(name, { group: g, weight: 0, target: 0, loop });

@@ -4,6 +4,7 @@ import type { PhysicsEngine } from "@babylonjs/core/Physics/v2/physicsEngine";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { Scene } from "@babylonjs/core/scene";
 import type { CharacterModel } from "@/characters/characterModel";
+import { CLIP_REFERENCE_HEIGHT, CLIP_SPEEDS, type AnimationClip } from "@/data/characters";
 import type { InputManager } from "@/core/input";
 import { TypedEvent } from "@/core/events";
 import { COLLISION } from "@/world/context";
@@ -12,11 +13,23 @@ import { GRAVITY } from "@/physics/havok";
 export type MoveState = "idle" | "walk" | "run" | "crouchIdle" | "crouchWalk";
 export type FootstepKind = "walk" | "run" | "crouch";
 
-export const PLAYER_SPEEDS = { walk: 1.7, run: 4.3, crouch: 0.95 } as const;
+/** Velocidades de deslocamento (m/s). Escolhidas perto da velocidade natural dos clipes para a reprodução ficar entre 0,8× e 1,4×. */
+export const PLAYER_SPEEDS = { walk: 1.3, run: 4.6, crouch: 0.8 } as const;
 const STAND_HEIGHT = 1.78;
 const CROUCH_HEIGHT = 1.15;
 const RADIUS = 0.32;
-const STRIDE: Record<FootstepKind, number> = { walk: 0.78, run: 1.15, crouch: 0.55 };
+/** Comprimento de um passo (m) em cada clipe — a cadência muda com a velocidade, a passada não. */
+const STRIDE: Record<FootstepKind, number> = { walk: 0.65, run: 2.5, crouch: 0.75 };
+
+/**
+ * Razão de reprodução que faz o pé apoiado recuar exatamente na velocidade em que o personagem
+ * avança (sem deslizar): velocidade real / (velocidade natural do clipe × altura relativa).
+ */
+export function animationSpeedRatio(clip: AnimationClip, speed: number, height: number): number {
+  const natural = (CLIP_SPEEDS[clip] ?? 1) * (height / CLIP_REFERENCE_HEIGHT);
+  if (natural <= 0) return 1;
+  return Math.max(0.5, Math.min(2.2, speed / natural));
+}
 
 /** Lógica pura de movimento relativo à câmera (testável). */
 export function cameraRelativeDirection(axis: { x: number; y: number }, cameraYaw: number): { x: number; z: number } {
@@ -232,21 +245,22 @@ export class PlayerController {
     const anim = this.model.animator;
     if (anim.isOneShotPlaying) return;
     const s = this.horizontalSpeed;
+    const h = this.model.height;
     switch (this.state) {
       case "idle":
         anim.play("Idle");
         break;
       case "walk":
-        anim.play("Walk", Math.max(0.6, s / PLAYER_SPEEDS.walk));
+        anim.play("Walk", animationSpeedRatio("Walk", s, h));
         break;
       case "run":
-        anim.play("Run", Math.max(0.8, s / PLAYER_SPEEDS.run));
+        anim.play("Run", animationSpeedRatio("Run", s, h));
         break;
       case "crouchIdle":
         anim.play("CrouchIdle");
         break;
       case "crouchWalk":
-        anim.play("CrouchWalk", Math.max(0.6, s / PLAYER_SPEEDS.crouch));
+        anim.play("CrouchWalk", animationSpeedRatio("CrouchWalk", s, h));
         break;
     }
   }

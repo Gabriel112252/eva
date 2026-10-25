@@ -6,7 +6,8 @@ import { QUESTS, QUEST_APURACAO } from "@/data/quests";
 import { openStore } from "@/persistence/saveStore";
 import { SaveSystem, createEmptySave, migrateSave, SAVE_SCHEMA_VERSION } from "@/persistence/saveSystem";
 import { DEFAULT_SETTINGS, sanitizeSettings } from "@/core/settings";
-import { cameraRelativeDirection, resolveMoveState, angleDelta } from "@/player/playerController";
+import { cameraRelativeDirection, resolveMoveState, angleDelta, animationSpeedRatio, PLAYER_SPEEDS } from "@/player/playerController";
+import { CLIP_SPEEDS, CLIP_REFERENCE_HEIGHT } from "@/data/characters";
 import { damp } from "@/player/thirdPersonCamera";
 import { pickInteractable, type Interactable } from "@/interaction/interactable";
 import { InputManager } from "@/core/input";
@@ -93,6 +94,26 @@ describe("Movimento e interação (lógica pura)", () => {
     expect(resolveMoveState(true, true, false)).toBe("run");
     expect(resolveMoveState(false, false, true)).toBe("crouchIdle");
     expect(resolveMoveState(true, true, true)).toBe("crouchWalk");
+  });
+
+  it("sincroniza a reprodução dos clipes com a velocidade real (sem pés deslizando)", () => {
+    const h = CLIP_REFERENCE_HEIGHT;
+    // na velocidade natural do clipe a reprodução é 1×
+    expect(animationSpeedRatio("Walk", CLIP_SPEEDS.Walk!, h)).toBeCloseTo(1);
+    expect(animationSpeedRatio("Run", CLIP_SPEEDS.Run!, h)).toBeCloseTo(1);
+    // personagem mais baixo = passada menor = reprodução mais rápida para a mesma velocidade
+    expect(animationSpeedRatio("Walk", 1.3, 1.6)).toBeGreaterThan(animationSpeedRatio("Walk", 1.3, 1.8));
+    // as velocidades do jogo ficam numa faixa de reprodução natural (0,8×–1,5×)
+    expect(animationSpeedRatio("Walk", PLAYER_SPEEDS.walk, 1.76)).toBeGreaterThan(0.8);
+    expect(animationSpeedRatio("Walk", PLAYER_SPEEDS.walk, 1.76)).toBeLessThan(1.5);
+    expect(animationSpeedRatio("Run", PLAYER_SPEEDS.run, 1.76)).toBeGreaterThan(0.75);
+    expect(animationSpeedRatio("Run", PLAYER_SPEEDS.run, 1.76)).toBeLessThan(1.2);
+    expect(animationSpeedRatio("CrouchWalk", PLAYER_SPEEDS.crouch, 1.76)).toBeGreaterThan(0.8);
+    expect(animationSpeedRatio("CrouchWalk", PLAYER_SPEEDS.crouch, 1.76)).toBeLessThan(1.5);
+    // limites: nunca para nem dispara
+    expect(animationSpeedRatio("Run", 0.1, h)).toBe(0.5);
+    expect(animationSpeedRatio("Walk", 9, h)).toBe(2.2);
+    expect(animationSpeedRatio("Idle", 3, h)).toBe(2.2);
   });
 
   it("calcula menor delta angular e suavização", () => {

@@ -6,3 +6,6 @@ dist/
 coverage/
 docs/screenshots/erro.jpg
 tools/blender/.cache/
+docs/videos/.frames/
+__pycache__/
+docs/videos/*.gif

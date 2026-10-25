@@ -1,10 +1,13 @@
 import type { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import type { AnimationClip } from "@/data/characters";
 
 /** Qualquer coisa com a qual Matias pode interagir pressionando E. */
 export interface Interactable {
   readonly id: string;
   /** Distância máxima (m) para o prompt aparecer. */
   readonly radius: number;
+  /** Clipe que Matias toca ao interagir (padrão: "Interact" — estender a mão; "PickUp" para pegar de uma mesa). */
+  readonly clip?: AnimationClip;
   /** Posição mundial de referência. */
   getPosition(): Vector3;
   /** Texto do prompt (ex.: "Falar com Miriam"); null quando indisponível. */

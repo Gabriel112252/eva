@@ -1,6 +1,6 @@
 # STATUS — O Último Veto / EVA
 
-Atualizado em 25/10/2026 (personagens realistas + controles de toque).
+Atualizado em 25/10/2026 (personagens realistas, controles de toque, animações CC0 retargeteadas).
 
 ## Marco atual: **M0 — primeiro protótipo jogável** ✅
 
@@ -12,7 +12,8 @@ O jogo roda no navegador (Chrome/Edge/Firefox recentes no desktop; Chrome/Safari
 | --- | --- | --- |
 | Engine, build, Docker | ✅ | Vite 8 + TypeScript estrito; `npm run check` (tsc + vitest + build) passa; `Dockerfile` multi-stage (Node → Nginx) escrito e revisado — **a imagem ainda não foi construída neste ambiente** (sem daemon Docker disponível); validar com `docker build` antes do deploy no Easypanel. |
 | Física Havok | ✅ | `PhysicsCharacterController` (cápsula), colisores estáticos para chão, calçadas (degrau 12 cm), prédios, props; caixas/barris dinâmicos empurráveis. |
-| Matias (3ª pessoa) | ✅ | Modelo GLB **rigado** (rig Mixamo, 52 ossos, skinning) com anatomia/rosto do MakeHuman (CC0), pele bakeada, cabelo, óculos, roupa de trabalho; clipes Idle/Walk/Run/CrouchIdle/CrouchWalk/Talk/Interact com cross-fade por peso. WASD, Shift (correr), C/Ctrl (agachar, com verificação de teto por raio físico), E (interagir), Esc (pausa). |
+| Matias (3ª pessoa) | ✅ | Modelo GLB **rigado** (rig Mixamo, 52 ossos, skinning) com anatomia/rosto do MakeHuman (CC0), pele bakeada, cabelo, óculos, roupa de trabalho. WASD, Shift (correr), C/Ctrl (agachar, com verificação de teto por raio físico), E (interagir), Esc (pausa). |
+| Animações | ✅ (reais, CC0) | 8 clipes da **Quaternius Universal Animation Library v3 Standard** (CC0; `assets-src/animations/`) retargeteados em Blender headless para o rig Mixamo de 52 ossos (`tools/blender/retarget.py`: alinhamento de quadros canônicos por osso, transferência de rotação no espaço do mundo, quadril escalado): Idle, Walk, Run (`Jog_Fwd_Loop`), CrouchIdle, CrouchWalk, Talk, Interact e PickUp (cartão). Cross-fade por peso e fase compartilhada entre marchas. A reprodução dos clipes de locomoção é sincronizada com a velocidade real (`animationSpeedRatio`) → pé apoiado parado no chão (medido em `tools/capture-video.mjs`). Velocidades: andar 1,3 m/s, correr 4,6 m/s, agachado 0,8 m/s. Os clipes procedurais antigos ficam só como fallback explícito (`--procedural-anims`) e um teste impede que cheguem ao build. |
 | Controles de toque | ✅ | Celular/tablet detectado automaticamente (ponteiro grosso; notebook com tela sensível ativa no 1º toque; `?touch=1/0` força): joystick virtual flutuante (zona morta, anel externo = correr), arrastar à direita gira a câmera sem pointer lock, botões E/Agachar/Correr/Pausa, toque curto avança falas (nunca escolhe resposta por acidente), tela cheia + orientação horizontal quando o navegador permite, qualidade baixa por padrão sem configuração salva. Verificado por `npm run test:touch` (Chromium emulando celular, só toques). |
 | Câmera | ✅ | Terceira pessoa sobre o ombro, mouse com pointer lock — e, quando o navegador recusa o lock (iframe sem permissão, `?pointerlock=0`), arrastar com o botão esquerdo gira a câmera (aviso único na tela) —, arrastar no toque, roda para distância, oclusão por raio físico (não atravessa paredes), enquadramentos de diálogo (over-the-shoulder/two-shot) com letterbox e DOF. Mouse/roda acumulados fora do modo seguir são descartados (sem salto ao sair do diálogo). |
 | Cenário | ✅ (procedural) | Rua de 62 m com 10 fachadas (janelas vedadas/acesas, sacadas, toldos, pichações, varais, caixas d'água, painéis solares), oficina de Matias (interior jogável), praça com posto de distribuição, fila, quadro de avisos, estandarte da Igreja, fonte seca, árvores, mato, carro queimado, entulho, barraca de mercado, gerador, portão da Central de Suprimentos. Placas e cartazes em PT-BR. Vegetação e sinais de ocupação humana (roupas, luzes acesas, energia parcial). |
@@ -36,7 +37,7 @@ O jogo roda no navegador (Chrome/Edge/Firefox recentes no desktop; Chrome/Safari
 
 ## Assets provisórios (todos marcados em `public/assets/licenses/ASSETS.md`)
 
-- **Personagens**: gerados por `tools/blender/make_character.py` (Blender headless via `pip install bpy`) a partir de **dados CC0 do MakeHuman** vendorizados em `tools/blender/data/makehuman` — malha base hm08, targets (raça/sexo/idade/peso + detalhes faciais), rig Mixamo com pesos, máscaras de pele e olhos. Anatomia e rosto são reais; pele é procedural bakeada (2048 px Matias / 1024 px NPCs); cabelo é uma calota esculpida (sem fios); roupas são cascas conformadas ao corpo (sem rugas/tecido); acessórios (óculos, mochila, cinto, boné, lenço, jaleco, avental) são primitivas ou camadas do corpo. Sem marcas; sem a fotografia do criador (o rosto de Matias não tem semelhança com ele). Pré-visualizações em `docs/screenshots/characters/`.
+- **Personagens**: gerados por `tools/blender/make_character.py` (Blender headless via `pip install bpy`) a partir de **dados CC0 do MakeHuman** vendorizados em `tools/blender/data/makehuman` — malha base hm08, targets (raça/sexo/idade/peso + detalhes faciais), rig Mixamo com pesos, máscaras de pele e olhos. Anatomia e rosto são reais; pele é procedural bakeada (2048 px Matias / 1024 px NPCs); cabelo é uma calota esculpida (sem fios); roupas são cascas conformadas ao corpo (sem rugas/tecido); acessórios (óculos, mochila, cinto, boné, lenço, jaleco, avental) são primitivas ou camadas do corpo. Sem marcas; sem a fotografia do criador (o rosto de Matias não tem semelhança com ele). Pré-visualizações em `docs/screenshots/characters/`. **Animações não são provisórias**: biblioteca CC0 da Quaternius (ver acima); vídeo de avaliação em `docs/videos/locomocao.mp4`.
 - **MPFB/asset packs**: o plugin MPFB foi clonado mas **não é executado** (o gerador é código próprio que lê só os dados CC0). Os pacotes de assets do MakeHuman (peles fotográficas, cabelos, roupas) **não estão instalados** — o site makehumancommunity.org é inacessível deste ambiente. Rodar o MPFB com `makehuman_system_assets` na máquina do criador é o próximo salto de qualidade.
 - **Cenário**: geometria em blocos e texturas procedurais (sem fotos/scans).
 - **Som**: sintetizado em tempo de execução.
@@ -47,7 +48,7 @@ O jogo roda no navegador (Chrome/Edge/Firefox recentes no desktop; Chrome/Safari
 | Necessidade | Ferramenta | Licença/observação |
 | --- | --- | --- |
 | Pele fotográfica, cabelo com fios e roupas modeladas | **Blender 4.x + MPFB 2** com o pacote `makehuman_system_assets` (CC0) instalado localmente; escultura de semelhança a partir da foto (privada) ou **KeenTools FaceBuilder** | Exportar GLB com o mesmo rig Mixamo/nomes de clipes; o gerador atual serve de base (mesmos ossos). |
-| Animações de locomoção realistas | **Mixamo** (gratuito para uso em projetos, inclusive comerciais, conforme termos da Adobe) ou captura própria (**Rokoko/Move.ai**) | Retarget em Blender para o rig do projeto; manter os nomes de clipes `Idle/Walk/Run/CrouchIdle/CrouchWalk/Talk/Interact`. |
+| Mais animações (reações da multidão, sentar, empurrar, cair) | A própria **UAL** tem 43 clipes (sentar, empurrar, nadar, morte…) e a **UAL 2** (CC0, gratuita) tem 130+; **Mixamo** como alternativa | Mesmo pipeline: adicionar a entrada em `GAME_CLIPS` (`tools/blender/retarget.py`) e em `ANIMATION_CLIPS`. |
 | Kit urbano brasileiro (fachadas, mobiliário, entulho) | **Blender** + texturas **Poly Haven (CC0)** / **ambientCG (CC0)**; **Kenney (CC0)** para props rápidos | Registrar cada arquivo em `ASSETS.md`. Compressão KTX2/Basis e Draco via `gltf-transform`. |
 | Dublagem PT-BR | Atores + gravação (ex.: estúdio local) ou, para animatic, TTS neural com licença comercial (ex.: ElevenLabs, Azure TTS pt-BR) | Arquivos `.ogg` em `public/assets/audio/voice/pt-BR/`, campo `voice` nas linhas de diálogo; registrar contrato/licença. |
 | Efeitos sonoros e ambiente | **Freesound (CC0/CC-BY)**, **Sonniss GDC packs** (royalty-free) | Substituir geradores em `src/audio/synth.ts` por arquivos; manter o sintetizador como fallback. |
@@ -64,7 +65,7 @@ O jogo roda no navegador (Chrome/Edge/Firefox recentes no desktop; Chrome/Safari
 
 ## Próxima etapa (M1)
 
-1. Elevar os personagens: pele fotográfica/cabelo/roupas via MPFB + asset packs na máquina do criador; animações Mixamo com retarget (rig já compatível).
+1. Elevar os personagens: pele fotográfica/cabelo/roupas via MPFB + asset packs na máquina do criador (animações já resolvidas com a UAL; rig compatível com mais clipes dela e do Mixamo).
 2. Fechar os beats 4 e 5: mensageiro, multidão na fila com reações, Custódio pedindo calma, depósito com a pista física e a decisão final em tensão.
 3. Gravar/licenciar dublagem e SFX; lip-sync básico.
 4. Texturas PBR reais (Poly Haven/ambientCG), kit modular de fachadas, decals de sujeira; otimização (instâncias, KTX2, Draco).

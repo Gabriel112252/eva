@@ -18,7 +18,7 @@ Jogo **3D narrativo para navegador**, com exploração em terceira pessoa, mist�
 
 - **Babylon.js 9** + **TypeScript** (estrito) + **Vite 8** — WebGL 2.
 - **Havok** (`@babylonjs/havok`, WASM) — física, colisão e `PhysicsCharacterController`.
-- **glTF/GLB** — personagens rigados (rig Mixamo) com animações esqueléticas, gerados em Blender headless a partir de dados CC0 do MakeHuman (`tools/blender/make_character.py`).
+- **glTF/GLB** — personagens rigados (rig Mixamo, 52 ossos) gerados em Blender headless a partir de dados CC0 do MakeHuman (`tools/blender/make_character.py`), com animações reais da **Quaternius Universal Animation Library** (CC0) retargeteadas por `tools/blender/retarget.py`.
 - **Web Audio** — áudio espacial (HRTF), passos, ambiente, interface; **Web Speech API** como voz provisória.
 - **IndexedDB** — salvamento local com esquema versionado.
 - **Vitest** (lógica, GLB, física headless) + **Playwright/Chromium** (teste visual com screenshots).
@@ -73,11 +73,12 @@ Os testes em navegador precisam do Playwright com Chromium (`npm i -D playwright
 
 ```bash
 /usr/bin/python3.11 -m pip install bpy==4.5.1   # Blender como módulo Python (Python 3.11)
-npm run assets:characters      # Blender headless: escreve public/assets/characters/*.glb + characters.json e valida (Khronos)
+npm run assets:characters      # Blender headless: morfa, veste, retargeteia as animações e escreve public/assets/characters/*.glb + characters.json; valida (Khronos)
 npm run assets:preview         # renderiza docs/screenshots/characters/matias_*.jpg (Cycles)
+npm run capture:video          # grava docs/videos/locomocao.mp4 (andar/correr/agachar/pegar) com quadros determinísticos a 30 fps e mede o deslizamento dos pés
 ```
 
-Os dados-fonte (malha hm08, targets, rig Mixamo, máscaras, olhos) são CC0 do MakeHuman, vendorizados em `tools/blender/data/makehuman/`.
+Os dados-fonte (malha hm08, targets, rig Mixamo, máscaras, olhos) são CC0 do MakeHuman, vendorizados em `tools/blender/data/makehuman/`. As animações vêm da Quaternius Universal Animation Library v3 Standard (CC0, `assets-src/animations/`); o retarget (`tools/blender/retarget.py`) alinha quadros canônicos por osso e transfere as rotações no espaço do mundo, então funciona apesar das poses de descanso e proporções diferentes. Para usar outra animação da biblioteca, acrescente-a a `GAME_CLIPS` e a `ANIMATION_CLIPS`.
 
 ## Docker / Easypanel
 
@@ -91,7 +92,8 @@ No Easypanel: serviço do tipo *App* apontando para este repositório com build 
 ## Estrutura
 
 ```text
-public/assets/characters/   GLB rigados (humanos MakeHuman CC0, provisórios) + manifesto
+public/assets/characters/   GLB rigados (humanos MakeHuman CC0 + animações UAL CC0) + manifesto
+assets-src/animations/      fonte das animações (Quaternius UAL Standard, CC0) e mapeamento
 public/assets/licenses/     ASSETS.md — origem e licença de cada asset
 src/core/                   boot, loop, input, configurações, orquestração (game.ts)
 src/world/                  materiais e texturas procedurais, rua, prédios, oficina, praça, props, luz/céu
@@ -104,7 +106,7 @@ src/audio/                  motor Web Audio, sintetizador de sons, voz
 src/ui/                     HUD, menus e controles de toque
 src/persistence/            IndexedDB e sistema de save
 tests/                      unit, assets, integration (física headless)
-tools/                      gerador/validador de personagens, testes em navegador (visual e toque)
+tools/                      gerador de personagens + retarget, validador, testes em navegador (visual e toque), captura de vídeo
 docs/                       bíblia canônica, prólogo, arquitetura, STATUS, screenshots
 ```
 
@@ -119,4 +121,4 @@ docs/                       bíblia canônica, prólogo, arquitetura, STATUS, sc
 
 ## Assets e licenças
 
-Todos os assets atuais são gerados pelo próprio projeto a partir de dados CC0 (MakeHuman) e são **provisórios**: humanos rigados com pele/cabelo/roupa procedurais, texturas e sons procedurais, voz por síntese do navegador. Nenhuma marca comercial nas roupas; a foto de referência do criador não está no repositório. Veja [`public/assets/licenses/ASSETS.md`](public/assets/licenses/ASSETS.md) para a tabela completa e [`docs/STATUS.md`](docs/STATUS.md) para as ferramentas externas previstas para substituí-los (Blender, Mixamo, Poly Haven, dublagem).
+Os personagens são gerados pelo próprio projeto a partir de dados CC0 (MakeHuman) e animados com a Quaternius Universal Animation Library (CC0). Continuam **provisórios**: pele/cabelo/roupa procedurais, texturas e sons procedurais, voz por síntese do navegador. Nenhuma marca comercial nas roupas; a foto de referência do criador não está no repositório. Veja [`public/assets/licenses/ASSETS.md`](public/assets/licenses/ASSETS.md) para a tabela completa e [`docs/STATUS.md`](docs/STATUS.md) para as ferramentas externas previstas para substituí-los (Blender, Mixamo, Poly Haven, dublagem).

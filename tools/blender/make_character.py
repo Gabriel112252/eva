@@ -950,7 +950,27 @@ def apply_arms_down_rest_pose(arm, mesh_objs):
         bpy.ops.object.mode_set(mode="OBJECT")
 
 
+ANIM_LIBRARY_DEFAULT = os.path.join(REPO, "assets-src", "animations", "ual-standard", "standard", "Unreal-Godot", "UAL1_Standard.glb")
+
+
+def build_animations_from_library(arm, library_path: str) -> dict:
+    """Clipes reais: Quaternius Universal Animation Library (CC0) retargeteada para o rig Mixamo (retarget.py)."""
+    sys.path.insert(0, HERE)
+    import retarget  # noqa: E402
+
+    lib = retarget.load_library(library_path)
+    frames = retarget.retarget_clips(lib, arm)
+    # remove a armadura/malha da biblioteca da cena (não deve ser exportada nem contaminar seleção)
+    for o in [lib.arm] + [c for c in lib.arm.children_recursive]:
+        bpy.data.objects.remove(o, do_unlink=True)
+    for a in list(lib.actions.values()):
+        if a.users == 0:
+            bpy.data.actions.remove(a)
+    return {name: {"duration": round(n / FPS, 4), "loop": loop, "source": src, "frames": n} for name, (src, loop) in retarget.GAME_CLIPS.items() for n in [frames[name]]}
+
+
 def build_animations(arm, scale: float):
+    """Fallback procedural (baixa qualidade) — só é usado se a biblioteca de animações não existir."""
     clips = rest_pose_lib()
     arm.animation_data_create()
     arm_fix = {}
@@ -979,7 +999,7 @@ def build_animations(arm, scale: float):
 # ---------------------------------------------------------------------------
 # Montagem de um personagem
 # ---------------------------------------------------------------------------
-def build_character(name: str, spec: dict, base: BaseMesh, vgroups, weights, tex_size: int, do_bake: bool, out_dir: str):
+def build_character(name: str, spec: dict, base: BaseMesh, vgroups, weights, tex_size: int, do_bake: bool, out_dir: str, anim_library: str | None = None):
     t0 = time.time()
     clear_scene()
     verts_mh = morph(base, spec)
@@ -1130,7 +1150,13 @@ def build_character(name: str, spec: dict, base: BaseMesh, vgroups, weights, tex
     # --- rest pose com braços caídos + animações --------------------------------
     mesh_objs = [body] + cloth_objs + hair_objs + [o for o, _ in acc] + ([eyes] if eyes else [])
     apply_arms_down_rest_pose(arm, mesh_objs)
-    build_animations(arm, scale)
+    if anim_library:
+        clips_info = build_animations_from_library(arm, anim_library)
+        log(f"{name}: animações da biblioteca ({os.path.basename(anim_library)}): " + ", ".join(f"{k}={v['frames']}f" for k, v in clips_info.items()))
+    else:
+        log(f"{name}: AVISO — biblioteca de animações ausente; usando clipes procedurais provisórios")
+        build_animations(arm, scale)
+        clips_info = {k: {"duration": d, "loop": l, "source": "procedural"} for k, (d, l, _) in rest_pose_lib().items()}
 
     # --- export ---------------------------------------------------------------
     objs = [arm, body] + cloth_objs + hair_objs + [o for o, _ in acc] + ([eyes] if eyes else [])
@@ -1166,7 +1192,7 @@ def build_character(name: str, spec: dict, base: BaseMesh, vgroups, weights, tex
     )
     tris = sum(len(p.vertices) - 2 for o in objs if o.type == "MESH" for p in o.data.polygons)
     log(f"{name}: exportado {out} ({os.path.getsize(out) / 1024:.0f} KB, ~{tris} triângulos antes do solidify) em {time.time() - t0:.1f}s")
-    return {"file": f"{name}.glb", "label": spec["label"], "height": spec["height"], "triangles": tris, "bones": len(arm.data.bones)}
+    return {"file": f"{name}.glb", "label": spec["label"], "height": spec["height"], "triangles": tris, "bones": len(arm.data.bones)}, clips_info
 
 
 def build_eyes(name: str, verts: list[Vector], scale: float):
@@ -1496,19 +1522,32 @@ def main():
     ap.add_argument("--no-bake", action="store_true")
     ap.add_argument("--tex", type=int, default=2048)
     ap.add_argument("--out", default=os.path.join(REPO, "public", "assets", "characters"))
+    ap.add_argument("--anim-lib", default=ANIM_LIBRARY_DEFAULT, help="GLB da Quaternius Universal Animation Library (in-place)")
+    ap.add_argument("--procedural-anims", action="store_true", help="ignora a biblioteca e usa os clipes procedurais provisórios")
     args = ap.parse_args()
     os.makedirs(args.out, exist_ok=True)
     names = [n.strip() for n in args.only.split(",") if n.strip()] or list(CHARACTERS)
+    anim_lib = None if args.procedural_anims else args.anim_lib
+    if anim_lib and not os.path.exists(anim_lib):
+        log(f"AVISO: biblioteca de animações não encontrada em {anim_lib} — clipes procedurais provisórios serão usados")
+        anim_lib = None
     base = BaseMesh(os.path.join(DATA, "base.obj"))
     vgroups = load_vertex_groups()
     weights = load_weights()
-    manifest = {"generator": "tools/blender/make_character.py", "source": "MakeHuman hm08 (CC0) + Blender headless", "fps": FPS, "rig": "mixamo", "bones": list(B.values()), "clips": {}, "characters": {}}
-    for name, (duration, loop, _) in rest_pose_lib().items():
-        manifest["clips"][name] = {"duration": duration, "loop": loop}
+    manifest = {
+        "generator": "tools/blender/make_character.py",
+        "source": "MakeHuman hm08 (CC0) + Blender headless",
+        "animations": "Quaternius Universal Animation Library v3 Standard (CC0), retarget tools/blender/retarget.py" if anim_lib else "procedural (provisório)",
+        "fps": FPS,
+        "rig": "mixamo",
+        "bones": list(B.values()),
+        "clips": {},
+        "characters": {},
+    }
     for n in names:
         spec = CHARACTERS[n]
         tex = args.tex if n == "matias" else min(args.tex, 1024)
-        manifest["characters"][n] = build_character(n, spec, base, vgroups, weights, tex, not args.no_bake, args.out)
+        manifest["characters"][n], manifest["clips"] = build_character(n, spec, base, vgroups, weights, tex, not args.no_bake, args.out, anim_lib)
     if not args.only:
         with open(os.path.join(args.out, "characters.json"), "w", encoding="utf-8") as f:
             json.dump(manifest, f, indent=2, ensure_ascii=False)

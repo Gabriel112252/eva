@@ -24,8 +24,18 @@ export const CHARACTERS: Record<CharacterVariant, CharacterInfo> = {
   ana: { variant: "ana", displayName: "Ana", height: 1.6, radius: 0.28, prompt: "Falar com Ana", voice: { pitch: 1.2, rate: 1.02, gender: "female" } },
 };
 
-export const ANIMATION_CLIPS = ["Idle", "Walk", "Run", "CrouchIdle", "CrouchWalk", "Talk", "Interact"] as const;
+export const ANIMATION_CLIPS = ["Idle", "Walk", "Run", "CrouchIdle", "CrouchWalk", "Talk", "Interact", "PickUp"] as const;
 export type AnimationClip = (typeof ANIMATION_CLIPS)[number];
+/** Clipes tocados uma vez (não em loop). */
+export const ONE_SHOT_CLIPS: readonly AnimationClip[] = ["Interact", "PickUp"];
+
+/**
+ * Velocidade natural (m/s) de cada clipe de locomoção a 1× — medida pela velocidade do pé apoiado nos
+ * loops in-place da Quaternius Universal Animation Library (manequim de ~1,80 m). O controlador ajusta
+ * a velocidade de reprodução para `velocidade real / (natural × altura/1,80)`, eliminando pés deslizando.
+ */
+export const CLIP_SPEEDS: Partial<Record<AnimationClip, number>> = { Walk: 0.98, Run: 6.1, CrouchWalk: 0.7 };
+export const CLIP_REFERENCE_HEIGHT = 1.8;
 
 /**
  * URL do modelo. VITE_CHARACTER_EXT permite renomear os .glb em hospedagens que
