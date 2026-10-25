@@ -76,6 +76,11 @@ Os testes em navegador precisam do Playwright com Chromium (`npm i -D playwright
 npm run assets:characters      # Blender headless: morfa, veste, retargeteia as animações e escreve public/assets/characters/*.glb + characters.json; valida (Khronos)
 npm run assets:preview         # renderiza docs/screenshots/characters/matias_*.jpg (Cycles)
 npm run capture:video          # grava docs/videos/locomocao.mp4 (andar/correr/agachar/pegar) com quadros determinísticos a 30 fps e mede o deslizamento dos pés
+npm run capture:praca          # grava docs/videos/praca_hero.mp4 (passeio pelo hero corner da praça)
+npm run assets:environment     # regenera o kit GLB da praça (tools/blender/make_environment.py → public/assets/environments/praca_hero.glb)
+npm run assets:vehicles        # valida os GLB-fonte dos veículos (PR #1) e gera os refinados em public/assets/vehicles/
+npm run test:vehicles          # testa os veículos no jogo construído (colisão, escala, sombras) e o visualizador preview-veiculos.html
+node tools/shot.mjs --out docs/screenshots/x.jpg --cam 24.5,2.4,3 --at 34,1.6,12.5 --player 29,0.22,7,0.9   # screenshot A/B com câmera fixa
 ```
 
 Os dados-fonte (malha hm08, targets, rig Mixamo, máscaras, olhos) são CC0 do MakeHuman, vendorizados em `tools/blender/data/makehuman/`. As animações vêm da Quaternius Universal Animation Library v3 Standard (CC0, `assets-src/animations/`); o retarget (`tools/blender/retarget.py`) alinha quadros canônicos por osso e transfere as rotações no espaço do mundo, então funciona apesar das poses de descanso e proporções diferentes. Para usar outra animação da biblioteca, acrescente-a a `GAME_CLIPS` e a `ANIMATION_CLIPS`.

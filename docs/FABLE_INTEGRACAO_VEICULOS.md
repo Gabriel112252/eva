@@ -1,5 +1,12 @@
 # MANUAL FABLE — INTEGRAÇÃO DO PACOTE SEM CONFLITOS
 
+> **Estado em 25/10/2026 — integrado.** PR #1 mesclada em `main` após o commit do M1.1 (só adicionava arquivos; nenhum `src/world/**` sobrescrito).
+> - Refino dos 5 GLBs no Blender (`tools/blender/refine_vehicles.py` → `public/assets/vehicles/`): materiais PBR com textura (pintura gasta com riscos/sujeira, ferrugem, madeira, lona, banda de pneu), UVs em caixa, chanfros e suavização por ângulo, peças juntadas por material (≤ 11 malhas por veículo), detalhes extras (sinalizador/antena/para-lamas/estribos/placas no Javali, lona ondulada e carga no Atlas, espelhos/escapamento/lona no Módulo). `assets-src/vehicles/` continua como fonte do gerador.
+> - Só **Javali, Atlas e Módulo** entram na São Paulo Velha (`src/world/vehiclesPack.ts`, chamado por `src/core/game.ts` depois dos módulos da praça): props estáticos com colisor Havok em caixa, oclusão de câmera, sombras. Posições revistas contra o layout atual (viatura junto à fachada da Central a leste do portão; van em frente ao posto médico; triciclo no meio-fio diante da barraca do mercado). **Rastro e Janus não aparecem** no cenário; só no visualizador.
+> - Visualizador `preview-veiculos.html` incluído no build (`vite.config.ts`), carregando de `public/assets/vehicles/`.
+> - Testes: `node tools/validate-eva-vehicles.mjs` (5/5), `tests/assets/vehicles.test.ts` (validador Khronos, só 3 terrestres no mundo), `npm run test:vehicles` (carregamento, escala, apoio no chão, colisão andando contra cada veículo, sombras, draw calls, FPS; visualizador com captura por modelo). A/B em `docs/screenshots/veiculos/`.
+> - Os modelos continuam **primeira versão/protótipo modular**: silhuetas simples (lofts de 8 lados), sem interiores, sem decalques. Próximo passe: modelagem mais rica em Blender (vincos, vidros com moldura, interiores, suspensão), texturas PBR fotográficas CC0.
+
 **Branch de origem:** `feat/veiculos-janus`. **NÃO integrar cegamente enquanto houver trabalho não commitado em `main`**.
 
 ## Sequência recomendada
