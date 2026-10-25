@@ -35,7 +35,7 @@ export function buildStreet(ctx: WorldContext): void {
   ctx.box("calcada_sul", { w: streetLen, h: S.curbHeight, d: S.sidewalkDepth }, new Vector3(streetCx, sidewalkY, -(S.halfWidth + S.sidewalkDepth / 2)), mats.sidewalk, { collider: true, shadow: false, cameraBlocker: false });
   const plazaW = S.plaza.x1 - S.plaza.x0;
   const plazaD = S.plaza.z1 - S.plaza.z0;
-  ctx.box("praca_piso", { w: plazaW, h: S.curbHeight, d: plazaD }, new Vector3((S.plaza.x0 + S.plaza.x1) / 2, sidewalkY, (S.plaza.z0 + S.plaza.z1) / 2), mats.sidewalk, { collider: true, shadow: false, cameraBlocker: false });
+  ctx.box("praca_piso", { w: plazaW, h: S.curbHeight, d: plazaD }, new Vector3((S.plaza.x0 + S.plaza.x1) / 2, sidewalkY, (S.plaza.z0 + S.plaza.z1) / 2), mats.pavingStones, { collider: true, shadow: false, cameraBlocker: false });
 
   // Faixas de pedestre e marcação central desbotadas (planos finos sobre o asfalto)
   for (let i = 0; i < 8; i++) {

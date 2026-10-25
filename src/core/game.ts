@@ -11,6 +11,7 @@ import { DEFAULT_SETTINGS, type GameSettings } from "./settings";
 import { enableHavok } from "@/physics/havok";
 import { Environment } from "@/world/environment";
 import { buildWorld, type World } from "@/world/worldBuilder";
+import { loadHeroAssets } from "@/world/heroAssets";
 import { STREET } from "@/world/street";
 import { loadCharacter, type CharacterModel } from "@/characters/characterModel";
 import { Npc } from "@/characters/npc";
@@ -117,6 +118,14 @@ export class Game {
       worldStep++;
       progress(0.1 + Math.min(0.35, worldStep * 0.06), label);
     });
+    progress(0.46, "Montando a praça da Apuração (módulos PBR)…");
+    let heroCasters: import("@babylonjs/core/Meshes/abstractMesh").AbstractMesh[] = [];
+    try {
+      const hero = await loadHeroAssets(this.scene, this.world.ctx);
+      heroCasters = hero.shadowCasters;
+    } catch (err) {
+      console.error("[heroAssets] falha ao carregar os módulos da praça", err);
+    }
     progress(0.5, "Carregando Matias…");
     this.matias = await loadCharacter(this.scene, "matias");
     const spawn = this.world.spawns.get("oficina")!;
@@ -137,7 +146,7 @@ export class Game {
     }
     progress(0.92, "Sombras e pós-processamento…");
     // em qualidade baixa só Matias projeta sombra (NPCs são o custo dominante de skinning no mapa de sombras)
-    this.env.addShadowCasters([...this.world.shadowCasters, ...this.matias.meshes, ...(this.settings.quality === "baixa" ? [] : this.npcs.flatMap((n) => n.model.meshes))]);
+    this.env.addShadowCasters([...this.world.shadowCasters, ...heroCasters, ...this.matias.meshes, ...(this.settings.quality === "baixa" ? [] : this.npcs.flatMap((n) => n.model.meshes))]);
     this.env.attachPostProcessing(this.camera.camera);
     this.collectFlickerLights();
     this.setupWorldInteractables();

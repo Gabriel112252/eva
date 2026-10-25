@@ -30,6 +30,8 @@ export interface BuildingSpec {
   vines?: boolean;
   ac?: number;
   seed: number;
+  /** A fachada vem de um módulo GLB (heroAssets): só o corpo e a laje são gerados aqui. */
+  frontModel?: boolean;
 }
 
 function rnd(seed: number, i: number): number {
@@ -55,6 +57,7 @@ export function buildBuilding(ctx: WorldContext, spec: BuildingSpec): void {
 
   // Corpo principal (colisor)
   ctx.box(`${spec.id}_corpo`, { w: width, h: height, d: spec.depth }, new Vector3(cx, height / 2, bodyZ), wallMat, { collider: true });
+  if (spec.frontModel) return; // fachada, platibanda, janelas e portas vêm do módulo GLB
 
   // Platibanda e laje do telhado
   ctx.box(`${spec.id}_platibanda`, { w: width + 0.2, h: 0.5, d: 0.25 }, new Vector3(cx, height + 0.25, spec.zFront + out * 0.08), mats.concrete);

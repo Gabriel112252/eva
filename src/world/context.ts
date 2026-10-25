@@ -224,9 +224,12 @@ export class WorldContext {
   }
 
   /** Corpo dinâmico leve (caixas/barris que o jogador empurra). */
-  dynamicBox(mesh: Mesh, size: { w: number; h: number; d: number }, mass: number): PhysicsBody {
+  /** Corpo dinâmico (empurrável). `node` pode ser uma malha procedural ou o nó de um módulo GLB; `center` é o
+   *  centro da caixa de colisão no espaço local do nó (módulos GLB têm a origem no chão). */
+  dynamicBox(node: TransformNode, size: { w: number; h: number; d: number }, mass: number, center = Vector3.Zero()): PhysicsBody {
+    const mesh = node;
     mesh.parent = this.dynamicRoot;
-    const shape = new PhysicsShapeBox(Vector3.Zero(), Quaternion.Identity(), new Vector3(size.w, size.h, size.d), this.scene);
+    const shape = new PhysicsShapeBox(center, Quaternion.Identity(), new Vector3(size.w, size.h, size.d), this.scene);
     shape.filterMembershipMask = COLLISION.PROP;
     shape.filterCollideMask = COLLISION.WORLD | COLLISION.PLAYER | COLLISION.NPC | COLLISION.PROP;
     shape.material = { friction: 0.7, restitution: 0.05 };
@@ -235,7 +238,8 @@ export class WorldContext {
     body.setMassProperties({ mass });
     body.setLinearDamping(0.6);
     body.setAngularDamping(0.8);
-    this.shadowCasters.push(mesh);
+    if (mesh instanceof Mesh) this.shadowCasters.push(mesh);
+    else this.shadowCasters.push(...mesh.getChildMeshes(false).filter((c) => !c.name.includes("COL_")));
     return body;
   }
 

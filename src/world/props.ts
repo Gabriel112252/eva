@@ -58,13 +58,17 @@ export function grassTuft(ctx: WorldContext, id: string, pos: Vector3, size = 0.
 // ---------------------------------------------------------------------------
 // Iluminação pública
 // ---------------------------------------------------------------------------
-export function streetLamp(ctx: WorldContext, id: string, pos: Vector3, facingX: number, state: "on" | "off" | "flicker"): void {
+export function streetLamp(ctx: WorldContext, id: string, pos: Vector3, facingX: number, state: "on" | "off" | "flicker", opts: { model?: boolean } = {}): void {
   const { mats } = ctx;
-  ctx.cylinder(`${id}_poste`, { height: 6.5, diameterTop: 0.12, diameterBottom: 0.2, tessellation: 8 }, new Vector3(pos.x, 3.25, pos.z), mats.metalPainted, { collider: true });
-  ctx.box(`${id}_braco`, { w: 1.6, h: 0.08, d: 0.08 }, new Vector3(pos.x + facingX * 0.7, 6.4, pos.z), mats.metalPainted, { shadow: false });
-  ctx.box(`${id}_luminaria`, { w: 0.6, h: 0.18, d: 0.3 }, new Vector3(pos.x + facingX * 1.5, 6.3, pos.z), mats.metalDark);
+  if (!opts.model) {
+    ctx.cylinder(`${id}_poste`, { height: 6.5, diameterTop: 0.12, diameterBottom: 0.2, tessellation: 8 }, new Vector3(pos.x, 3.25, pos.z), mats.metalPainted, { collider: true });
+    ctx.box(`${id}_braco`, { w: 1.6, h: 0.08, d: 0.08 }, new Vector3(pos.x + facingX * 0.7, 6.4, pos.z), mats.metalPainted, { shadow: false });
+    ctx.box(`${id}_luminaria`, { w: 0.6, h: 0.18, d: 0.3 }, new Vector3(pos.x + facingX * 1.5, 6.3, pos.z), mats.metalDark);
+  }
   if (state !== "off") {
-    const glow = ctx.box(`${id}_lampada`, { w: 0.5, h: 0.04, d: 0.22 }, new Vector3(pos.x + facingX * 1.5, 6.2, pos.z), mats.lampGlow, { batch: false, shadow: false });
+    // com `model`, o poste/braço/luminária vêm do GLB poste_luz (heroAssets.ts) e o brilho fica rente ao vidro (6,36 m)
+    const glowY = opts.model ? 6.33 : 6.2;
+    const glow = ctx.box(`${id}_lampada`, { w: 0.5, h: 0.04, d: 0.22 }, new Vector3(pos.x + facingX * 1.5, glowY, pos.z), mats.lampGlow, { batch: false, shadow: false });
     const light = new SpotLight(`${id}_luz`, new Vector3(pos.x + facingX * 1.5, 6.15, pos.z), new Vector3(0, -1, 0), Math.PI * 0.75, 2, ctx.scene);
     light.diffuse = new Color3(1.0, 0.78, 0.5);
     light.intensity = state === "flicker" ? 12 : 16;

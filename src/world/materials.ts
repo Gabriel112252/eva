@@ -2,7 +2,7 @@ import { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { Texture } from "@babylonjs/core/Materials/Textures/texture";
 import type { Scene } from "@babylonjs/core/scene";
-import { foliageAlpha, heightField, normalMap, plasterBrickAlbedo, surfaceAlbedo, type HeightField } from "./textures";
+import { CANVAS_AVAILABLE, foliageAlpha, heightField, normalMap, plasterBrickAlbedo, surfaceAlbedo, type HeightField } from "./textures";
 
 /** Biblioteca de materiais PBR do quarteirão (texturas procedurais provisórias). */
 export class MaterialLibrary {
@@ -34,6 +34,10 @@ export class MaterialLibrary {
   readonly lampGlow: PBRMaterial;
   readonly emissiveRed: PBRMaterial;
   readonly emissiveGreen: PBRMaterial;
+  /** Materiais PBR de texturas fotográficas CC0 (ambientCG) — ver public/assets/textures e ASSETS.md. */
+  readonly pavingStones: PBRMaterial;
+  readonly plasterPhoto: { gray: PBRMaterial; warm: PBRMaterial; sand: PBRMaterial };
+  readonly concretePhoto: PBRMaterial;
 
   private readonly all: PBRMaterial[] = [];
 
@@ -165,6 +169,50 @@ export class MaterialLibrary {
     this.lampGlow = this.pbr("lampada", { color: "#ffe8b0", roughness: 0.3, emissive: "#ffd28a", emissiveIntensity: 3.0 });
     this.emissiveRed = this.pbr("led_vermelho", { color: "#ff3b30", roughness: 0.4, emissive: "#ff2a1a", emissiveIntensity: 2.5 });
     this.emissiveGreen = this.pbr("led_verde", { color: "#5bff6a", roughness: 0.4, emissive: "#38ff4a", emissiveIntensity: 2.0 });
+
+    // --- texturas fotográficas CC0 (ambientCG) ----------------------------
+    this.pavingStones = this.photoPbr("pedra_praca", "PavingStones070", { tileSize: 2.6, tint: "#e2ddd2", roughness: 1.0, ao: true });
+    this.plasterPhoto = {
+      gray: this.photoPbr("reboco_foto_cinza", "PaintedPlaster017", { tileSize: 1.6, tint: "#b9b7b2" }),
+      warm: this.photoPbr("reboco_foto_quente", "PaintedPlaster017", { tileSize: 1.6, tint: "#d9c9ad" }),
+      sand: this.photoPbr("reboco_foto_areia", "PaintedPlaster017", { tileSize: 1.6, tint: "#d6c6a2" }),
+    };
+    this.concretePhoto = this.photoPbr("concreto_foto", "Concrete034", { tileSize: 2.0, tint: "#d8d6d0" });
+  }
+
+  /**
+   * Material PBR a partir de um conjunto Color/NormalGL/Roughness(/AmbientOcclusion) em
+   * public/assets/textures/<id>/ (CC0). Em testes headless (sem DOM) fica só a cor.
+   */
+  private photoPbr(name: string, id: string, o: { tileSize: number; tint: string; roughness?: number; ao?: boolean }): PBRMaterial {
+    const m = this.pbr(name, { color: o.tint, roughness: o.roughness ?? 1.0, tileSize: o.tileSize });
+    if (!CANVAS_AVAILABLE) return m;
+    const base = `${import.meta.env.BASE_URL}assets/textures/${id}/`;
+    const tex = (file: string, srgb: boolean) => {
+      const t = new Texture(base + file, this.scene, false, true, Texture.TRILINEAR_SAMPLINGMODE);
+      t.gammaSpace = srgb;
+      t.wrapU = Texture.WRAP_ADDRESSMODE;
+      t.wrapV = Texture.WRAP_ADDRESSMODE;
+      t.anisotropicFilteringLevel = 8;
+      return t;
+    };
+    m.albedoTexture = tex("Color.jpg", true);
+    m.albedoColor = Color3.FromHexString(o.tint).toLinearSpace();
+    m.bumpTexture = tex("NormalGL.jpg", false);
+    // mapa OpenGL (Y para cima) numa cena canhota: mesma convenção que o loader glTF do Babylon
+    m.invertNormalMapX = true;
+    m.invertNormalMapY = false;
+    m.metallicTexture = tex("Roughness.jpg", false);
+    m.useRoughnessFromMetallicTextureAlpha = false;
+    m.useRoughnessFromMetallicTextureGreen = true;
+    m.useMetallnessFromMetallicTextureBlue = false;
+    m.metallic = 0;
+    m.roughness = o.roughness ?? 1.0;
+    if (o.ao) {
+      m.ambientTexture = tex("AmbientOcclusion.jpg", false);
+      m.ambientTextureStrength = 1.0;
+    }
+    return m;
   }
 
   private pbr(
