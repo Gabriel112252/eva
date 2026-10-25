@@ -10,6 +10,7 @@ import { InputManager, type GameAction } from "./input";
 import { DEFAULT_SETTINGS, type GameSettings } from "./settings";
 import { enableHavok } from "@/physics/havok";
 import { Environment } from "@/world/environment";
+import { AtmosphereExperiment, getAtmosphereMode } from "@/world/atmosphereExperiment";
 import { buildWorld, type World } from "@/world/worldBuilder";
 import { STREET } from "@/world/street";
 import { loadCharacter, type CharacterModel } from "@/characters/characterModel";
@@ -44,6 +45,7 @@ export class Game {
   settings: GameSettings = { ...DEFAULT_SETTINGS };
 
   private env!: Environment;
+  private atmosphere: AtmosphereExperiment | null = null;
   private world!: World;
   private player!: PlayerController;
   private camera!: ThirdPersonCamera;
@@ -117,6 +119,10 @@ export class Game {
       worldStep++;
       progress(0.1 + Math.min(0.35, worldStep * 0.06), label);
     });
+    const atmosfera = getAtmosphereMode(window.location.search);
+    if (atmosfera !== "off") {
+      this.atmosphere = new AtmosphereExperiment(this.scene, this.env, this.world.mats, this.settings.quality, atmosfera);
+    }
     progress(0.5, "Carregando Matias…");
     this.matias = await loadCharacter(this.scene, "matias");
     const spawn = this.world.spawns.get("oficina")!;
@@ -758,6 +764,10 @@ export class Game {
       case "dialogue":
         this.updatePlaying(dt);
         break;
+    }
+    if (this.atmosphere) {
+      const active = this.state === "playing" || this.state === "dialogue";
+      this.atmosphere.update(active ? this.player.feet : Vector3.Zero(), active);
     }
     if (this.state !== "paused") this.scene.render();
   }
