@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "unit": "meters",
+  "coordinateSystem": "+X east, +Y up, +Z north",
+  "gameArea": "Sao Paulo Velha / Setor 17",
+  "spawnPolicy": "opt-in only after visual review; first 3 vehicles are static props; AV-4 and Janus not spawned",
+  "entries": [
+    {
+      "id": "javali_vb4",
+      "glb": "javali_vb4.glb",
+      "position": [
+        40.2,
+        0.12,
+        10.5
+      ],
+      "rotationY": 0,
+      "collider": "box",
+      "enabledSuggested": true,
+      "reason": "leste da Central de Suprimentos, longe da fila e da entrada principal"
+    },
+    {
+      "id": "atlas_t3",
+      "glb": "atlas_t3.glb",
+      "position": [
+        -8.5,
+        0,
+        1.5
+      ],
+      "rotationY": 1.57,
+      "collider": "box",
+      "enabledSuggested": true,
+      "reason": "perto do mercado, margem da rua; confirmar corredor de circulação"
+    },
+    {
+      "id": "modulo_v7",
+      "glb": "modulo_v7.glb",
+      "position": [
+        24,
+        0.12,
+        -12.5
+      ],
+      "rotationY": 1.57,
+      "collider": "box",
+      "enabledSuggested": true,
+      "reason": "ponto de descarga ao sul da praça, revisar conflitos com posto médico"
+    },
+    {
+      "id": "rastro_av4",
+      "glb": "rastro_av4.glb",
+      "enabledSuggested": false,
+      "reason": "somente doca restrita/futura cena, não na praça povoada"
+    },
+    {
+      "id": "janus_station",
+      "glb": "janus_station.glb",
+      "enabledSuggested": false,
+      "reason": "miniatura de estação orbital para futuro observatório/mapa; não inserir em escala real"
+    }
+  ],
+  "warnings": [
+    "Positions are suggestions requiring actual collision/npc path tests.",
+    "Verify floor contact, sidewalk height, spawn line-of-sight before activation.",
+    "Never treat station as accessible in first chapter."
+  ]
+}
