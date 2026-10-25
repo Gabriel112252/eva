@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>EVA — Prévia de Veículos 3D</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#121a1b;color:#eae6dc;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+#renderCanvas{display:block;width:100%;height:100%;touch-action:none}
+header{position:absolute;top:16px;left:16px;z-index:2;max-width:min(460px,85vw);padding:16px;background:#071219db;border:1px solid #b5a06a77;border-radius:10px;box-shadow:0 8px 30px #0005}
+header h1{margin:0 0 8px;font-size:17px;letter-spacing:.07em}header p{font-size:12px;line-height:1.5;color:#cad0cd;margin:10px 0 0}
+select{max-width:100%;font-size:15px;color:#f8f8f4;background:#233238;border:1px solid #9d925e;border-radius:6px;padding:8px}#status{font-size:12px;margin-top:8px;white-space:pre-wrap;color:#f2d08f}
+footer{position:absolute;bottom:12px;right:12px;color:#efefe9a0;font-size:12px;padding:5px 9px;background:#121b1dc9;border-radius:5px}
+</style></head><body>
+<header><h1>EVA | Atelier de veículos 3D</h1>
+<label for="model">Modelo para inspecionar:</label>
+<select id="model"><option value="javali_vb4.glb">Javali VB-4 · viatura</option><option value="atlas_t3.glb">Atlas T-3 · triciclo</option><option value="modulo_v7.glb">Módulo V-7 · van</option><option value="rastro_av4.glb">Rastro AV-4 · aeromoto</option><option value="janus_station.glb">Janus · estação orbital</option></select>
+<div id="status">Carregando modelo...</div><p>Modelos GLB reais de primeira passagem, ainda não são arte final. Arraste para girar e use o scroll para aproximar. Nenhum deles é um veículo pilotável.</p>
+</header>
+<canvas id="renderCanvas"></canvas><footer>Prévia de produção · Não faz parte do prólogo jogável</footer>
+<script type="module" src="/src/dev/previewVehicles.ts"></script>
+</body></html>
