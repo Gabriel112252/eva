@@ -1,0 +1,99 @@
+{
+  "version": "1.0.0",
+  "stage": "modular geometry proof; NOT production-ready AAA",
+  "coordinateSystem": "glTF2 Y-up +Z front",
+  "unit": "meter",
+  "source": "tools/generate-eva-vehicles.mjs",
+  "license": "original EVA assets; use by project",
+  "assets": [
+    {
+      "id": "javali_vb4",
+      "source": "assets-src/vehicles/javali_vb4.glb",
+      "dimensionsApprox": [
+        -1.29,
+        0,
+        -2.5,
+        1.29,
+        2.15,
+        2.5
+      ],
+      "sizeBytes": 165976,
+      "parts": 80,
+      "triangles": 4674,
+      "gameplay": "static-prop-only"
+    },
+    {
+      "id": "atlas_t3",
+      "source": "assets-src/vehicles/atlas_t3.glb",
+      "dimensionsApprox": [
+        -0.71,
+        -0.01,
+        -1.34,
+        0.71,
+        1.64,
+        1.4
+      ],
+      "sizeBytes": 141736,
+      "parts": 73,
+      "triangles": 3832,
+      "gameplay": "static-prop-only"
+    },
+    {
+      "id": "modulo_v7",
+      "source": "assets-src/vehicles/modulo_v7.glb",
+      "dimensionsApprox": [
+        -1.11,
+        0.01,
+        -2.64,
+        1.11,
+        2.55,
+        2.67
+      ],
+      "sizeBytes": 164876,
+      "parts": 81,
+      "triangles": 4590,
+      "gameplay": "static-prop-only"
+    },
+    {
+      "id": "rastro_av4",
+      "source": "assets-src/vehicles/rastro_av4.glb",
+      "dimensionsApprox": [
+        -1.65,
+        0.09,
+        -1.31,
+        1.65,
+        1.57,
+        1.38
+      ],
+      "sizeBytes": 100600,
+      "parts": 38,
+      "triangles": 3056,
+      "gameplay": "static-prop-only"
+    },
+    {
+      "id": "janus_station",
+      "source": "assets-src/vehicles/janus_station.glb",
+      "dimensionsApprox": [
+        -7.95,
+        -1.43,
+        -3.4,
+        7.95,
+        2.52,
+        3.57
+      ],
+      "sizeBytes": 224660,
+      "parts": 91,
+      "triangles": 6816,
+      "gameplay": "static-prop-only"
+    }
+  ],
+  "requiresReview": [
+    "lighting",
+    "collisions",
+    "screen-size",
+    "mesh quality",
+    "material roughness",
+    "gameplay integration"
+  ],
+  "spawnEnabledByDefault": false
+}
