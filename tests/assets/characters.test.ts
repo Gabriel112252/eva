@@ -3,6 +3,7 @@ import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import validator from "gltf-validator";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import type { TargetCamera } from "@babylonjs/core/Cameras/targetCamera";
 import { ANIMATION_CLIPS, CHARACTERS, type CharacterVariant } from "@/data/characters";
 import { loadCharacter } from "@/characters/characterModel";
 import { characterBytes, characterDataUrl, createHeadlessScene, ROOT } from "../helpers/headless";
@@ -65,6 +66,31 @@ describe("Personagens GLB (modelos rigados reais)", () => {
     const q = leg.rotationQuaternion!;
     expect(Math.abs(q.x) + Math.abs(q.y) + Math.abs(q.z)).toBeGreaterThan(0.01);
     expect(model.animator.clip).toBe("Walk");
+    engine.dispose();
+  });
+
+  it("a caixa envolvente acompanha o personagem pelo mundo (frustum culling não o apaga longe da origem)", async () => {
+    const { engine, scene } = await createHeadlessScene(false);
+    const model = await loadCharacter(scene, "ana", "", characterDataUrl("ana"));
+    const far = new Vector3(20.14, 0.12, -2.19); // praça: posição onde os personagens sumiam
+    model.root.position.copyFrom(far);
+    scene.render();
+    for (const m of model.meshes) {
+      m.computeWorldMatrix(true);
+      const bb = m.getBoundingInfo().boundingBox;
+      expect(bb.minimumWorld.x, m.name).toBeLessThan(far.x);
+      expect(bb.maximumWorld.x, m.name).toBeGreaterThan(far.x);
+      expect(bb.minimumWorld.z, m.name).toBeLessThan(far.z);
+      expect(bb.maximumWorld.z, m.name).toBeGreaterThan(far.z);
+      expect(bb.maximumWorld.y, m.name).toBeGreaterThan(far.y + 1.5);
+      // a câmera olhando para o personagem o considera visível
+      const cam = scene.activeCamera as TargetCamera;
+      cam.position.copyFrom(far.add(new Vector3(0, 1.5, -4)));
+      cam.setTarget(far.add(new Vector3(0, 1, 0)));
+      cam.getViewMatrix(true);
+      cam.getProjectionMatrix(true);
+      expect(cam.isInFrustum(m), `${m.name} fora do frustum`).toBe(true);
+    }
     engine.dispose();
   });
 });
