@@ -1,0 +1,7 @@
+node_modules
+dist
+docs/screenshots
+.git
+.github
+*.log
+.DS_Store

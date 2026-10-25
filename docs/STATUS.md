@@ -1,0 +1,70 @@
+# STATUS — O Último Veto / EVA
+
+Atualizado em 24/10/2026 (commit do protótipo M0).
+
+## Marco atual: **M0 — primeiro protótipo jogável** ✅
+
+O jogo roda no navegador (Chrome/Edge/Firefox recentes, desktop) em Babylon.js 9 + Havok, com Matias em terceira pessoa num quarteirão de São Paulo Velha.
+
+### Operacional (verificado por testes automatizados e teste visual em Chromium)
+
+| Área | Estado | Observações |
+| --- | --- | --- |
+| Engine, build, Docker | ✅ | Vite 8 + TypeScript estrito; `npm run check` (tsc + vitest + build) passa; `Dockerfile` multi-stage (Node → Nginx) escrito e revisado — **a imagem ainda não foi construída neste ambiente** (sem daemon Docker disponível); validar com `docker build` antes do deploy no Easypanel. |
+| Física Havok | ✅ | `PhysicsCharacterController` (cápsula), colisores estáticos para chão, calçadas (degrau 12 cm), prédios, props; caixas/barris dinâmicos empurráveis. |
+| Matias (3ª pessoa) | ✅ | Modelo GLB **rigado** (17 ossos, skinning) com clipes Idle/Walk/Run/CrouchIdle/CrouchWalk/Talk/Interact e cross-fade por peso. WASD, Shift (correr), C/Ctrl (agachar, com verificação de teto por raio físico), E (interagir), Esc (pausa). |
+| Câmera | ✅ | Terceira pessoa sobre o ombro, mouse com pointer lock, roda para distância, oclusão por raio físico (não atravessa paredes), enquadramentos de diálogo (over-the-shoulder/two-shot) com letterbox e DOF. |
+| Cenário | ✅ (procedural) | Rua de 62 m com 10 fachadas (janelas vedadas/acesas, sacadas, toldos, pichações, varais, caixas d'água, painéis solares), oficina de Matias (interior jogável), praça com posto de distribuição, fila, quadro de avisos, estandarte da Igreja, fonte seca, árvores, mato, carro queimado, entulho, barraca de mercado, gerador, portão da Central de Suprimentos. Placas e cartazes em PT-BR. Vegetação e sinais de ocupação humana (roupas, luzes acesas, energia parcial). |
+| Iluminação | ✅ | Sol direcional + hemisférica + sombras em cascata (CSM, 3 cascatas) ou simples (qualidade baixa), céu procedural (`SkyMaterial`), névoa seca, IBL procedural, postes (um aceso, um piscando com zumbido), lâmpada da oficina; pós-processamento ACES, vinheta, grão, bloom, aberração cromática leve. |
+| NPCs 3D | ✅ (placeholders) | Miriam, Custódio, Comerciante, Raquel e Ana: GLB rigados, colisão (cápsula), viram-se para o jogador, gesto ocasional, animação Talk em diálogo. |
+| Diálogo PT-BR | ✅ | 5 grafos (`src/data/dialogues.ts`) com falas canônicas do prólogo, condições, efeitos, escolhas (teclas 1–4/setas/clique), legendas com nome do falante, avanço com Espaço/E. |
+| Voz | ⚠️ provisória | Síntese de fala do navegador (Web Speech API, voz pt-BR quando disponível). **Não há dublagem gravada.** O sistema já aceita arquivos (`voice` por linha) quando existirem. |
+| Estado narrativo | ✅ | Flags (`matiasTrustsSystem`, `apuracao.postura`, `pista.carregamento`, …) e missão "A Apuração" com 5 objetivos; HUD de objetivo e avisos. |
+| Salvamento | ✅ | IndexedDB (fallback em memória), esquema versionado com migração, autosave em eventos e a cada 45 s, botão Salvar/Continuar, configurações persistidas. Verificado: a escolha persiste após recarregar a página. |
+| Áudio | ⚠️ sintetizado | Web Audio: vento, gerador, multidão, estática do rádio, lâmpada falhando (emissores espaciais HRTF), passos (andar/correr/agachado), cliques e sinos de interface, ducking em diálogos, mute/volumes. **Nenhuma gravação real ainda.** |
+| Interface | ✅ | Menu principal, pausa, opções (sensibilidade, inverter Y, volumes, legendas, voz, qualidade), sobre; HUD discreto (objetivo, prompt contextual, legendas, escolhas, letterbox, fade). |
+| Testes | ✅ | 26 testes Vitest: validador glTF da Khronos nos 6 GLB, carregamento no Babylon (NullEngine), física Havok real headless (andar/correr/colidir/degrau/agachar/NPC/câmera), diálogos, missões, save IndexedDB, áudio sintetizado. `tools/visual-test.mjs` abre o build em Chromium, joga o fluxo (andar, correr, agachar, cartão, praça, diálogo, escolha, refresh, pausa) e salva screenshots JPEG em `docs/screenshots/`. |
+
+### Beats do prólogo cobertos
+
+1. **Acordar — oficina**: ✅ interior, rádio com boletim (fala sintetizada + legenda, pode ser desligado), cartão de registro (objetivo 1).
+2. **Percorrer o bairro**: ✅ rua densa com comerciante (diálogo sobre cotas de Registrados × Vinculados), placas, varais, carro queimado; tutorial de agachar ainda só por prompt de controles (sem área de rastejar obrigatória).
+3. **Raquel e Ana**: ✅ diálogo com a escolha que define `matiasTrustsSystem`.
+4. **A Apuração — praça**: ⚠️ parcial — Miriam anuncia a cota com as falas canônicas, Ana e Raquel intervêm, há duas posturas e o Custódio reage à postura de confronto. **Falta** a multidão reagindo (NPCs extras na fila), o mensageiro trazendo o relatório e a cena coreografada.
+5. **A escolha — depósito**: ❌ apenas a pista (`pista.carregamento`) é plantada no fim do diálogo com Miriam; a decisão entre contestação oficial × procurar Raquel em particular fica para M1.
+
+## Assets provisórios (todos marcados em `public/assets/licenses/ASSETS.md`)
+
+- **Personagens**: manequins estilizados gerados por `tools/gen-character.mjs` (geometria + esqueleto + animações reais, mas sem escultura orgânica, texturas de pele, roupas modeladas ou expressões faciais). Matias segue a descrição canônica (pele morena, cabelo escuro curto, óculos, roupa de trabalho, mochila, cinto de ferramentas), sem usar a fotografia privada do criador e sem marcas.
+- **Cenário**: geometria em blocos e texturas procedurais (sem fotos/scans).
+- **Som**: sintetizado em tempo de execução.
+- **Voz**: TTS do navegador.
+
+## Ferramentas externas necessárias para a próxima etapa (identificadas, não executadas aqui)
+
+| Necessidade | Ferramenta | Licença/observação |
+| --- | --- | --- |
+| Modelo de Matias e NPCs com escultura, roupas e texturas | **Blender 4.x** (escultura/retopologia) ou **Character Creator / MakeHuman** (MakeHuman é CC0 para as malhas geradas) | Exportar GLB com rig padronizado (nomes de ossos Mixamo-like como nos placeholders). A foto do criador fica como referência privada. |
+| Animações de locomoção realistas | **Mixamo** (gratuito para uso em projetos, inclusive comerciais, conforme termos da Adobe) ou captura própria (**Rokoko/Move.ai**) | Retarget em Blender para o rig do projeto; manter os nomes de clipes `Idle/Walk/Run/CrouchIdle/CrouchWalk/Talk/Interact`. |
+| Kit urbano brasileiro (fachadas, mobiliário, entulho) | **Blender** + texturas **Poly Haven (CC0)** / **ambientCG (CC0)**; **Kenney (CC0)** para props rápidos | Registrar cada arquivo em `ASSETS.md`. Compressão KTX2/Basis e Draco via `gltf-transform`. |
+| Dublagem PT-BR | Atores + gravação (ex.: estúdio local) ou, para animatic, TTS neural com licença comercial (ex.: ElevenLabs, Azure TTS pt-BR) | Arquivos `.ogg` em `public/assets/audio/voice/pt-BR/`, campo `voice` nas linhas de diálogo; registrar contrato/licença. |
+| Efeitos sonoros e ambiente | **Freesound (CC0/CC-BY)**, **Sonniss GDC packs** (royalty-free) | Substituir geradores em `src/audio/synth.ts` por arquivos; manter o sintetizador como fallback. |
+| Lip-sync | **Rhubarb Lip Sync** (MIT) gerando visemas a partir das falas | Requer blend shapes faciais no modelo final. |
+
+## Limitações conhecidas
+
+- Sem suporte a touch/gamepad (apenas teclado + mouse).
+- Sem LOD/streaming: a cena inteira é carregada de uma vez (~140 meshes, ~2 K triângulos por personagem); roda bem em GPU integrada moderna, mas não foi medido em hardware fraco.
+- WebGL 2 apenas (WebGPU não habilitado ainda).
+- Renderização por software (sem GPU) fica em ~4–6 FPS — só para testes automatizados.
+- A voz sintetizada depende das vozes instaladas no sistema do jogador (Chrome tem vozes pt-BR online; Firefox depende do SO).
+- O caminho até a praça não tem ainda a "área inacessível" para o tutorial de agachar.
+
+## Próxima etapa (M1)
+
+1. Substituir placeholders de personagens por modelos esculpidos (começando por Matias) e animações Mixamo com retarget.
+2. Fechar os beats 4 e 5: mensageiro, multidão na fila com reações, Custódio pedindo calma, depósito com a pista física e a decisão final em tensão.
+3. Gravar/licenciar dublagem e SFX; lip-sync básico.
+4. Texturas PBR reais (Poly Haven/ambientCG), kit modular de fachadas, decals de sujeira; otimização (instâncias, KTX2, Draco).
+5. Gamepad + touch, acessibilidade (tamanho de legenda, daltonismo), WebGPU opcional.
+6. Pipeline de CI (GitHub Actions: `npm run check` + teste visual com screenshots).

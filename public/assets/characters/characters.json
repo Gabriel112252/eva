@@ -1,0 +1,157 @@
+{
+  "generator": "tools/gen-character.mjs",
+  "fps": 30,
+  "bones": [
+    "Hips",
+    "Spine",
+    "Chest",
+    "Neck",
+    "Head",
+    "LeftUpperArm",
+    "LeftLowerArm",
+    "LeftHand",
+    "RightUpperArm",
+    "RightLowerArm",
+    "RightHand",
+    "LeftUpperLeg",
+    "LeftLowerLeg",
+    "LeftFoot",
+    "RightUpperLeg",
+    "RightLowerLeg",
+    "RightFoot"
+  ],
+  "clips": {
+    "Idle": {
+      "duration": 4,
+      "loop": true
+    },
+    "Walk": {
+      "duration": 1.05,
+      "loop": true
+    },
+    "Run": {
+      "duration": 0.62,
+      "loop": true
+    },
+    "CrouchIdle": {
+      "duration": 3.5,
+      "loop": true
+    },
+    "CrouchWalk": {
+      "duration": 1.1,
+      "loop": true
+    },
+    "Talk": {
+      "duration": 4,
+      "loop": true
+    },
+    "Interact": {
+      "duration": 1.2,
+      "loop": false
+    }
+  },
+  "characters": {
+    "matias": {
+      "file": "matias.glb",
+      "label": "Matias (58) — protagonista, placeholder",
+      "height": 1.76,
+      "vertices": 2024,
+      "triangles": 2236,
+      "bones": 17,
+      "clips": [
+        "Idle",
+        "Walk",
+        "Run",
+        "CrouchIdle",
+        "CrouchWalk",
+        "Talk",
+        "Interact"
+      ]
+    },
+    "miriam": {
+      "file": "miriam.glb",
+      "label": "Miriam (36) — arquivista religiosa da Apuração, placeholder",
+      "height": 1.68,
+      "vertices": 1655,
+      "triangles": 2116,
+      "bones": 17,
+      "clips": [
+        "Idle",
+        "Walk",
+        "Run",
+        "CrouchIdle",
+        "CrouchWalk",
+        "Talk",
+        "Interact"
+      ]
+    },
+    "custodio": {
+      "file": "custodio.glb",
+      "label": "Custódio da praça — segurança, placeholder",
+      "height": 1.83,
+      "vertices": 1592,
+      "triangles": 2020,
+      "bones": 17,
+      "clips": [
+        "Idle",
+        "Walk",
+        "Run",
+        "CrouchIdle",
+        "CrouchWalk",
+        "Talk",
+        "Interact"
+      ]
+    },
+    "comerciante": {
+      "file": "comerciante.glb",
+      "label": "Comerciante do bairro, placeholder",
+      "height": 1.7,
+      "vertices": 1592,
+      "triangles": 2020,
+      "bones": 17,
+      "clips": [
+        "Idle",
+        "Walk",
+        "Run",
+        "CrouchIdle",
+        "CrouchWalk",
+        "Talk",
+        "Interact"
+      ]
+    },
+    "raquel": {
+      "file": "raquel.glb",
+      "label": "Raquel (40) — médica da comunidade, placeholder",
+      "height": 1.65,
+      "vertices": 1655,
+      "triangles": 2116,
+      "bones": 17,
+      "clips": [
+        "Idle",
+        "Walk",
+        "Run",
+        "CrouchIdle",
+        "CrouchWalk",
+        "Talk",
+        "Interact"
+      ]
+    },
+    "ana": {
+      "file": "ana.glb",
+      "label": "Ana (15) — filha de Matias, placeholder",
+      "height": 1.6,
+      "vertices": 1568,
+      "triangles": 2008,
+      "bones": 17,
+      "clips": [
+        "Idle",
+        "Walk",
+        "Run",
+        "CrouchIdle",
+        "CrouchWalk",
+        "Talk",
+        "Interact"
+      ]
+    }
+  }
+}

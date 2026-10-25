@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>O Último Veto — EVA</title>
+    <meta name="description" content="Jogo 3D narrativo para navegador. Prólogo: A Apuração — São Paulo Velha, 2072." />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="game" tabindex="0" aria-label="Cena 3D do jogo"></canvas>
+      <div id="ui">
+        <!-- Carregamento -->
+        <section id="loading" class="screen visible" aria-live="polite">
+          <div class="loading-inner">
+            <h1 class="title">O ÚLTIMO VETO</h1>
+            <p class="subtitle-small">EVA · Capítulo 0 — A Apuração</p>
+            <div class="progress"><div id="loading-bar" class="progress-bar"></div></div>
+            <p id="loading-label" class="muted">Preparando São Paulo Velha…</p>
+            <p id="loading-error" class="error" hidden></p>
+          </div>
+        </section>
+
+        <!-- Menu principal -->
+        <section id="menu" class="screen">
+          <div class="menu-inner">
+            <h1 class="title">O ÚLTIMO VETO</h1>
+            <p class="subtitle-small">EVA · Capítulo 0 — A Apuração · São Paulo Velha, 2072</p>
+            <nav class="menu-list">
+              <button id="btn-continue" class="menu-btn" hidden>Continuar</button>
+              <button id="btn-new" class="menu-btn">Novo jogo</button>
+              <button id="btn-options" class="menu-btn">Opções</button>
+              <button id="btn-about" class="menu-btn">Sobre o protótipo</button>
+            </nav>
+            <p class="muted small">WASD mover · Shift correr · C agachar · E interagir · Esc pausar</p>
+          </div>
+        </section>
+
+        <!-- Pausa -->
+        <section id="pause" class="screen">
+          <div class="menu-inner">
+            <h2 class="title small-title">PAUSA</h2>
+            <nav class="menu-list">
+              <button id="btn-resume" class="menu-btn">Continuar</button>
+              <button id="btn-save" class="menu-btn">Salvar</button>
+              <button id="btn-pause-options" class="menu-btn">Opções</button>
+              <button id="btn-quit" class="menu-btn">Voltar ao menu</button>
+            </nav>
+            <p id="pause-status" class="muted small"></p>
+          </div>
+        </section>
+
+        <!-- Opções -->
+        <section id="options" class="screen">
+          <div class="menu-inner options-inner">
+            <h2 class="title small-title">OPÇÕES</h2>
+            <form id="options-form" class="options-form">
+              <label>Sensibilidade do mouse <input type="range" name="mouseSensitivity" min="0.2" max="3" step="0.05" /><output></output></label>
+              <label class="check"><input type="checkbox" name="invertY" /> Inverter eixo vertical</label>
+              <label>Volume geral <input type="range" name="volumeMaster" min="0" max="1" step="0.05" /><output></output></label>
+              <label>Ambiente <input type="range" name="volumeAmbience" min="0" max="1" step="0.05" /><output></output></label>
+              <label>Efeitos <input type="range" name="volumeSfx" min="0" max="1" step="0.05" /><output></output></label>
+              <label>Vozes <input type="range" name="volumeVoice" min="0" max="1" step="0.05" /><output></output></label>
+              <label class="check"><input type="checkbox" name="muted" /> Mudo</label>
+              <label class="check"><input type="checkbox" name="subtitles" /> Legendas</label>
+              <label class="check"><input type="checkbox" name="voiceTts" /> Voz sintetizada provisória (navegador)</label>
+              <label>Qualidade gráfica
+                <select name="quality">
+                  <option value="baixa">Baixa</option>
+                  <option value="media">Média</option>
+                  <option value="alta">Alta</option>
+                </select>
+              </label>
+              <p class="muted small">A qualidade gráfica é aplicada ao reiniciar a cena.</p>
+            </form>
+            <nav class="menu-list">
+              <button id="btn-options-back" class="menu-btn">Voltar</button>
+            </nav>
+          </div>
+        </section>
+
+        <!-- Sobre -->
+        <section id="about" class="screen">
+          <div class="menu-inner about-inner">
+            <h2 class="title small-title">SOBRE O PROTÓTIPO</h2>
+            <p>Protótipo jogável M0 do prólogo <em>A Apuração</em>. Mundo 3D em Babylon.js com física Havok, personagens rigados provisórios (manequins gerados proceduralmente), diálogos em português com escolhas persistentes, áudio sintetizado e salvamento local (IndexedDB).</p>
+            <p class="muted small">Vozes: síntese de fala do navegador (provisória). Nenhum ator foi gravado ainda. Texturas e sons são procedurais. Detalhes e licenças em <code>docs/STATUS.md</code> e <code>public/assets/licenses/ASSETS.md</code>.</p>
+            <nav class="menu-list">
+              <button id="btn-about-back" class="menu-btn">Voltar</button>
+            </nav>
+          </div>
+        </section>
+
+        <!-- HUD -->
+        <div id="hud" class="hidden">
+          <div id="objective" class="objective">
+            <span class="objective-label">Objetivo</span>
+            <span id="objective-text"></span>
+            <span id="objective-hint" class="objective-hint"></span>
+          </div>
+          <div id="notice" class="notice"></div>
+          <div id="prompt" class="prompt"><kbd>E</kbd><span id="prompt-text"></span></div>
+          <div id="click-hint" class="click-hint">Clique na cena para assumir o controle</div>
+          <div id="letterbox-top" class="letterbox top"></div>
+          <div id="letterbox-bottom" class="letterbox bottom"></div>
+          <div id="subtitle" class="subtitle">
+            <span id="subtitle-speaker" class="subtitle-speaker"></span>
+            <p id="subtitle-text" class="subtitle-text"></p>
+            <span id="subtitle-continue" class="subtitle-continue">Espaço · continuar</span>
+          </div>
+          <div id="choices" class="choices"></div>
+          <div id="fade" class="fade"></div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,35 @@
+{
+  "name": "o-ultimo-veto-eva",
+  "version": "0.1.0",
+  "private": true,
+  "description": "O Último Veto — EVA: jogo 3D narrativo para navegador (Babylon.js + TypeScript + Vite + Havok).",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 4173",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "assets:characters": "node tools/gen-character.mjs && node tools/validate-characters.mjs",
+    "test:visual": "node tools/visual-test.mjs",
+    "check": "npm run typecheck && npm run test && npm run build"
+  },
+  "dependencies": {
+    "@babylonjs/core": "^9.32.0",
+    "@babylonjs/havok": "^1.3.14",
+    "@babylonjs/loaders": "^9.32.0",
+    "@babylonjs/materials": "^9.32.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "fake-indexeddb": "^6.2.6",
+    "gltf-validator": "^2.0.0-dev.3.10",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
