@@ -21,22 +21,22 @@ describe("Personagens GLB (modelos rigados reais)", () => {
       expect(report.issues.numErrors, JSON.stringify(report.issues.messages)).toBe(0);
       expect(report.info.hasSkins).toBe(true);
       expect(report.info.animationCount).toBe(ANIMATION_CLIPS.length);
-      expect(report.info.totalTriangleCount ?? 0).toBeGreaterThan(1000);
+      expect(report.info.totalTriangleCount ?? 0).toBeGreaterThan(20000);
     }
   });
 
   it("o manifesto lista os mesmos clipes e ossos usados pelo jogo", () => {
     const manifest = JSON.parse(readFileSync(resolve(ROOT, "public/assets/characters/characters.json"), "utf8")) as { bones: string[]; clips: Record<string, unknown>; characters: Record<string, { height: number }> };
     expect(Object.keys(manifest.clips).sort()).toEqual([...ANIMATION_CLIPS].sort());
-    expect(manifest.bones).toContain("Hips");
-    expect(manifest.bones).toContain("Head");
+    expect(manifest.bones).toContain("mixamorig:Hips");
+    expect(manifest.bones).toContain("mixamorig:Head");
     for (const v of variants) expect(manifest.characters[v]?.height).toBeCloseTo(CHARACTERS[v].height, 2);
   });
 
-  it("carrega no Babylon com esqueleto, 7 clipes e olhando para +Z; a animação move os ossos", async () => {
+  it("carrega no Babylon com esqueleto Mixamo (52 ossos), 7 clipes e olhando para +Z; a animação move os ossos", async () => {
     const { engine, scene } = await createHeadlessScene(false);
     const model = await loadCharacter(scene, "matias", "", characterDataUrl("matias"));
-    expect(model.skeleton?.bones.length).toBe(17);
+    expect(model.skeleton?.bones.length).toBe(52);
     expect(model.meshes.length).toBeGreaterThan(0);
     for (const clip of ANIMATION_CLIPS) expect(model.animator.has(clip), clip).toBe(true);
     expect(model.head).not.toBeNull();
@@ -56,7 +56,7 @@ describe("Personagens GLB (modelos rigados reais)", () => {
     expect(maxZ).toBeGreaterThan(0.1);
     expect(maxY).toBeGreaterThan(1.7);
     // tocar Walk altera a rotação da coxa (prova de animação esquelética real)
-    const leg = scene.getTransformNodeByName("LeftUpperLeg")!;
+    const leg = scene.getTransformNodeByName("mixamorig:LeftUpLeg")!;
     model.animator.play("Walk");
     for (let i = 0; i < 20; i++) {
       scene.render();

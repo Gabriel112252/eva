@@ -1,6 +1,7 @@
 import { ImportMeshAsync } from "@babylonjs/core/Loading/sceneLoader";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { BoundingInfo } from "@babylonjs/core/Culling/boundingInfo";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Scene } from "@babylonjs/core/scene";
 import type { Skeleton } from "@babylonjs/core/Bones/skeleton";
@@ -38,12 +39,17 @@ export async function loadCharacter(scene: Scene, variant: CharacterVariant, suf
   for (const m of meshes) {
     m.isPickable = false;
     m.receiveShadows = true;
-    m.alwaysSelectAsActiveMesh = true;
+    // caixa envolvente generosa (cobre qualquer pose) para o frustum culling funcionar com skinning
+    m.setBoundingInfo(new BoundingInfo(new Vector3(-0.9, -0.2, -0.9), new Vector3(0.9, 2.1, 0.9)));
+    m.doNotSyncBoundingInfo = true;
   }
-  const head = result.transformNodes.find((t) => t.name === "Head") ?? null;
+  // rig Mixamo ("mixamorig:Head") ou rig simples ("Head")
+  const head = result.transformNodes.find((t) => t.name === "mixamorig:Head" || t.name === "Head") ?? null;
   const animator = new CharacterAnimator(result.animationGroups);
   const info = CHARACTERS[variant];
   const skeleton = result.skeletons[0] ?? null;
+  // 52 ossos × 4 vec4 excedem o limite de uniforms de vértice em GPUs modestas: usa textura de matrizes
+  if (skeleton) skeleton.useTextureToStoreBoneMatrices = true;
 
   return {
     variant,

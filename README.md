@@ -18,7 +18,7 @@ Jogo **3D narrativo para navegador**, com exploração em terceira pessoa, mist�
 
 - **Babylon.js 9** + **TypeScript** (estrito) + **Vite 8** — WebGL 2.
 - **Havok** (`@babylonjs/havok`, WASM) — física, colisão e `PhysicsCharacterController`.
-- **glTF/GLB** — personagens rigados com animações esqueléticas (placeholders gerados por `tools/gen-character.mjs`).
+- **glTF/GLB** — personagens rigados (rig Mixamo) com animações esqueléticas, gerados em Blender headless a partir de dados CC0 do MakeHuman (`tools/blender/make_character.py`).
 - **Web Audio** — áudio espacial (HRTF), passos, ambiente, interface; **Web Speech API** como voz provisória.
 - **IndexedDB** — salvamento local com esquema versionado.
 - **Vitest** (lógica, GLB, física headless) + **Playwright/Chromium** (teste visual com screenshots).
@@ -66,12 +66,15 @@ npm run test:visual   # abre dist/ em Chromium headless, joga o fluxo e salva do
 
 O teste visual precisa do Playwright com Chromium (`npm i -D playwright && npx playwright install chromium`, ou um Playwright global). Sem GPU ele usa SwiftShader (poucos FPS, mas o fluxo completo é verificado).
 
-### Regenerar os personagens provisórios
+### Regenerar os personagens
 
 ```bash
-npm run assets:characters      # escreve public/assets/characters/*.glb + characters.json
-node tools/validate-characters.mjs   # validador glTF da Khronos
+/usr/bin/python3.11 -m pip install bpy==4.5.1   # Blender como módulo Python (Python 3.11)
+npm run assets:characters      # Blender headless: escreve public/assets/characters/*.glb + characters.json e valida (Khronos)
+npm run assets:preview         # renderiza docs/screenshots/characters/matias_*.jpg (Cycles)
 ```
+
+Os dados-fonte (malha hm08, targets, rig Mixamo, máscaras, olhos) são CC0 do MakeHuman, vendorizados em `tools/blender/data/makehuman/`.
 
 ## Docker / Easypanel
 
@@ -113,4 +116,4 @@ docs/                       bíblia canônica, prólogo, arquitetura, STATUS, sc
 
 ## Assets e licenças
 
-Todos os assets atuais são gerados pelo próprio projeto (CC0) e são **provisórios**: manequins rigados, texturas e sons procedurais, voz por síntese do navegador. Nenhuma marca comercial nas roupas; a foto de referência do criador não está no repositório. Veja [`public/assets/licenses/ASSETS.md`](public/assets/licenses/ASSETS.md) para a tabela completa e [`docs/STATUS.md`](docs/STATUS.md) para as ferramentas externas previstas para substituí-los (Blender, Mixamo, Poly Haven, dublagem).
+Todos os assets atuais são gerados pelo próprio projeto a partir de dados CC0 (MakeHuman) e são **provisórios**: humanos rigados com pele/cabelo/roupa procedurais, texturas e sons procedurais, voz por síntese do navegador. Nenhuma marca comercial nas roupas; a foto de referência do criador não está no repositório. Veja [`public/assets/licenses/ASSETS.md`](public/assets/licenses/ASSETS.md) para a tabela completa e [`docs/STATUS.md`](docs/STATUS.md) para as ferramentas externas previstas para substituí-los (Blender, Mixamo, Poly Haven, dublagem).

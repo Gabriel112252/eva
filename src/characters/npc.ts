@@ -56,9 +56,10 @@ export class Npc implements Interactable {
     return this.model.root.position;
   }
 
+  /** Posição dos olhos (o osso Head do rig fica na base do crânio; soma ~6 cm). */
   get headPosition(): Vector3 {
     const h = this.model.head?.getAbsolutePosition();
-    if (h) return h;
+    if (h) return h.add(new Vector3(0, 0.06, 0));
     return this.model.root.position.add(new Vector3(0, this.model.height - 0.12, 0));
   }
 

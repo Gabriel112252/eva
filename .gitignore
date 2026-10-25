@@ -5,3 +5,4 @@ dist/
 .vite/
 coverage/
 docs/screenshots/erro.jpg
+tools/blender/.cache/

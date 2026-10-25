@@ -83,7 +83,7 @@ export class Environment {
 
     // --- Sombras ---------------------------------------------------------
     if (quality === "baixa") {
-      const sg = new ShadowGenerator(1024, this.sun);
+      const sg = new ShadowGenerator(768, this.sun);
       sg.usePercentageCloserFiltering = true;
       sg.filteringQuality = ShadowGenerator.QUALITY_LOW;
       sg.bias = 0.0015;

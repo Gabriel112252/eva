@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "assets:characters": "node tools/gen-character.mjs && node tools/validate-characters.mjs",
+    "assets:characters": "python3.11 tools/blender/make_character.py && node tools/validate-characters.mjs",
+    "assets:preview": "python3.11 tools/blender/preview_glb.py public/assets/characters/matias.glb docs/screenshots/characters --clip Idle --frame 30",
     "test:visual": "node tools/visual-test.mjs",
     "check": "npm run typecheck && npm run test && npm run build"
   },

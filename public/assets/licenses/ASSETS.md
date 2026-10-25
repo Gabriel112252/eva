@@ -1,16 +1,17 @@
 # Manifesto de assets — O Último Veto / EVA
 
-Regra do projeto: **nenhum asset sem origem e licença registradas aqui.** Nada neste repositório foi baixado de outros jogos ou de bibliotecas sem licença de redistribuição. Até esta etapa, todos os assets são gerados pelo próprio projeto (procedurais) e, portanto, PROVISÓRIOS.
+Regra do projeto: **nenhum asset sem origem e licença registradas aqui.** Nada neste repositório foi baixado de outros jogos ou de bibliotecas sem licença de redistribuição. Até esta etapa, os assets são gerados pelo próprio projeto a partir de dados CC0 (MakeHuman) e, portanto, PROVISÓRIOS.
 
 | Caminho | Tipo | Origem | Autoria | Licença | Uso comercial | Observação |
 | --- | --- | --- | --- | --- | --- | --- |
-| `public/assets/characters/matias.glb` | Modelo 3D rigado (17 ossos, skinning, 7 clipes) | Gerado por `tools/gen-character.mjs` | Projeto EVA (procedural) | CC0-1.0 (asset próprio) | Sim | **Placeholder**: manequim estilizado com proporções, óculos, mochila e cinto de ferramentas; sem marcas. Substituir por modelo esculpido/escaneado em Blender. |
-| `public/assets/characters/miriam.glb` | Modelo 3D rigado | idem | Projeto EVA | CC0-1.0 | Sim | Placeholder (lenço, faixa dourada da Igreja). |
-| `public/assets/characters/custodio.glb` | Modelo 3D rigado | idem | Projeto EVA | CC0-1.0 | Sim | Placeholder (colete, boné). |
-| `public/assets/characters/comerciante.glb` | Modelo 3D rigado | idem | Projeto EVA | CC0-1.0 | Sim | Placeholder (avental). |
-| `public/assets/characters/raquel.glb` | Modelo 3D rigado | idem | Projeto EVA | CC0-1.0 | Sim | Placeholder (jaleco). |
-| `public/assets/characters/ana.glb` | Modelo 3D rigado | idem | Projeto EVA | CC0-1.0 | Sim | Placeholder (15 anos, 1,60 m). |
-| `public/assets/characters/characters.json` | Manifesto | idem | Projeto EVA | CC0-1.0 | Sim | Lista ossos, clipes, alturas e contagens. |
+| `public/assets/characters/matias.glb` | Modelo 3D rigado (rig Mixamo, 52 ossos, skinning, 7 clipes) | Gerado por `tools/blender/make_character.py` (Blender headless) a partir de dados CC0 do MakeHuman | Malha/targets/rig/pesos/olhos: MakeHuman Team (CC0 1.0); pele, cabelo, roupa, acessórios e animações: Projeto EVA (procedurais, CC0) | CC0-1.0 | Sim | Anatomia e rosto reais (MakeHuman hm08 morfado: 58 anos, moreno); pele bakeada 2048 px; cabelo em calota; roupa de trabalho como casca conformada; óculos, mochila, cinto. **Provisório**: sem fios de cabelo, sem rugas de tecido, sem cílios, sem semelhança com o criador. |
+| `public/assets/characters/miriam.glb` | Modelo 3D rigado (Mixamo) | idem | idem | CC0-1.0 | Sim | 36 anos; lenço na cabeça, faixa da Igreja. Pele 1024 px, malha reduzida (decimate 0,6). |
+| `public/assets/characters/custodio.glb` | Modelo 3D rigado (Mixamo) | idem | idem | CC0-1.0 | Sim | Boné com aba, colete. |
+| `public/assets/characters/comerciante.glb` | Modelo 3D rigado (Mixamo) | idem | idem | CC0-1.0 | Sim | Avental, grisalho. |
+| `public/assets/characters/raquel.glb` | Modelo 3D rigado (Mixamo) | idem | idem | CC0-1.0 | Sim | Jaleco, coque. |
+| `public/assets/characters/ana.glb` | Modelo 3D rigado (Mixamo) | idem | idem | CC0-1.0 | Sim | 15 anos, rabo de cavalo. |
+| `public/assets/characters/characters.json` | Manifesto | idem | Projeto EVA | CC0-1.0 | Sim | Ossos, clipes, alturas e contagens. |
+| `tools/blender/data/makehuman/**` | Dados-fonte: `base.obj` (hm08), targets `.target.gz`, `rig.mixamo.json`, `weights.mixamo.json`, máscaras `mpfb_*.jpg`, olhos `high-poly.*` + `brown_eye.png` | github.com/makehumancommunity/mpfb2 (`src/mpfb/data`) e github.com/makehumancommunity/makehuman (`makehuman/data/eyes`) | MakeHuman Team (Data Collection AB, Joel Palmius, Jonas Hauquier) | CC0 1.0 (ver `tools/blender/data/makehuman/LICENSE.md`) | Sim | Apenas dados; nenhum código GPL do MakeHuman/MPFB é executado ou distribuído. |
 | Texturas do cenário (asfalto, calçada, reboco com tijolo, ferrugem, lonas, folhagem, placas) | Texturas 2D geradas em canvas na inicialização (`src/world/textures.ts`) | Código do projeto | Projeto EVA | CC0-1.0 | Sim | Não existem arquivos de imagem no repositório; são sintetizadas em tempo de execução. Substituir por texturas PBR fotografadas (ex.: Poly Haven, CC0) quando o pipeline de assets começar. |
 | Geometria do cenário (prédios, oficina, praça, props, vegetação) | Malhas geradas por código (`src/world/*.ts`) | Código do projeto | Projeto EVA | CC0-1.0 | Sim | Blocos modulares procedurais; serão substituídos/complementados por kits GLB modelados em Blender. |
 | Sons (passos, vento, gerador, multidão, estática de rádio, cliques, sinos) | Áudio sintetizado em tempo de execução (`src/audio/synth.ts`) | Código do projeto | Projeto EVA | CC0-1.0 | Sim | **Nenhum arquivo de áudio gravado existe ainda.** Substituir por gravações licenciadas (Freesound CC0, bibliotecas comerciais) registradas aqui. |

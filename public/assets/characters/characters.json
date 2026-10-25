@@ -1,28 +1,33 @@
 {
-  "generator": "tools/gen-character.mjs",
+  "generator": "tools/blender/make_character.py",
+  "source": "MakeHuman hm08 (CC0) + Blender headless",
   "fps": 30,
+  "rig": "mixamo",
   "bones": [
-    "Hips",
-    "Spine",
-    "Chest",
-    "Neck",
-    "Head",
-    "LeftUpperArm",
-    "LeftLowerArm",
-    "LeftHand",
-    "RightUpperArm",
-    "RightLowerArm",
-    "RightHand",
-    "LeftUpperLeg",
-    "LeftLowerLeg",
-    "LeftFoot",
-    "RightUpperLeg",
-    "RightLowerLeg",
-    "RightFoot"
+    "mixamorig:Hips",
+    "mixamorig:Spine",
+    "mixamorig:Spine1",
+    "mixamorig:Spine2",
+    "mixamorig:Neck",
+    "mixamorig:Head",
+    "mixamorig:LeftShoulder",
+    "mixamorig:LeftArm",
+    "mixamorig:LeftForeArm",
+    "mixamorig:LeftHand",
+    "mixamorig:RightShoulder",
+    "mixamorig:RightArm",
+    "mixamorig:RightForeArm",
+    "mixamorig:RightHand",
+    "mixamorig:LeftUpLeg",
+    "mixamorig:LeftLeg",
+    "mixamorig:LeftFoot",
+    "mixamorig:RightUpLeg",
+    "mixamorig:RightLeg",
+    "mixamorig:RightFoot"
   ],
   "clips": {
     "Idle": {
-      "duration": 4,
+      "duration": 4.0,
       "loop": true
     },
     "Walk": {
@@ -42,7 +47,7 @@
       "loop": true
     },
     "Talk": {
-      "duration": 4,
+      "duration": 4.0,
       "loop": true
     },
     "Interact": {
@@ -53,105 +58,45 @@
   "characters": {
     "matias": {
       "file": "matias.glb",
-      "label": "Matias (58) — protagonista, placeholder",
+      "label": "Matias (58) — protagonista",
       "height": 1.76,
-      "vertices": 2024,
-      "triangles": 2236,
-      "bones": 17,
-      "clips": [
-        "Idle",
-        "Walk",
-        "Run",
-        "CrouchIdle",
-        "CrouchWalk",
-        "Talk",
-        "Interact"
-      ]
+      "triangles": 34614,
+      "bones": 52
     },
     "miriam": {
       "file": "miriam.glb",
-      "label": "Miriam (36) — arquivista religiosa da Apuração, placeholder",
+      "label": "Miriam (36) — arquivista da Apuração",
       "height": 1.68,
-      "vertices": 1655,
-      "triangles": 2116,
-      "bones": 17,
-      "clips": [
-        "Idle",
-        "Walk",
-        "Run",
-        "CrouchIdle",
-        "CrouchWalk",
-        "Talk",
-        "Interact"
-      ]
+      "triangles": 27783,
+      "bones": 52
     },
     "custodio": {
       "file": "custodio.glb",
-      "label": "Custódio da praça — segurança, placeholder",
+      "label": "Custódio da praça — segurança",
       "height": 1.83,
-      "vertices": 1592,
-      "triangles": 2020,
-      "bones": 17,
-      "clips": [
-        "Idle",
-        "Walk",
-        "Run",
-        "CrouchIdle",
-        "CrouchWalk",
-        "Talk",
-        "Interact"
-      ]
+      "triangles": 21868,
+      "bones": 52
     },
     "comerciante": {
       "file": "comerciante.glb",
-      "label": "Comerciante do bairro, placeholder",
+      "label": "Comerciante do bairro",
       "height": 1.7,
-      "vertices": 1592,
-      "triangles": 2020,
-      "bones": 17,
-      "clips": [
-        "Idle",
-        "Walk",
-        "Run",
-        "CrouchIdle",
-        "CrouchWalk",
-        "Talk",
-        "Interact"
-      ]
+      "triangles": 22652,
+      "bones": 52
     },
     "raquel": {
       "file": "raquel.glb",
-      "label": "Raquel (40) — médica da comunidade, placeholder",
+      "label": "Raquel (40) — médica da comunidade",
       "height": 1.65,
-      "vertices": 1655,
-      "triangles": 2116,
-      "bones": 17,
-      "clips": [
-        "Idle",
-        "Walk",
-        "Run",
-        "CrouchIdle",
-        "CrouchWalk",
-        "Talk",
-        "Interact"
-      ]
+      "triangles": 29366,
+      "bones": 52
     },
     "ana": {
       "file": "ana.glb",
-      "label": "Ana (15) — filha de Matias, placeholder",
+      "label": "Ana (15) — filha de Matias",
       "height": 1.6,
-      "vertices": 1568,
-      "triangles": 2008,
-      "bones": 17,
-      "clips": [
-        "Idle",
-        "Walk",
-        "Run",
-        "CrouchIdle",
-        "CrouchWalk",
-        "Talk",
-        "Interact"
-      ]
+      "triangles": 22342,
+      "bones": 52
     }
   }
 }

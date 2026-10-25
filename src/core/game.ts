@@ -123,7 +123,8 @@ export class Game {
       this.interactables.push(npc);
     }
     progress(0.92, "Sombras e pós-processamento…");
-    this.env.addShadowCasters([...this.world.shadowCasters, ...this.matias.meshes, ...this.npcs.flatMap((n) => n.model.meshes)]);
+    // em qualidade baixa só Matias projeta sombra (NPCs são o custo dominante de skinning no mapa de sombras)
+    this.env.addShadowCasters([...this.world.shadowCasters, ...this.matias.meshes, ...(this.settings.quality === "baixa" ? [] : this.npcs.flatMap((n) => n.model.meshes))]);
     this.env.attachPostProcessing(this.camera.camera);
     this.collectFlickerLights();
     this.setupWorldInteractables();
