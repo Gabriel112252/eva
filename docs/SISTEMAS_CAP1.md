@@ -82,8 +82,8 @@ game.addExaminable({
 });
 ```
 Fluxo: prompt "Examinar: …" → E → close-up (`ThirdPersonCamera` modo `inspect`, FOV 0,62, do lado de Matias) +
-painel com título/texto → fecha com E, Espaço, Esc ou toque. Enquanto aberto o jogo fica no estado `dialogue`
-(movimento travado). Já examinado: flag `examinado.<id>` (salva com o jogo). `game.examine.active` é o objeto aberto.
+painel com título/texto → fecha com E, Espaço, toque ou Esc (com o cursor travado, Esc abre a pausa; ao voltar o
+exame continua aberto). Enquanto aberto o jogo fica no estado `dialogue` (movimento travado). Já examinado: flag `examinado.<id>` (salva com o jogo). `game.examine.active` é o objeto aberto.
 
 ## 4. Reparo (`RepairSpec`)
 
@@ -157,5 +157,6 @@ o banco + deslocamento.
 `clues`, `timers`, `examining`, `repair`, `cargo`, `curfew`, `triggers` (últimos 8) e `zonesInside`.
 Testes: `npm run test` (unit: `tests/unit/cap1Narrative.test.ts`, `tests/unit/cap1Stealth.test.ts`) e
 `node tools/gameplay-test.mjs --only sistemas` (no build; spawn de custódio, detecção, exame, pistas, timer, zona,
-reparo e carga). Atenção ao Playwright: não devolva objetos da cena de `page.evaluate` (serializar o grafo derruba
+reparo e carga — ~15 min em SwiftShader). Capturas: `docs/screenshots/sistemas_furtivo_detectado.jpg`,
+`sistemas_carga_atlas.jpg`, `vfx_clarao.jpg` (o canvas não inclui a HUD HTML). Atenção ao Playwright: não devolva objetos da cena de `page.evaluate` (serializar o grafo derruba
 a aba) — use `await page.evaluate(async () => { await window.eva.spawnCustodio(...); })`.
