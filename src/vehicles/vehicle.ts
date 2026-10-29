@@ -4,7 +4,8 @@ import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
 import { PhysicsBody } from "@babylonjs/core/Physics/v2/physicsBody";
-import { PhysicsMotionType } from "@babylonjs/core/Physics/v2/IPhysicsEnginePlugin";
+import { PhysicsActivationControl, PhysicsMotionType } from "@babylonjs/core/Physics/v2/IPhysicsEnginePlugin";
+import type { HavokPlugin } from "@babylonjs/core/Physics/v2/Plugins/havokPlugin";
 import { PhysicsShapeBox } from "@babylonjs/core/Physics/v2/physicsShape";
 import { PhysicsRaycastResult } from "@babylonjs/core/Physics/physicsRaycastResult";
 import type { PhysicsEngine } from "@babylonjs/core/Physics/v2/physicsEngine";
@@ -121,6 +122,12 @@ export class Vehicle implements Interactable {
     this.body.setMassProperties({ mass: def.mass, centerOfMass: def.centerOfMass, inertia: new Vector3(k * (sy * sy + sz * sz), k * (sx * sx + sz * sz), k * (sx * sx + sy * sy)) });
     this.body.setLinearDamping(0.05);
     this.body.setAngularDamping(def.kind === "hover" ? 1.5 : 0.6);
+    // a aeromoto nunca dorme: pairando com velocidade zero o Havok a desativaria e os impulsos dos rotores
+    // deixariam de acordá-la (ficava presa no ar após um teletransporte)
+    if (def.kind === "hover") {
+      const plugin = scene.getPhysicsEngine()?.getPhysicsPlugin() as HavokPlugin | undefined;
+      plugin?.setActivationControl?.(this.body, PhysicsActivationControl.ALWAYS_ACTIVE);
+    }
     this.body.setCollisionCallbackEnabled(true);
     this.body.getCollisionObservable().add((ev) => {
       const impulse = ev.impulse ?? 0;
@@ -246,13 +253,15 @@ export class Vehicle implements Interactable {
       const c = this.controls;
       const hc: HoverControls | null = this.occupied ? { throttle: c.throttle, steer: c.steer, lift: c.lift, boost: c.boost } : null;
       this.hover.step(dt, hc);
-      // cerca invisível: além de ~170 m do centro do quarteirão, empurra de volta (o mundo acaba ali)
+      // cerca invisível horizontal: perto do chão, ~170 m do centro do quarteirão (o mundo construído acaba
+      // ali); quanto mais alto, mais largo o raio permitido — no céu não há teto nem cerca.
       const p = this.anchor.getAbsolutePosition();
       const dx = p.x - 0;
       const dz = p.z - 0;
       const r = Math.hypot(dx, dz);
-      if (r > 170) {
-        const k = (r - 170) * 1.5 * this.def.mass;
+      const rMax = 170 + Math.max(0, p.y - 80) * 0.6;
+      if (r > rMax) {
+        const k = Math.min(r - rMax, 60) * 1.5 * this.def.mass;
         this.body.applyImpulse(new Vector3((-dx / r) * k * dt, 0, (-dz / r) * k * dt), p);
         this.outOfBounds = true;
       } else this.outOfBounds = false;
@@ -281,8 +290,19 @@ export class Vehicle implements Interactable {
     return Math.atan2(f.x, f.z);
   }
 
+  /** altura sobre o solo (m) — aeromoto */
   get altitude(): number {
     return this.hover?.groundHeight ?? 0;
+  }
+
+  /** altitude absoluta (m acima do nível da cidade) — aeromoto */
+  get altitudeAbs(): number {
+    return this.hover?.altitude ?? 0;
+  }
+
+  /** 0..1: ar disponível para os rotores (cai acima de 60 km) */
+  get air(): number {
+    return this.hover?.air ?? 1;
   }
 
   get isUpright(): boolean {

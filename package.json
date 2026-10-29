@@ -22,7 +22,8 @@
     "test:vehicles": "node tools/vehicles-test.mjs && node tools/preview-test.mjs",
     "capture:praca": "node tools/capture-praca.mjs",
     "test:gameplay": "node tools/gameplay-test.mjs",
-    "assets:props": "python3.11 tools/blender/make_props.py"
+    "assets:props": "python3.11 tools/blender/make_props.py",
+    "capture:altitude": "node tools/capture-altitude.mjs"
   },
   "dependencies": {
     "@babylonjs/core": "^9.32.0",

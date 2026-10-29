@@ -122,7 +122,7 @@ export class Hud {
   setVehicleSpeed(kmh: number, altitude: number | null): void {
     const v = String(Math.round(kmh));
     if (this.vehicleSpeed.textContent !== v) this.vehicleSpeed.textContent = v;
-    this.vehicleAlt.textContent = altitude === null ? "" : `alt ${altitude.toFixed(1)} m`;
+    this.vehicleAlt.textContent = altitude === null ? "" : altitude >= 1000 ? `alt ${(altitude / 1000).toFixed(altitude >= 10000 ? 0 : 1)} km` : `alt ${altitude.toFixed(1)} m`;
   }
 
   setInventory(visible: boolean, items: Array<{ name: string; count: number; note?: string }>): void {

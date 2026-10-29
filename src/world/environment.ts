@@ -15,6 +15,7 @@ import type { Camera } from "@babylonjs/core/Cameras/camera";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { QualityLevel } from "@/core/settings";
 import { CANVAS_AVAILABLE } from "./textures";
+import { PlanetLayer } from "./planet";
 import "@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent";
 import "@babylonjs/core/Rendering/depthRendererSceneComponent";
 
@@ -32,6 +33,14 @@ export class Environment {
   private dusk = 0;
   private duskTarget = 0;
   private skyMaterial: SkyMaterial | null = null;
+  /** Terra vista de cima (ligada quando a câmera passa de ~140 m) */
+  planet: PlanetLayer | null = null;
+  /** 0..1: a névoa se dissipa entre 100 m e 1,5 km de altitude */
+  private altFog = 0;
+  /** 0..1: o céu escurece até o espaço entre 8 km e 80 km */
+  private altSpace = 0;
+  /** valores-base da hora do dia (antes do efeito da altitude) */
+  private base = { fogDensity: 0.0085, skyLum: 0.9, skyTurb: 6.5, skyIntensity: 0.55, envIntensity: 0.7 };
 
   constructor(
     readonly scene: Scene,
@@ -108,6 +117,14 @@ export class Environment {
       this.shadows = csm;
     }
     this.shadows.setDarkness(0.25);
+
+    // --- Terra vista de cima (voo da aeromoto) ---------------------------
+    try {
+      this.planet = new PlanetLayer(scene, this.skyDome, quality);
+    } catch (err) {
+      console.warn("[ambiente] camada distante indisponível", err);
+      this.planet = null;
+    }
   }
 
   get isNight(): boolean {
@@ -136,18 +153,56 @@ export class Environment {
     this.sun.position = dir.scale(-80);
     this.sun.intensity = 3.2 * (1 - k) + 1.1 * k;
     this.sun.diffuse = Color3.Lerp(new Color3(1.0, 0.93, 0.82), new Color3(1.0, 0.58, 0.32), k);
-    this.sky.intensity = 0.55 * (1 - k) + 0.28 * k;
+    this.base.skyIntensity = 0.55 * (1 - k) + 0.28 * k;
     this.sky.diffuse = Color3.Lerp(new Color3(0.78, 0.86, 1.0), new Color3(0.36, 0.4, 0.62), k);
     this.sky.groundColor = Color3.Lerp(new Color3(0.42, 0.36, 0.3), new Color3(0.2, 0.16, 0.16), k);
     this.scene.fogColor = Color3.Lerp(new Color3(0.78, 0.76, 0.7), new Color3(0.36, 0.3, 0.32), k);
-    this.scene.fogDensity = 0.0085 + 0.004 * k;
-    this.scene.environmentIntensity = 0.7 * (1 - k) + 0.35 * k;
+    this.base.fogDensity = 0.0085 + 0.004 * k;
+    this.base.envIntensity = 0.7 * (1 - k) + 0.35 * k;
     this.scene.ambientColor = Color3.Lerp(new Color3(0.18, 0.18, 0.2), new Color3(0.12, 0.1, 0.14), k);
-    if (this.skyMaterial) {
-      this.skyMaterial.sunPosition = dir.scale(-100);
-      this.skyMaterial.luminance = 0.9 * (1 - k) + 0.45 * k;
-      this.skyMaterial.turbidity = 6.5 + 5 * k;
+    if (this.skyMaterial) this.skyMaterial.sunPosition = dir.scale(-100);
+    this.base.skyLum = 0.9 * (1 - k) + 0.45 * k;
+    this.base.skyTurb = 6.5 + 5 * k;
+    this.applyAtmosphere();
+  }
+
+  /**
+   * Efeito da altitude da câmera (m): dissipa a névoa, abre o plano distante, escurece o céu até o espaço
+   * e atualiza a Terra vista de cima. Chamar a cada quadro.
+   */
+  updateAltitude(camera: Camera, altitude: number): void {
+    const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+    // a poeira da rua some rápido com a altitude (visibilidade de ~250 m no chão → quilômetros a 1 km)
+    const aFog = clamp01((altitude - 20) / 400);
+    const aSpace = clamp01((altitude - 8000) / 72000);
+    if (Math.abs(aFog - this.altFog) > 1e-4 || Math.abs(aSpace - this.altSpace) > 1e-4) {
+      this.altFog = aFog;
+      this.altSpace = aSpace;
+      this.applyAtmosphere();
     }
+    camera.maxZ = 500 + aFog * 5500;
+    this.planet?.update(camera, altitude, clamp01((altitude - 35000) / 45000), aFog);
+  }
+
+  /** Combina hora do dia e altitude em névoa, céu, luz difusa e ambiente. */
+  private applyAtmosphere(): void {
+    const aFog = this.altFog;
+    const aSpace = this.altSpace;
+    this.scene.fogDensity = this.base.fogDensity * (1 - aFog) * (1 - aFog);
+    this.sky.intensity = this.base.skyIntensity * (1 - 0.8 * aSpace);
+    this.scene.environmentIntensity = this.base.envIntensity * (1 - 0.6 * aSpace);
+    if (this.skyMaterial) {
+      // no SkyMaterial, luminance maior = céu mais escuro (fator log2(2/l⁴) → 0 em l≈1,19): espaço ≈ 1,15
+      this.skyMaterial.luminance = this.base.skyLum * (1 - aSpace) + 1.15 * aSpace;
+      this.skyMaterial.turbidity = this.base.skyTurb * (1 - aSpace) + 1.0 * aSpace;
+      this.skyMaterial.rayleigh = 1.6 * (1 - aSpace);
+      this.skyMaterial.mieCoefficient = 0.012 * (1 - aSpace) + 0.0005 * aSpace;
+    }
+  }
+
+  /** 0..1 — quanto do céu já virou espaço (para HUD/testes). */
+  get spaceLevel(): number {
+    return this.altSpace;
   }
 
   addShadowCasters(meshes: AbstractMesh[]): void {

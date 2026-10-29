@@ -63,6 +63,7 @@ O jogo roda no navegador (Chrome/Edge/Firefox recentes no desktop; Chrome/Safari
 ## Limitações conhecidas
 
 - Sem gamepad (teclado + mouse no desktop; toque no celular/tablet). No celular, o toque foi verificado em Chromium emulado — não em aparelhos reais; iOS Safari não permite tela cheia em páginas (o jogo segue na aba normal).
+- Vista aérea: a cidade real (600 m) aparece como um quadrado de chão marrom sobre a ortofoto gerada; o anel entre 6 km e 300 km usa uma só imagem (borrada abaixo de ~10 km de altitude). Pendente: calota intermediária e costura do chão real com a ortofoto.
 - Sem LOD/streaming: a cena inteira é carregada de uma vez (~140 meshes, 22–35 K triângulos por personagem); roda bem em GPU integrada moderna; em celular começa em qualidade baixa, sem medição em aparelhos fracos.
 - WebGL 2 apenas (WebGPU não habilitado ainda).
 - Renderização por software (sem GPU) fica em ~2–5 FPS — só para testes automatizados; no Chromium headless o pointer lock ativo deixa os frames 5–10× mais lentos, por isso o teste visual roda com `?pointerlock=0` (`--lock` para o caminho com cursor travado).

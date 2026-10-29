@@ -26,8 +26,8 @@ export interface HoverDef {
   yawRate: number;
   /** inclinação visual máxima (rad) ao acelerar/virar */
   tiltMax: number;
-  /** teto (m) acima do solo */
-  ceiling: number;
+  /** velocidade vertical (m/s) pedida pelo comando de subir/descer em voo livre (cresce com a altitude) */
+  climbSpeed: number;
 }
 
 export interface VehicleDef {
@@ -152,6 +152,6 @@ export const VEHICLE_DEFS: Record<VehicleId, VehicleDef> = {
     exit: new Vector3(1.8, 0, -0.3),
     camera: { distance: 9, height: 2.6, pitch: 0.2 },
     headlights: [new Vector3(0, 0.75, 1.36)],
-    hover: { hoverHeight: 2.2, liftAccel: 7, thrustAccel: 9, maxSpeed: 26, yawRate: 1.6, tiltMax: 0.35, ceiling: 28 },
+    hover: { hoverHeight: 2.2, liftAccel: 7, thrustAccel: 9, maxSpeed: 26, yawRate: 1.6, tiltMax: 0.35, climbSpeed: 40 },
   },
 };

@@ -55,4 +55,15 @@ Imagens de **referência artística** (não são assets do jogo) geradas pelo cr
 | `docs/concept/sp_velha_praca_02_camada_tech.jpg` — mesma praça com a camada tecnológica de 2040–56 remendada (pele fotovoltaica, anexos modulares, posto da Central, Custódios, triciclo) | Z-Image Turbo (via Kairogen), 29/10/2026 | 1 crédito |
 | `docs/concept/sp_velha_praca_03_monumental.jpg` — variante marcante: viaduto de maglev morto sobre a feira, torre com fazenda vertical, caminhão blindado | Z-Image Turbo (via Kairogen), 29/10/2026 | 1 crédito |
 
+| `docs/concept/sp_velha_sobrevoo_01.jpg` — sobrevoo oblíquo da cidade (referência para o agente de mapas) | Seedream V4.5 (via Kairogen), 29/10/2026 | 2 créditos |
+
+### Texturas do jogo geradas (Kairogen)
+
+Carregadas pelo jogo na camada distante (`src/world/planet.ts`) quando a aeromoto sobe. Geradas pelo criador na conta Kairogen dele; conteúdo fictício (não são imagens de satélite reais).
+
+| Arquivo | Uso | Modelo | Custo |
+| --- | --- | --- | --- |
+| `textures/aereo/cidade.jpg` (1024²) | ortofoto da malha urbana em torno do Setor 17 (~6 km) | Z-Image Turbo, 29/10/2026 | 1 crédito |
+| `textures/aereo/regiao.jpg` (1024²) | região metropolitana, serra e costa (~300 km) | Z-Image Turbo, 29/10/2026 | 1 crédito |
+
 Teste de voz (PT-BR, ElevenLabs Multilingual v2 via Kairogen, voz "Antonio de Jesus", 1 crédito) realizado na mesma data; o arquivo não foi incorporado porque o domínio `cdn.kairogen.ai` ainda não é acessível deste ambiente.

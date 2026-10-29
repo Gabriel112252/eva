@@ -26,6 +26,19 @@ const tmpV = new Vector3();
 const tmpV2 = new Vector3();
 const tmpQ = new Quaternion();
 
+/** acima desta altura sobre o solo (m) o controle PD de altitude dá lugar ao voo livre */
+export const FREE_FLIGHT_HEIGHT = 45;
+/** altitude (m) em que os rotores começam a perder sustentação por falta de ar */
+export const AIR_THIN_START = 60_000;
+/** altitude (m) sem ar: nenhum empuxo (a aeromoto volta a cair) */
+export const AIR_NONE = 100_000;
+
+/** 1 ao nível do mar → 0 a 100 km: quanto os rotores ainda "mordem" o ar. */
+export function airFactor(altitudeMeters: number): number {
+  if (altitudeMeters <= AIR_THIN_START) return 1;
+  return Math.max(0, 1 - (altitudeMeters - AIR_THIN_START) / (AIR_NONE - AIR_THIN_START));
+}
+
 export class HoverController {
   private readonly ray = new PhysicsRaycastResult();
   /** altitude alvo sobre o solo (mantida ao soltar os comandos verticais) */
@@ -38,6 +51,12 @@ export class HoverController {
   forwardSpeed = 0;
   /** ligado = sustentação ativa; desligado = cai/assenta no chão */
   powered = false;
+  /** altitude absoluta (m acima do nível da cidade) no último passo */
+  altitude = 0;
+  /** true quando não há solo no alcance do raio: voo livre (sem manter altura) */
+  freeFlight = false;
+  /** 0..1: ar disponível para os rotores (cai acima de 60 km) */
+  air = 1;
   private yaw = 0;
 
   constructor(
@@ -59,10 +78,14 @@ export class HoverController {
     const pos = this.chassis.getAbsolutePosition();
     // altura sobre o solo (raio para baixo a partir do centro)
     tmpV.set(pos.x, pos.y + 0.5, pos.z);
-    tmpV2.set(pos.x, pos.y - 60, pos.z);
+    tmpV2.set(pos.x, pos.y - (FREE_FLIGHT_HEIGHT + 15), pos.z);
     this.engine.raycastToRef(tmpV, tmpV2, this.ray, this.rayMask);
-    const groundY = this.ray.hasHit ? this.ray.hitPointWorld.y : pos.y - 60;
+    // sem solo no alcance: o chão da região está em y≈0 (mundo plano) — altura = altitude
+    const groundY = this.ray.hasHit ? this.ray.hitPointWorld.y : 0;
     this.groundHeight = pos.y - groundY;
+    this.altitude = Math.max(0, pos.y);
+    this.freeFlight = !this.ray.hasHit || this.groundHeight > FREE_FLIGHT_HEIGHT;
+    this.air = airFactor(this.altitude);
 
     body.getLinearVelocityToRef(tmpV);
     const vel = tmpV.clone();
@@ -78,21 +101,34 @@ export class HoverController {
     }
 
     const c = controls ?? { throttle: 0, steer: 0, lift: 0, boost: false };
-    // --- vertical: gravidade compensada + PD de altitude (ou comando direto de subir/descer)
     const g = 9.81;
+    const boostMul = c.boost ? 2.2 : 1;
+    // o ar rarefeito deixa o veículo mais rápido (menos arrasto) até os rotores perderem sustentação
+    const speedScale = 1 + Math.min(14, this.altitude / 1500);
     let ay: number;
-    if (c.lift !== 0) {
-      ay = g + c.lift * this.def.liftAccel - vel.y * 0.8;
-      this.targetHeight = Math.max(0.6, Math.min(this.def.ceiling, this.groundHeight));
+    if (!this.freeFlight) {
+      // --- perto do solo: gravidade compensada + PD de altitude (ou comando direto de subir/descer)
+      if (c.lift !== 0) {
+        ay = g + c.lift * this.def.liftAccel * boostMul - vel.y * 0.8;
+        this.targetHeight = Math.max(0.6, this.groundHeight);
+      } else {
+        const err = this.targetHeight - this.groundHeight;
+        ay = g + Math.max(-this.def.liftAccel, Math.min(this.def.liftAccel, err * 3.2)) - vel.y * 2.2;
+      }
     } else {
-      const err = this.targetHeight - this.groundHeight;
-      ay = g + Math.max(-this.def.liftAccel, Math.min(this.def.liftAccel, err * 3.2)) - vel.y * 2.2;
+      // --- voo livre: o comando vertical pede uma velocidade de subida/descida; sem comando, pára de subir
+      const climbMax = this.def.climbSpeed * boostMul * speedScale;
+      const vTarget = c.lift * climbMax;
+      const maxAccel = this.def.liftAccel * 3 * (c.boost ? 1.6 : 1);
+      ay = g + Math.max(-maxAccel, Math.min(maxAccel, (vTarget - vel.y) * 0.9));
+      this.targetHeight = this.groundHeight;
     }
-    if (this.groundHeight > this.def.ceiling && ay > g) ay = g - 1;
+    // sem ar não há sustentação: acima de ~60 km o empuxo cai até zero (volta a cair a 100 km)
+    ay *= this.air;
     // --- frontal: empuxo na direção do nariz + arrasto proporcional à velocidade
-    const maxSpeed = c.boost ? this.def.maxSpeed * 1.35 : this.def.maxSpeed;
-    const thrust = c.throttle * this.def.thrustAccel * (c.boost ? 1.5 : 1);
-    const drag = this.def.thrustAccel / maxSpeed; // v_terminal = thrust/drag
+    const maxSpeed = (c.boost ? this.def.maxSpeed * 1.35 : this.def.maxSpeed) * speedScale;
+    const thrust = c.throttle * this.def.thrustAccel * (c.boost ? 1.5 : 1) * Math.min(8, speedScale) * this.air;
+    const drag = (this.def.thrustAccel * Math.min(8, speedScale)) / maxSpeed; // v_terminal = thrust/drag
     const horizontal = new Vector3(vel.x, 0, vel.z);
     const force = forward.scale(thrust * mass).subtractInPlace(horizontal.scale(drag * mass));
     // `ay` é a aceleração vertical total que os rotores devem produzir (já inclui compensar g)

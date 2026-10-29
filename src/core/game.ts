@@ -94,6 +94,7 @@ export class Game {
   private deathTimer = -1;
   private cameraShake = 0;
   private boundsNoticeShown = false;
+  private thinAirNoticeShown = false;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.engine = new Engine(canvas, true, { stencil: true, antialias: true, preserveDrawingBuffer: false, powerPreference: "high-performance" }, false);
@@ -544,6 +545,7 @@ export class Game {
       analog: this.input.analogAxis,
       heldRun: this.input.isHeld("run"),
       driving: this.driving?.def.id ?? null,
+      altitude: this.driving?.hover ? { ground: this.driving.altitude, abs: this.driving.altitudeAbs, air: this.driving.air, farLayer: this.env.planet?.isActive ?? false, space: this.env.spaceLevel } : null,
       health: this.combat?.health.current ?? null,
       ammo: this.combat?.weapon ? { mag: this.combat.weapon.magazine, reserve: this.combat.weapon.reserve, phase: this.combat.weapon.phase } : null,
       aiming: this.combat?.aiming ?? false,
@@ -928,6 +930,7 @@ export class Game {
     this.audio.updateListener(cam.position, fwd, Vector3.Up());
     this.updateLights(dt);
     this.env.updateTimeOfDay(dt);
+    this.env.updateAltitude(cam, Math.max(0, cam.globalPosition.y));
     this.updateRadio(dt, feet);
     this.updateTriggers(feet);
 
@@ -1263,6 +1266,10 @@ export class Game {
   exitVehicle(): void {
     const v = this.driving;
     if (!v) return;
+    if (v.hover && v.altitude > 3) {
+      this.hud.showNotice("Pouse antes de descer da aeromoto (Ctrl desce).", 3);
+      return;
+    }
     const pos = v.exitPosition();
     const d = pos.subtract(v.position);
     const yaw = Math.atan2(d.x, d.z);
@@ -1292,11 +1299,15 @@ export class Game {
       lift: v.def.kind === "hover" ? (held("advance") ? 1 : 0) - (held("crouchHold") || held("crouchToggle") ? 1 : 0) : 0,
       boost: held("run"),
     };
-    this.hud.setVehicleSpeed(v.speedKmh, v.def.kind === "hover" ? v.altitude : null);
+    this.hud.setVehicleSpeed(v.speedKmh, v.def.kind === "hover" ? v.altitudeAbs : null);
     if (v.outOfBounds && !this.boundsNoticeShown) {
       this.boundsNoticeShown = true;
-      this.hud.showNotice("Limite do setor — volte para o quarteirão.", 3);
+      this.hud.showNotice("Limite do setor construído — suba para ir mais longe ou volte ao quarteirão.", 3);
       window.setTimeout(() => (this.boundsNoticeShown = false), 8000);
+    }
+    if (v.hover && v.air < 1 && !this.thinAirNoticeShown) {
+      this.thinAirNoticeShown = true;
+      this.hud.showNotice("Ar rarefeito: os rotores perdem sustentação acima de 60 km.", 4);
     }
     const rpm = Math.min(1, v.speedKmh / (v.def.maxSpeed * 3.6));
     this.audio.updateEngine(rpm, Math.abs(v.controls.throttle) * (v.def.kind === "hover" ? 1 : 1 - rpm * 0.5));

@@ -62,7 +62,9 @@ Parâmetros opcionais na URL: `?quality=baixa|media|alta` força a qualidade gr�
 | Tab | Mostrar descrição da missão |
 | Esc | Pausa (salvar, opções, voltar ao menu) |
 
-**Veículos jogáveis**: Javali VB-4 (viatura blindada, praça leste), Módulo V-7 (van, junto ao portão da Central), Atlas T-3 (triciclo de carga, em frente à barraca do mercado) e Rastro AV-4 (aeromoto, praça leste — voa: Espaço sobe, Ctrl desce, W/S empuxo, A/D guinada). Aproxime-se da porta e pressione **E**.
+**Veículos jogáveis**: Javali VB-4 (viatura blindada, praça leste), Módulo V-7 (van, junto ao portão da Central), Atlas T-3 (triciclo de carga, em frente à barraca do mercado) e Rastro AV-4 (aeromoto, praça leste — voa: Espaço sobe, Ctrl desce, W/S empuxo, A/D guinada, Shift turbo). Aproxime-se da porta e pressione **E**.
+
+**Céu sem teto**: a Rastro sobe o quanto o ar permitir. Acima de ~45 m ela entra em voo livre (o comando vertical pede velocidade de subida, que cresce com a altitude e com o turbo), a poeira da rua some, o céu escurece até o espaço, aparecem estrelas e a curvatura da Terra; acima de 60 km os rotores perdem sustentação e a ~100 km não há mais empuxo (a aeromoto volta a cair). Perto do chão há uma cerca invisível a ~170 m do quarteirão; quanto mais alto, mais longe se pode ir. Só é possível descer da aeromoto pousada (Ctrl). Capturas: `docs/screenshots/altitude/`.
 
 **Missão (vertical slice, ~10–15 min)**: acordar na oficina → percorrer a rua e falar com os moradores → Raquel e Ana → a Apuração com Miriam → o Custódio revela que o lote sai ao anoitecer → **confronto** com desviadores em duas levas (pistola, mira, recarga, kit médico) → **fuga** com a van Módulo V-7 até a oficina → trancar o carregamento → decisão final pelo rádio. Matias pode cair: a tela "Matias caiu" devolve ao último ponto (junto à van) e a onda recomeça. O progresso é salvo automaticamente (IndexedDB).
 
@@ -89,6 +91,7 @@ npm run assets:characters      # Blender headless: morfa, veste, retargeteia as 
 npm run assets:preview         # renderiza docs/screenshots/characters/matias_*.jpg (Cycles)
 npm run capture:video          # grava docs/videos/locomocao.mp4 (andar/correr/agachar/pegar) com quadros determinísticos a 30 fps e mede o deslizamento dos pés
 npm run capture:praca          # grava docs/videos/praca_hero.mp4 (passeio pelo hero corner da praça)
+npm run capture:altitude       # capturas da aeromoto a 300 m, 3 km, 12 km, 40 km e 90 km (docs/screenshots/altitude/)
 npm run assets:environment     # regenera o kit GLB da praça (tools/blender/make_environment.py → public/assets/environments/praca_hero.glb)
 npm run assets:vehicles        # valida os GLB-fonte dos veículos (PR #1) e gera os refinados em public/assets/vehicles/
 npm run test:vehicles          # veículos como props/visualizador (preview-veiculos.html)

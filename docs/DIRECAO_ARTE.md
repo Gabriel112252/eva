@@ -11,6 +11,19 @@ Eliminar aparência blocada/Minecraft no prólogo `A Apuração`, sem desrespeit
 - **Som**: efeitos de passo Kenney já reais; vozes continuam via Web Speech API.
 - Ações do Fable já integraram animações; **não** recomeçar câmera, rigging e física.
 
+## Regra das três camadas (decisão do criador, 29/10/2026)
+São Paulo Velha não é 2026 decadente: é **2072**. Toda rua mostra três camadas de tempo, nesta ordem de leitura:
+1. **Base antiga (até 2040)** — os prédios brasileiros existentes: massa de apartamentos, grades, platibandas, reboco.
+2. **Camada tecnológica da Década dos Milagres (2043–2056)** — aparafusada por cima da base: peles fotovoltaicas, anexos modulares pré-fabricados, recicladores de água nos telhados, postes-sensor com câmeras mortas, letreiros de LED (alguns ainda acesos), totens de recarga reaproveitados como postes de feira, vans elétricas com baterias externas, triciclos elétricos. Em cada quarteirão, **um marco monumental visível de longe**: viaduto de maglev morto virando sombra de feira, torre de vidro com fazenda vertical meio ocupada, canopy solar, antena da Central.
+3. **Remendos (2057–2072)** — fiação improvisada, lonas, varais, peças recuperadas, sujeira e vegetação nas frestas. Digno e habitado, nunca ruína genérica.
+
+A **Igreja/Central** é sempre o contraste: branca, limpa, dourada/índigo e iluminada, no meio do remendado. Sem neon cyberpunk; o futurismo está nas camadas 2 e nos marcos, não em letreiros holográficos.
+
+Referências obrigatórias (geradas pelo criador via Kairogen a partir do cânone): `docs/concept/sp_velha_praca_02_camada_tech.jpg` (dose A — fachadas), `docs/concept/sp_velha_praca_03_monumental.jpg` (dose B — marcos), `docs/concept/sp_velha_praca_01.jpg` (o que NÃO basta: só remendo, parece 2026).
+
+## Céu sem teto
+A aeromoto Rastro AV-4 sobe sem limite até o ar acabar (~100 km): a névoa da rua se dissipa, o céu escurece até o espaço, estrelas aparecem e a **curvatura da Terra** fica visível (camada distante em `src/world/planet.ts`, texturas de satélite geradas em `public/assets/textures/aereo/`). Capturas em `docs/screenshots/altitude/`.
+
 ## Conceito visual — duas linguagens contrastantes
 ### São Paulo Velha — civilização remendada
 - Prédios urbanos brasileiros existentes reformados e remendados: massa de apartamentos, grades, portões, fiação aérea, postes, varandas, ladrilho, reboco com trincas, marquises, coberturas improvisadas, pintura desbotada, estabelecimentos reaproveitados.

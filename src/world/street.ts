@@ -26,6 +26,8 @@ export function buildStreet(ctx: WorldContext): void {
   // sobrevoa o quarteirão; a silhueta da cidade ao redor é construída em buildSkyline (worldBuilder).
   ctx.ground("terra_base", { w: 600, h: 600 }, new Vector3(0, -0.03, 0), mats.soil, 2);
   ctx.staticBoxCollider("chao", { w: 600, h: 1, d: 600 }, new Vector3(0, -0.5, 0), undefined, false);
+  // piso de segurança da região (40 km): quem voa para longe da cidade e desce ainda encontra chão
+  ctx.staticBoxCollider("chao_regiao", { w: 40000, h: 1, d: 40000 }, new Vector3(0, -0.6, 0), undefined, false);
 
   // Asfalto
   ctx.ground("asfalto", { w: streetLen, h: S.halfWidth * 2 }, new Vector3(streetCx, 0.005, 0), mats.asphalt, 4);

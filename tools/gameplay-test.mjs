@@ -113,6 +113,35 @@ try {
   const a2 = await page.evaluate(() => { const v = window.eva.driving; const p = v.position; return { p: [p.x, p.z], alt: v.altitude, up: v.isUpright }; });
   const flew = Math.hypot(a2.p[0] - b2[0], a2.p[1] - b2[1]);
   check(flew > 6 && a2.up, `Rastro avançou voando ${flew.toFixed(1)} m (alt ${a2.alt.toFixed(1)} m)`);
+  // --- céu sem teto: subir com turbo além do antigo teto (28 m) ---
+  await press("advance", true);
+  await press("run", true);
+  await step(90); // 3 s
+  await press("run", false);
+  await press("advance", false);
+  const high = await page.evaluate(() => window.eva.driving.altitude);
+  check(high > 30, `Rastro passou do antigo teto (altitude ${high.toFixed(1)} m)`);
+  // --- estratosfera: teletransporte a 40 km para validar voo livre, céu escuro e a Terra vista de cima ---
+  await page.evaluate(() => {
+    const v = window.eva.driving;
+    const p = v.position;
+    v.teleport(p.constructor.FromArray([p.x, 40000, p.z]), v.heading);
+    v.hover.setPowered(true);
+  });
+  await step(20);
+  s = await snap();
+  const altInfo = s.altitude ?? {};
+  check(altInfo.abs > 30000 && altInfo.farLayer === true && altInfo.space > 0.3, `Estratosfera: alt ${((altInfo.abs ?? 0) / 1000).toFixed(1)} km · camada distante ${altInfo.farLayer} · espaço ${(altInfo.space ?? 0).toFixed(2)} · ar ${(altInfo.air ?? 0).toFixed(2)}`);
+  const hoverSpeed = await page.evaluate(() => { const v = window.eva.driving; const vel = v.body.getLinearVelocity(); return Math.abs(vel.y); });
+  check(hoverSpeed < 12, `Rastro paira em voo livre (velocidade vertical ${hoverSpeed.toFixed(1)} m/s)`);
+  await shot("veiculo_rastro_estratosfera");
+  // volta para perto do chão, sobre a praça (a subida com turbo deriva para oeste, por cima dos telhados), para pousar
+  await page.evaluate(([x, z]) => {
+    const v = window.eva.driving;
+    v.teleport(v.position.constructor.FromArray([x, 5, z]), v.heading);
+    v.hover.setPowered(true);
+  }, [ras[0], ras[2]]);
+  await step(20);
   await press("crouchHold", true);
   await step(120);
   await press("crouchHold", false);
