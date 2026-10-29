@@ -152,6 +152,6 @@ export const VEHICLE_DEFS: Record<VehicleId, VehicleDef> = {
     exit: new Vector3(1.8, 0, -0.3),
     camera: { distance: 9, height: 2.6, pitch: 0.2 },
     headlights: [new Vector3(0, 0.75, 1.36)],
-    hover: { hoverHeight: 2.2, liftAccel: 7, thrustAccel: 9, maxSpeed: 26, yawRate: 1.6, tiltMax: 0.35, climbSpeed: 40 },
+    hover: { hoverHeight: 2.2, liftAccel: 9, thrustAccel: 13, maxSpeed: 30, yawRate: 2.2, tiltMax: 0.35, climbSpeed: 14 },
   },
 };

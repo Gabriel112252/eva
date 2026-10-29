@@ -47,7 +47,7 @@ Parâmetros opcionais na URL: `?quality=baixa|media|alta` força a qualidade gr�
 | Tecla | Ação |
 | --- | --- |
 | Mouse | Câmera (clique na cena para travar o cursor; se o navegador recusar — p. ex. dentro de um iframe — arraste com o botão esquerdo) · roda = distância |
-| W A S D / setas | Andar (a pé) · acelerar/frear/ré e virar (veículos) · empuxo e guinada (aeromoto) |
+| W A S D / setas | Andar (a pé) · acelerar/frear/ré e virar (veículos) · empuxo e deslocamento lateral (aeromoto — a guinada segue o mouse) |
 | Shift | Correr · turbo na aeromoto |
 | C (alterna) · Ctrl (segurar) | Agachar · Ctrl = descer na aeromoto |
 | E | Interagir (rádio, cartão, NPCs, itens) · **entrar/sair de veículos** |
@@ -64,7 +64,7 @@ Parâmetros opcionais na URL: `?quality=baixa|media|alta` força a qualidade gr�
 
 **Veículos jogáveis**: Javali VB-4 (viatura blindada, praça leste), Módulo V-7 (van, junto ao portão da Central), Atlas T-3 (triciclo de carga, em frente à barraca do mercado) e Rastro AV-4 (aeromoto, praça leste — voa: Espaço sobe, Ctrl desce, W/S empuxo, A/D guinada, Shift turbo). Aproxime-se da porta e pressione **E**.
 
-**Céu sem teto**: a Rastro sobe o quanto o ar permitir. Acima de ~45 m ela entra em voo livre (o comando vertical pede velocidade de subida, que cresce com a altitude e com o turbo), a poeira da rua some, o céu escurece até o espaço, aparecem estrelas e a curvatura da Terra; acima de 60 km os rotores perdem sustentação e a ~100 km não há mais empuxo (a aeromoto volta a cair). Perto do chão há uma cerca invisível a ~170 m do quarteirão; quanto mais alto, mais longe se pode ir. Só é possível descer da aeromoto pousada (Ctrl). Capturas: `docs/screenshots/altitude/`.
+**Pilotagem da Rastro**: a moto vira para onde a câmera olha; **W com a câmera apontando para cima sobe, para baixo desce** (zona morta pequena), Espaço/Ctrl forçam subir/descer, A/D deslocam de lado, Shift é turbo (2× subida, 1,5× velocidade). **Céu sem teto**: a Rastro sobe o quanto o ar permitir. Acima de ~45 m ela entra em voo livre (o comando vertical pede velocidade de subida, que cresce com a altitude e com o turbo), a poeira da rua some, o céu escurece até o espaço, aparecem estrelas e a curvatura da Terra; acima de 60 km os rotores perdem sustentação e a ~100 km não há mais empuxo (a aeromoto volta a cair). Perto do chão há uma cerca invisível a ~170 m do quarteirão; quanto mais alto, mais longe se pode ir. Só é possível descer da aeromoto pousada (Ctrl). Capturas: `docs/screenshots/altitude/`.
 
 **Missão (vertical slice, ~10–15 min)**: acordar na oficina → percorrer a rua e falar com os moradores → Raquel e Ana → a Apuração com Miriam → o Custódio revela que o lote sai ao anoitecer → **confronto** com desviadores em duas levas (pistola, mira, recarga, kit médico) → **fuga** com a van Módulo V-7 até a oficina → trancar o carregamento → decisão final pelo rádio. Matias pode cair: a tela "Matias caiu" devolve ao último ponto (junto à van) e a onda recomeça. O progresso é salvo automaticamente (IndexedDB).
 

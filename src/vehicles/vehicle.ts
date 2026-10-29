@@ -29,6 +29,8 @@ export interface VehicleControls {
   /** -1..1 subir/descer (aeromoto) */
   lift: number;
   boost: boolean;
+  /** aeromoto: guinada desejada em rad (mundo) — vira para onde a câmera olha; ausente = guinada por `steer` */
+  headingTarget?: number | null;
 }
 
 export function vehicleUrl(id: string): string {
@@ -251,7 +253,7 @@ export class Vehicle implements Interactable {
     if (this.rv) this.rv.update(dt);
     if (this.hover) {
       const c = this.controls;
-      const hc: HoverControls | null = this.occupied ? { throttle: c.throttle, steer: c.steer, lift: c.lift, boost: c.boost } : null;
+      const hc: HoverControls | null = this.occupied ? { throttle: c.throttle, steer: c.steer, lift: c.lift, boost: c.boost, headingTarget: c.headingTarget ?? null } : null;
       this.hover.step(dt, hc);
       // cerca invisível horizontal: perto do chão, ~170 m do centro do quarteirão (o mundo construído acaba
       // ali); quanto mais alto, mais largo o raio permitido — no céu não há teto nem cerca.

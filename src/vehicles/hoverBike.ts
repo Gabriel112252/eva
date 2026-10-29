@@ -15,11 +15,13 @@ import type { HoverDef } from "./vehicleDefs";
 export interface HoverControls {
   /** -1..1 (trás/frente) */
   throttle: number;
-  /** -1..1 (esquerda/direita) */
+  /** -1..1: deslocamento lateral (esquerda/direita); sem `headingTarget`, vira guinada */
   steer: number;
   /** -1..1 (descer/subir) */
   lift: number;
   boost: boolean;
+  /** guinada desejada (rad, mundo) — a moto vira para onde a câmera olha; null = guinada por `steer` */
+  headingTarget?: number | null;
 }
 
 const tmpV = new Vector3();
@@ -100,46 +102,66 @@ export class HoverController {
       return;
     }
 
-    const c = controls ?? { throttle: 0, steer: 0, lift: 0, boost: false };
+    const c: HoverControls = controls ?? { throttle: 0, steer: 0, lift: 0, boost: false, headingTarget: null };
     const g = 9.81;
-    const boostMul = c.boost ? 2.2 : 1;
+    const boostMul = c.boost ? 2.0 : 1;
     // o ar rarefeito deixa o veículo mais rápido (menos arrasto) até os rotores perderem sustentação
     const speedScale = 1 + Math.min(14, this.altitude / 1500);
+    const right = new Vector3(forward.z, 0, -forward.x);
     let ay: number;
-    if (!this.freeFlight) {
-      // --- perto do solo: gravidade compensada + PD de altitude (ou comando direto de subir/descer)
-      if (c.lift !== 0) {
-        ay = g + c.lift * this.def.liftAccel * boostMul - vel.y * 0.8;
-        this.targetHeight = Math.max(0.6, this.groundHeight);
-      } else {
-        const err = this.targetHeight - this.groundHeight;
-        ay = g + Math.max(-this.def.liftAccel, Math.min(this.def.liftAccel, err * 3.2)) - vel.y * 2.2;
-      }
-    } else {
-      // --- voo livre: o comando vertical pede uma velocidade de subida/descida; sem comando, pára de subir
+    if (c.lift !== 0) {
+      // --- comando vertical: pede uma velocidade de subida/descida (cresce com turbo e altitude);
+      // perto do chão a descida é amortecida para pousar sem bater
       const climbMax = this.def.climbSpeed * boostMul * speedScale;
-      const vTarget = c.lift * climbMax;
+      let vTarget = c.lift * climbMax;
+      if (vTarget < 0 && this.groundHeight < 2.5) vTarget = Math.max(vTarget, -Math.max(0.3, (this.groundHeight - 0.3) * 1.6));
       const maxAccel = this.def.liftAccel * 3 * (c.boost ? 1.6 : 1);
-      ay = g + Math.max(-maxAccel, Math.min(maxAccel, (vTarget - vel.y) * 0.9));
+      ay = g + Math.max(-maxAccel, Math.min(maxAccel, (vTarget - vel.y) * 1.2));
+      this.targetHeight = Math.max(0.6, this.groundHeight);
+    } else if (!this.freeFlight) {
+      // --- perto do solo sem comando: PD mantém a altura
+      const err = this.targetHeight - this.groundHeight;
+      ay = g + Math.max(-this.def.liftAccel, Math.min(this.def.liftAccel, err * 3.2)) - vel.y * 2.2;
+    } else {
+      // --- voo livre sem comando: pára de subir/descer (paira)
+      ay = g - vel.y * 1.5;
       this.targetHeight = this.groundHeight;
     }
     // sem ar não há sustentação: acima de ~60 km o empuxo cai até zero (volta a cair a 100 km)
     ay *= this.air;
-    // --- frontal: empuxo na direção do nariz + arrasto proporcional à velocidade
-    const maxSpeed = (c.boost ? this.def.maxSpeed * 1.35 : this.def.maxSpeed) * speedScale;
-    const thrust = c.throttle * this.def.thrustAccel * (c.boost ? 1.5 : 1) * Math.min(8, speedScale) * this.air;
+    // --- frontal e lateral: empuxo na direção do nariz (e para o lado com `steer` quando a guinada vem da
+    // câmera) + arrasto proporcional à velocidade
+    const maxSpeed = (c.boost ? this.def.maxSpeed * 1.5 : this.def.maxSpeed) * speedScale;
+    const thrustScale = this.def.thrustAccel * (c.boost ? 1.8 : 1) * Math.min(8, speedScale) * this.air;
+    const cameraSteer = c.headingTarget !== null && c.headingTarget !== undefined;
+    const thrustF = c.throttle * thrustScale;
+    const thrustR = cameraSteer ? c.steer * thrustScale * 0.75 : 0;
     const drag = (this.def.thrustAccel * Math.min(8, speedScale)) / maxSpeed; // v_terminal = thrust/drag
     const horizontal = new Vector3(vel.x, 0, vel.z);
-    const force = forward.scale(thrust * mass).subtractInPlace(horizontal.scale(drag * mass));
+    const force = forward.scale(thrustF * mass).addInPlace(right.scale(thrustR * mass)).subtractInPlace(horizontal.scale(drag * mass));
     // `ay` é a aceleração vertical total que os rotores devem produzir (já inclui compensar g)
     force.y = ay * mass;
     // impulso com o dt real do passo (applyForce do Havok usa o passo fixo de 1/60, não o dt do frame)
     body.applyImpulse(force.scaleInPlace(dt), pos.add(new Vector3(0, 0.4, 0)));
 
-    // --- orientação: guinada pelos comandos; pitch/roll inclinam com aceleração e curva, com retorno ao nível
-    this.yaw += c.steer * this.def.yawRate * dt;
-    const pitch = -c.throttle * this.def.tiltMax * 0.8;
-    const roll = -c.steer * this.def.tiltMax;
+    // --- orientação: a moto vira para onde a câmera olha (ou guinada por A/D); pitch/roll inclinam com
+    // aceleração, deslocamento lateral e curva, com retorno ao nível
+    let yawRateUsed = 0;
+    if (cameraSteer) {
+      let d = (c.headingTarget! - this.yaw) % (Math.PI * 2);
+      if (d > Math.PI) d -= Math.PI * 2;
+      if (d < -Math.PI) d += Math.PI * 2;
+      const maxTurn = this.def.yawRate * 1.5 * dt;
+      const stepYaw = Math.max(-maxTurn, Math.min(maxTurn, d * Math.min(1, dt * 6)));
+      this.yaw += stepYaw;
+      yawRateUsed = dt > 0 ? stepYaw / dt : 0;
+    } else {
+      this.yaw += c.steer * this.def.yawRate * dt;
+      yawRateUsed = c.steer * this.def.yawRate;
+    }
+    const lateralSpeed = Vector3.Dot(vel, right);
+    const pitch = -c.throttle * this.def.tiltMax * 0.8 - Math.max(-0.6, Math.min(0.6, (vel.y / Math.max(8, this.def.climbSpeed)) * 0.25));
+    const roll = -(cameraSteer ? c.steer : 0) * this.def.tiltMax * 0.7 - (yawRateUsed / this.def.yawRate) * this.def.tiltMax * 0.6 - Math.max(-0.4, Math.min(0.4, lateralSpeed / Math.max(10, this.def.maxSpeed))) * 0.3;
     Quaternion.RotationYawPitchRollToRef(this.yaw, pitch, roll, tmpQ);
     const current = this.chassis.rotationQuaternion ?? Quaternion.Identity();
     // velocidade angular que leva da orientação atual à desejada em ~0,25 s
