@@ -37,7 +37,7 @@
               <button id="btn-options" class="menu-btn">Opções</button>
               <button id="btn-about" class="menu-btn">Sobre o protótipo</button>
             </nav>
-            <p id="menu-controls-hint" class="muted small">WASD mover · Shift correr · C agachar · E interagir · Esc pausar</p>
+            <p id="menu-controls-hint" class="muted small">WASD mover · Shift correr · C agachar · E interagir/entrar · Botão direito mirar · Esquerdo atirar · R recarregar · I mochila · Esc pausar</p>
           </div>
         </section>
 
@@ -140,6 +140,41 @@
             <span id="subtitle-continue" class="subtitle-continue">Espaço · continuar</span>
           </div>
           <div id="choices" class="choices"></div>
+          <div id="vitals" class="vitals">
+            <div class="health"><div id="health-bar" class="health-bar"></div></div>
+            <div id="ammo" class="ammo"><span id="ammo-mag">—</span><span id="ammo-reserve"></span><span id="ammo-label" class="ammo-label"></span></div>
+          </div>
+          <div id="crosshair" class="crosshair"><span></span><span></span><span></span><span></span></div>
+          <div id="hitmarker" class="hitmarker"></div>
+          <div id="damage-vignette" class="damage-vignette"></div>
+          <div id="vehicle-hud" class="vehicle-hud">
+            <div id="vehicle-name" class="vehicle-name"></div>
+            <div class="vehicle-speed"><span id="vehicle-speed">0</span><span class="unit">km/h</span><span id="vehicle-alt" class="vehicle-alt"></span></div>
+            <div id="vehicle-hint" class="vehicle-hint"></div>
+          </div>
+          <div id="inventory" class="inventory">
+            <div class="inventory-title">Mochila <span class="muted small">(I · fechar)</span></div>
+            <ul id="inventory-list" class="inventory-list"></ul>
+          </div>
+          <div id="death" class="overlay death">
+            <div class="overlay-card">
+              <h2>Matias caiu</h2>
+              <p id="death-text" class="muted">O carregamento ainda está lá. Volte ao último ponto.</p>
+              <button id="btn-retry" class="menu-btn" type="button">Tentar de novo</button>
+            </div>
+          </div>
+          <div id="mission-end" class="overlay mission-end">
+            <div class="overlay-card wide">
+              <p class="overlay-kicker">Capítulo 0 concluído</p>
+              <h2 id="mission-end-title">A Apuração</h2>
+              <p id="mission-end-text" class="mission-end-text"></p>
+              <ul id="mission-end-stats" class="mission-end-stats"></ul>
+              <div class="overlay-actions">
+                <button id="btn-mission-continue" class="menu-btn" type="button">Continuar explorando</button>
+                <button id="btn-mission-menu" class="menu-btn" type="button">Voltar ao menu</button>
+              </div>
+            </div>
+          </div>
           <div id="fade" class="fade"></div>
         </div>
       </div>

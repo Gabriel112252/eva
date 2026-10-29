@@ -35,6 +35,12 @@ export class ThirdPersonCamera {
   private smoothedPos = new Vector3();
   private smoothedTarget = new Vector3();
   private initialized = false;
+  /** campo de visão alvo (mira estreita, veículo mais aberto) */
+  fovTarget = 0.95;
+  /** tempo desde o último movimento de mouse (alinhamento automático atrás do veículo) */
+  private idleTime = 0;
+  /** deslocamento vertical extra do pivô (veículos) */
+  pivotLift = 0;
   private readonly rayResult = new PhysicsRaycastResult();
   private dialogueFrom = new Vector3();
   private dialogueAt = new Vector3();
@@ -62,6 +68,23 @@ export class ThirdPersonCamera {
     this.mode = "follow";
   }
 
+  /** Perfil de seguimento: a pé, mirando ou dirigindo. */
+  setProfile(p: { distance: number; shoulder: number; fov: number; pitch?: number; pivotLift?: number; minDistance?: number }): void {
+    this.targetDistance = p.distance;
+    this.shoulder = p.shoulder;
+    this.fovTarget = p.fov;
+    this.pivotLift = p.pivotLift ?? 0;
+    this.minDistance = p.minDistance ?? 1.4;
+    if (p.pitch !== undefined) this.pitch = p.pitch;
+  }
+
+  private minDistance = 1.4;
+
+  /** Perfil padrão a pé. */
+  setWalkProfile(): void {
+    this.setProfile({ distance: 2.9, shoulder: 0.42, fov: 0.95, minDistance: 1.4 });
+  }
+
   setMenuOrbit(): void {
     this.mode = "menu";
     this.menuTime = 0;
@@ -76,7 +99,7 @@ export class ThirdPersonCamera {
     }
     switch (this.mode) {
       case "follow":
-        this.updateFollow(dt, input, pivot, eyeHeight);
+        this.updateFollow(dt, input, pivot, eyeHeight, lookYaw);
         break;
       case "dialogue": {
         const s = this.initialized ? 5 : 1000;
@@ -100,23 +123,32 @@ export class ThirdPersonCamera {
         break;
       }
     }
-    void lookYaw;
+    this.camera.fov = damp(this.camera.fov, this.fovTarget, 10, dt);
   }
 
-  private updateFollow(dt: number, input: InputManager, pivot: Vector3, eyeHeight: number): void {
+  private updateFollow(dt: number, input: InputManager, pivot: Vector3, eyeHeight: number, alignYaw?: number): void {
     const { dx, dy } = input.consumeMouseDelta();
     const sens = 0.0022 * this.sensitivity;
     this.yaw += dx * sens;
     this.pitch += (this.invertY ? -dy : dy) * sens;
     this.pitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, this.pitch));
+    // dirigindo: sem mouse por um instante, a câmera volta a ficar atrás do veículo
+    if (dx !== 0 || dy !== 0) this.idleTime = 0;
+    else this.idleTime += dt;
+    if (alignYaw !== undefined && this.idleTime > 0.9) {
+      let d = (alignYaw - this.yaw) % (Math.PI * 2);
+      if (d > Math.PI) d -= Math.PI * 2;
+      if (d < -Math.PI) d += Math.PI * 2;
+      this.yaw += d * (1 - Math.exp(-2.5 * dt));
+    }
     const wheel = input.consumeWheel();
-    if (wheel !== 0) this.targetDistance = Math.max(1.4, Math.min(5.0, this.targetDistance + wheel * 0.35));
+    if (wheel !== 0) this.targetDistance = Math.max(this.minDistance, Math.min(12.0, this.targetDistance + wheel * 0.35 * (this.targetDistance > 4 ? 2 : 1)));
     this.distance = damp(this.distance, this.targetDistance, 8, dt);
 
-    // pivô no ombro do personagem
+    // pivô no ombro do personagem (ou acima do veículo)
     const fwd = new Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
     const right = new Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
-    const pivotPos = pivot.add(new Vector3(0, eyeHeight, 0)).add(right.scale(this.shoulder));
+    const pivotPos = pivot.add(new Vector3(0, eyeHeight + this.pivotLift, 0)).add(right.scale(this.shoulder));
 
     // posição desejada atrás e acima
     const cp = Math.cos(this.pitch);

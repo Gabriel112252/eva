@@ -261,3 +261,117 @@ export function rms(data: Float32Array): number {
   for (let i = 0; i < data.length; i++) sum += (data[i] ?? 0) ** 2;
   return Math.sqrt(sum / Math.max(1, data.length));
 }
+
+// ---------------------------------------------------------------------------
+// Vertical slice — motor de veículo, aeromoto, tiro e impactos (sintetizados, provisórios:
+// substituir por gravações CC0 registradas em ASSETS.md quando houver arquivos)
+// ---------------------------------------------------------------------------
+/** Ciclo de motor a combustão/híbrido em marcha lenta (loop curto; o tom é alterado por playbackRate). */
+export function engineLoop(sampleRate: number, seconds: number, seed: number): SynthBuffer {
+  const n = Math.floor(sampleRate * seconds);
+  const data = new Float32Array(n);
+  const rng = makeRng(seed);
+  const f0 = 38; // Hz (marcha lenta); o jogo sobe o playbackRate com a rotação
+  let phase = 0;
+  let lp = 0;
+  for (let i = 0; i < n; i++) {
+    phase += (f0 / sampleRate) * (1 + 0.01 * Math.sin((i / sampleRate) * 7));
+    const saw = (phase % 1) * 2 - 1;
+    const pulse = Math.sin(phase * Math.PI * 2 * 2) * 0.4 + Math.sin(phase * Math.PI * 2 * 3) * 0.25;
+    const noise = (rng() - 0.5) * 0.08;
+    const raw = saw * 0.45 + pulse + noise;
+    lp += (raw - lp) * 0.12;
+    data[i] = lp * 0.5;
+  }
+  return { sampleRate, channels: [crossfadeLoop(data, Math.floor(sampleRate * 0.05))] };
+}
+
+/** Turbinas canalizadas da aeromoto: zumbido com batimento e sopro. */
+export function rotorLoop(sampleRate: number, seconds: number, seed: number): SynthBuffer {
+  const n = Math.floor(sampleRate * seconds);
+  const data = new Float32Array(n);
+  const rng = makeRng(seed);
+  let lp = 0;
+  for (let i = 0; i < n; i++) {
+    const t = i / sampleRate;
+    const hum = Math.sin(t * 2 * Math.PI * 92) * 0.35 + Math.sin(t * 2 * Math.PI * 184 + 0.3) * 0.2 + Math.sin(t * 2 * Math.PI * 276) * 0.1;
+    const beat = 0.8 + 0.2 * Math.sin(t * 2 * Math.PI * 11);
+    const noise = (rng() - 0.5) * 0.5;
+    lp += (noise - lp) * 0.2;
+    data[i] = (hum * beat + lp * 0.6) * 0.45;
+  }
+  return { sampleRate, channels: [crossfadeLoop(data, Math.floor(sampleRate * 0.08))] };
+}
+
+/** Disparo de pistola: estalo de ruído com envelope curto + corpo grave com decaimento. */
+export function gunshot(sampleRate: number, seed: number): SynthBuffer {
+  const n = Math.floor(sampleRate * 0.42);
+  const data = new Float32Array(n);
+  const rng = makeRng(seed);
+  let lp = 0;
+  for (let i = 0; i < n; i++) {
+    const t = i / sampleRate;
+    const crack = (rng() - 0.5) * Math.exp(-t * 90);
+    const body = Math.sin(t * 2 * Math.PI * (120 - t * 160)) * Math.exp(-t * 18) * 0.9;
+    const tail = (rng() - 0.5) * Math.exp(-t * 9) * 0.25;
+    lp += (tail - lp) * 0.08;
+    data[i] = Math.tanh((crack * 1.6 + body + lp) * 1.4) * 0.9;
+  }
+  return { sampleRate, channels: [data] };
+}
+
+/** Impacto de projétil em superfície dura (lascas). */
+export function ricochet(sampleRate: number, seed: number): SynthBuffer {
+  const n = Math.floor(sampleRate * 0.18);
+  const data = new Float32Array(n);
+  const rng = makeRng(seed);
+  const f = 1800 + (seed % 5) * 300;
+  for (let i = 0; i < n; i++) {
+    const t = i / sampleRate;
+    data[i] = ((rng() - 0.5) * Math.exp(-t * 60) * 0.8 + Math.sin(t * 2 * Math.PI * f * (1 - t * 2)) * Math.exp(-t * 40) * 0.4) * 0.7;
+  }
+  return { sampleRate, channels: [data] };
+}
+
+/** Clique metálico do carregador (recarga). */
+export function magazineClick(sampleRate: number, seed: number): SynthBuffer {
+  const n = Math.floor(sampleRate * 0.12);
+  const data = new Float32Array(n);
+  const rng = makeRng(seed);
+  for (let i = 0; i < n; i++) {
+    const t = i / sampleRate;
+    data[i] = ((rng() - 0.5) * Math.exp(-t * 120) * 0.6 + Math.sin(t * 2 * Math.PI * 2600) * Math.exp(-t * 70) * 0.5) * 0.7;
+  }
+  return { sampleRate, channels: [data] };
+}
+
+/** Batida surda de lataria (colisão de veículo). */
+export function carImpact(sampleRate: number, seed: number): SynthBuffer {
+  const n = Math.floor(sampleRate * 0.5);
+  const data = new Float32Array(n);
+  const rng = makeRng(seed);
+  let lp = 0;
+  for (let i = 0; i < n; i++) {
+    const t = i / sampleRate;
+    const thud = Math.sin(t * 2 * Math.PI * (70 - t * 40)) * Math.exp(-t * 10);
+    const rattle = (rng() - 0.5) * Math.exp(-t * 14) * 0.5;
+    lp += (rattle - lp) * 0.15;
+    data[i] = Math.tanh((thud + lp) * 1.3) * 0.8;
+  }
+  return { sampleRate, channels: [data] };
+}
+
+/** Grunhido de dor curto (síntese formântica simples) — provisório. */
+export function hurtGrunt(sampleRate: number, seed: number, pitch = 1): SynthBuffer {
+  const n = Math.floor(sampleRate * 0.3);
+  const data = new Float32Array(n);
+  const rng = makeRng(seed);
+  for (let i = 0; i < n; i++) {
+    const t = i / sampleRate;
+    const f = (150 - t * 120) * pitch;
+    const env = Math.min(1, t * 40) * Math.exp(-t * 9);
+    const v = Math.sin(t * 2 * Math.PI * f) * 0.5 + Math.sin(t * 2 * Math.PI * f * 2.1) * 0.25 + (rng() - 0.5) * 0.2;
+    data[i] = v * env * 0.6;
+  }
+  return { sampleRate, channels: [data] };
+}

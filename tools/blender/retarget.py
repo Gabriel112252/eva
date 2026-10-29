@@ -310,6 +310,15 @@ GAME_CLIPS: dict[str, tuple[str, bool]] = {
     "Talk": ("Idle_Talking_Loop", True),
     "Interact": ("Interact", False),  # estende a mão e aperta/aponta (rádio, cumprimento)
     "PickUp": ("PickUp_Table", False),  # abaixa e pega um objeto de uma mesa (cartão de registro)
+    # combate (pistola), reações e veículos — vertical slice
+    "PistolIdle": ("Pistol_Idle_Loop", True),
+    "PistolAim": ("Pistol_Aim_Neutral", True),
+    "PistolShoot": ("Pistol_Shoot", False),
+    "PistolReload": ("Pistol_Reload", False),
+    "Hit": ("Hit_Chest", False),
+    "Death": ("Death01", False),
+    "Driving": ("Driving_Loop", True),
+    "Sit": ("Sitting_Idle_Loop", True),
 }
 
 

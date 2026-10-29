@@ -16,7 +16,13 @@ export type GameAction =
   | "choice2"
   | "choice3"
   | "choice4"
-  | "objectives";
+  | "objectives"
+  | "fire"
+  | "aim"
+  | "reload"
+  | "inventory"
+  | "heal"
+  | "lights";
 
 const DEFAULT_BINDINGS: Record<string, GameAction> = {
   KeyW: "forward",
@@ -41,6 +47,10 @@ const DEFAULT_BINDINGS: Record<string, GameAction> = {
   Digit3: "choice3",
   Digit4: "choice4",
   Tab: "objectives",
+  KeyR: "reload",
+  KeyI: "inventory",
+  KeyH: "heal",
+  KeyF: "lights",
 };
 
 /**
@@ -107,13 +117,36 @@ export class InputManager {
     this.mouseDy += Math.max(-150, Math.min(150, e.movementY));
   };
 
-  // Sem pointer lock: arrastar com o botão esquerdo gira a câmera. Usa Pointer Events porque o
-  // Babylon cancela o pointerdown na cena, o que suprime mousedown/mousemove/mouseup do navegador.
+  // Botões do mouse: esquerdo = atirar, direito = mirar (com o cursor travado). Sem pointer lock, o
+  // botão direito ainda mira e o esquerdo atira enquanto se mira; fora disso, arrastar com o esquerdo
+  // gira a câmera. Usa Pointer Events porque o Babylon cancela o pointerdown na cena, o que suprime
+  // mousedown/mousemove/mouseup do navegador.
   private readonly pointerDown = (e: PointerEvent) => {
-    if (e.pointerType !== "mouse" || e.button !== 0 || this.isPointerLocked) return;
+    if (e.pointerType !== "mouse") return;
+    if (e.button === 2) {
+      this.press("aim");
+      return;
+    }
+    if (e.button !== 0) return;
+    if (this.isPointerLocked || this.held.has("aim")) {
+      this.press("fire");
+      return;
+    }
     this.dragLook = true;
     this.dragLast = { x: e.clientX, y: e.clientY };
   };
+
+  private press(action: GameAction): void {
+    if (this.held.has(action)) return;
+    this.held.add(action);
+    this.onAction.emit(action);
+  }
+
+  private release(action: GameAction): void {
+    if (this.held.delete(action)) this.onActionReleased.emit(action);
+  }
+
+  private readonly contextMenu = (e: Event) => e.preventDefault();
 
   private readonly pointerMove = (e: PointerEvent) => {
     if (!this.dragLook || e.pointerType !== "mouse" || this.isPointerLocked) return;
@@ -125,7 +158,10 @@ export class InputManager {
   };
 
   private readonly pointerUp = (e: PointerEvent) => {
-    if (e.pointerType === "mouse") this.dragLook = false;
+    if (e.pointerType !== "mouse") return;
+    this.dragLook = false;
+    if (e.button === 0) this.release("fire");
+    if (e.button === 2) this.release("aim");
   };
 
   private readonly wheel = (e: WheelEvent) => {
@@ -166,6 +202,7 @@ export class InputManager {
     window.addEventListener("pointerup", this.pointerUp);
     window.addEventListener("pointercancel", this.pointerUp);
     element.addEventListener("wheel", this.wheel, { passive: false });
+    element.addEventListener("contextmenu", this.contextMenu);
     document.addEventListener("pointerlockchange", this.lockChange);
     document.addEventListener("pointerlockerror", this.lockError);
     window.addEventListener("blur", this.blur);
@@ -181,6 +218,7 @@ export class InputManager {
     window.removeEventListener("pointerup", this.pointerUp);
     window.removeEventListener("pointercancel", this.pointerUp);
     this.attachedTo.removeEventListener("wheel", this.wheel);
+    this.attachedTo.removeEventListener("contextmenu", this.contextMenu);
     document.removeEventListener("pointerlockchange", this.lockChange);
     document.removeEventListener("pointerlockerror", this.lockError);
     window.removeEventListener("blur", this.blur);
@@ -217,6 +255,14 @@ export class InputManager {
 
   /** Vetor de movimento no plano (x: direita, y: frente): teclas digitais + eixo analógico, módulo ≤ 1. */
   moveAxis(): { x: number; y: number } {
+    const { x, y } = this.rawAxis();
+    const len = Math.hypot(x, y);
+    if (len > 1) return { x: x / len, y: y / len };
+    return { x, y };
+  }
+
+  /** Eixos sem normalização (veículos: acelerador e volante independentes), cada um em [-1, 1]. */
+  rawAxis(): { x: number; y: number } {
     if (!this.enabled) return { x: 0, y: 0 };
     let x = this.analogX;
     let y = this.analogY;
@@ -224,12 +270,7 @@ export class InputManager {
     if (this.held.has("back")) y -= 1;
     if (this.held.has("right")) x += 1;
     if (this.held.has("left")) x -= 1;
-    const len = Math.hypot(x, y);
-    if (len > 1) {
-      x /= len;
-      y /= len;
-    }
-    return { x, y };
+    return { x: Math.max(-1, Math.min(1, x)), y: Math.max(-1, Math.min(1, y)) };
   }
 
   /**

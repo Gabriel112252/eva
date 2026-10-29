@@ -47,7 +47,7 @@ export class Npc implements Interactable {
     this.collider.rotationQuaternion = Quaternion.Identity();
     const shape = new PhysicsShapeCapsule(new Vector3(0, -info.height / 2 + info.radius, 0), new Vector3(0, info.height / 2 - info.radius, 0), info.radius, scene);
     shape.filterMembershipMask = COLLISION.NPC | COLLISION.CAMERA_BLOCKER;
-    shape.filterCollideMask = COLLISION.PLAYER | COLLISION.PROP;
+    shape.filterCollideMask = COLLISION.PLAYER | COLLISION.PROP | COLLISION.VEHICLE | COLLISION.ENEMY;
     this.body = new PhysicsBody(this.collider, PhysicsMotionType.STATIC, false, scene);
     this.body.shape = shape;
   }

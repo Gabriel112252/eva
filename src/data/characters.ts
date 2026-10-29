@@ -1,5 +1,5 @@
 /** Metadados dos personagens 3D (arquivos em public/assets/characters/, gerados por tools/gen-character.mjs). */
-export type CharacterVariant = "matias" | "miriam" | "custodio" | "comerciante" | "raquel" | "ana";
+export type CharacterVariant = "matias" | "miriam" | "custodio" | "comerciante" | "raquel" | "ana" | "saqueador_a" | "saqueador_b";
 
 export interface CharacterInfo {
   variant: CharacterVariant;
@@ -22,12 +22,20 @@ export const CHARACTERS: Record<CharacterVariant, CharacterInfo> = {
   comerciante: { variant: "comerciante", displayName: "Comerciante", height: 1.7, radius: 0.32, prompt: "Falar com o comerciante", voice: { pitch: 0.95, rate: 1.05, gender: "male" } },
   raquel: { variant: "raquel", displayName: "Raquel", height: 1.65, radius: 0.3, prompt: "Falar com Raquel", voice: { pitch: 1.0, rate: 0.95, gender: "female" } },
   ana: { variant: "ana", displayName: "Ana", height: 1.6, radius: 0.28, prompt: "Falar com Ana", voice: { pitch: 1.2, rate: 1.02, gender: "female" } },
+  saqueador_a: { variant: "saqueador_a", displayName: "Desviador", height: 1.78, radius: 0.32, voice: { pitch: 0.85, rate: 1.0, gender: "male" } },
+  saqueador_b: { variant: "saqueador_b", displayName: "Desviador", height: 1.74, radius: 0.32, voice: { pitch: 0.78, rate: 0.97, gender: "male" } },
 };
 
-export const ANIMATION_CLIPS = ["Idle", "Walk", "Run", "CrouchIdle", "CrouchWalk", "Talk", "Interact", "PickUp"] as const;
+/** Variantes que são NPCs falantes da praça/rua (os saqueadores são inimigos: ver src/ai/). */
+export const NPC_TALKERS: CharacterVariant[] = ["miriam", "custodio", "comerciante", "raquel", "ana"];
+export const ENEMY_VARIANTS: CharacterVariant[] = ["saqueador_a", "saqueador_b"];
+
+export const ANIMATION_CLIPS = ["Idle", "Walk", "Run", "CrouchIdle", "CrouchWalk", "Talk", "Interact", "PickUp", "PistolIdle", "PistolAim", "PistolShoot", "PistolReload", "Hit", "Death", "Driving", "Sit"] as const;
 export type AnimationClip = (typeof ANIMATION_CLIPS)[number];
 /** Clipes tocados uma vez (não em loop). */
-export const ONE_SHOT_CLIPS: readonly AnimationClip[] = ["Interact", "PickUp"];
+export const ONE_SHOT_CLIPS: readonly AnimationClip[] = ["Interact", "PickUp", "PistolShoot", "PistolReload", "Hit", "Death"];
+/** Clipes que param no último quadro em vez de voltar ao anterior (morte). */
+export const HOLD_LAST_FRAME_CLIPS: readonly AnimationClip[] = ["Death"];
 
 /**
  * Velocidade natural (m/s) de cada clipe de locomoção a 1× — medida pela velocidade do pé apoiado nos

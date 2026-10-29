@@ -28,6 +28,10 @@ export class Environment {
   readonly skyDome: Mesh;
   readonly shadows: CascadedShadowGenerator | ShadowGenerator;
   pipeline: DefaultRenderingPipeline | null = null;
+  /** 0 = tarde (14h30), 1 = anoitecer (18h40): o confronto da missão acontece ao cair da noite */
+  private dusk = 0;
+  private duskTarget = 0;
+  private skyMaterial: SkyMaterial | null = null;
 
   constructor(
     readonly scene: Scene,
@@ -69,6 +73,7 @@ export class Environment {
     skyMat.mieCoefficient = 0.012;
     skyMat.mieDirectionalG = 0.86;
     skyMat.fogEnabled = false;
+    this.skyMaterial = skyMat;
     // metade da aresta (200) × √3 ≈ 346 m < maxZ da câmera (500): o domo nunca é cortado pelo plano distante
     this.skyDome = MeshBuilder.CreateBox("ceu_domo", { size: 400 }, scene);
     this.skyDome.material = skyMat;
@@ -103,6 +108,42 @@ export class Environment {
       this.shadows = csm;
     }
     this.shadows.setDarkness(0.25);
+  }
+
+  get isNight(): boolean {
+    return this.dusk > 0.5;
+  }
+
+  /** Alvo da transição tarde→anoitecer (0..1); a cena interpola em ~segundos. */
+  setDusk(target: number): void {
+    this.duskTarget = Math.max(0, Math.min(1, target));
+  }
+
+  /** Interpola sol, céu, névoa e ambiente entre tarde e anoitecer (chamar a cada frame). */
+  updateTimeOfDay(dt: number): void {
+    if (Math.abs(this.duskTarget - this.dusk) < 1e-4) return;
+    this.dusk += (this.duskTarget - this.dusk) * Math.min(1, dt * 0.35);
+    const k = this.dusk;
+    // sol baixo a oeste, alaranjado
+    const day = new Vector3(0.52, -0.68, -0.52).normalize();
+    const eve = new Vector3(0.86, -0.18, -0.48).normalize();
+    const dir = Vector3.Lerp(day, eve, k).normalize();
+    this.sun.direction = dir;
+    this.sun.position = dir.scale(-80);
+    this.sun.intensity = 3.2 * (1 - k) + 1.1 * k;
+    this.sun.diffuse = Color3.Lerp(new Color3(1.0, 0.93, 0.82), new Color3(1.0, 0.58, 0.32), k);
+    this.sky.intensity = 0.55 * (1 - k) + 0.28 * k;
+    this.sky.diffuse = Color3.Lerp(new Color3(0.78, 0.86, 1.0), new Color3(0.36, 0.4, 0.62), k);
+    this.sky.groundColor = Color3.Lerp(new Color3(0.42, 0.36, 0.3), new Color3(0.2, 0.16, 0.16), k);
+    this.scene.fogColor = Color3.Lerp(new Color3(0.78, 0.76, 0.7), new Color3(0.36, 0.3, 0.32), k);
+    this.scene.fogDensity = 0.0085 + 0.004 * k;
+    this.scene.environmentIntensity = 0.7 * (1 - k) + 0.35 * k;
+    this.scene.ambientColor = Color3.Lerp(new Color3(0.18, 0.18, 0.2), new Color3(0.12, 0.1, 0.14), k);
+    if (this.skyMaterial) {
+      this.skyMaterial.sunPosition = dir.scale(-100);
+      this.skyMaterial.luminance = 0.9 * (1 - k) + 0.45 * k;
+      this.skyMaterial.turbidity = 6.5 + 5 * k;
+    }
   }
 
   addShadowCasters(meshes: AbstractMesh[]): void {

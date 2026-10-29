@@ -74,6 +74,54 @@
       "loop": false,
       "source": "PickUp_Table",
       "frames": 26
+    },
+    "PistolIdle": {
+      "duration": 1.6667,
+      "loop": true,
+      "source": "Pistol_Idle_Loop",
+      "frames": 50
+    },
+    "PistolAim": {
+      "duration": 0.1667,
+      "loop": true,
+      "source": "Pistol_Aim_Neutral",
+      "frames": 5
+    },
+    "PistolShoot": {
+      "duration": 0.6667,
+      "loop": false,
+      "source": "Pistol_Shoot",
+      "frames": 20
+    },
+    "PistolReload": {
+      "duration": 1.7,
+      "loop": false,
+      "source": "Pistol_Reload",
+      "frames": 51
+    },
+    "Hit": {
+      "duration": 0.3667,
+      "loop": false,
+      "source": "Hit_Chest",
+      "frames": 11
+    },
+    "Death": {
+      "duration": 2.4333,
+      "loop": false,
+      "source": "Death01",
+      "frames": 73
+    },
+    "Driving": {
+      "duration": 1.6667,
+      "loop": true,
+      "source": "Driving_Loop",
+      "frames": 50
+    },
+    "Sit": {
+      "duration": 1.6667,
+      "loop": true,
+      "source": "Sitting_Idle_Loop",
+      "frames": 50
     }
   },
   "characters": {
@@ -96,6 +144,20 @@
       "label": "Custódio da praça — segurança",
       "height": 1.83,
       "triangles": 21868,
+      "bones": 52
+    },
+    "saqueador_a": {
+      "file": "saqueador_a.glb",
+      "label": "Saqueador (desviador de cargas) — variante A",
+      "height": 1.78,
+      "triangles": 21915,
+      "bones": 52
+    },
+    "saqueador_b": {
+      "file": "saqueador_b.glb",
+      "label": "Saqueador (desviador de cargas) — variante B",
+      "height": 1.74,
+      "triangles": 25862,
       "bones": 52
     },
     "comerciante": {

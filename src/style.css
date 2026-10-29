@@ -701,3 +701,286 @@ body.touch-mode .subtitle {
     height: 8vh;
   }
 }
+
+
+/* ---------------------------------------------------------------------------
+   Vertical slice: sinais vitais, mira, veículo, mochila, morte e fim de missão
+   --------------------------------------------------------------------------- */
+.vitals {
+  position: absolute;
+  left: 32px;
+  bottom: 30px;
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 220px;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.9);
+}
+.vitals.visible {
+  display: flex;
+}
+.health {
+  width: 220px;
+  height: 6px;
+  background: rgba(236, 230, 216, 0.14);
+  border: 1px solid rgba(236, 230, 216, 0.25);
+}
+.health-bar {
+  height: 100%;
+  width: 100%;
+  background: var(--gold);
+  transition: width 0.25s ease, background 0.25s ease;
+}
+.health-bar.low {
+  background: #c74a3a;
+}
+.ammo {
+  font-family: var(--font-title);
+  font-size: 22px;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+#ammo-reserve {
+  font-size: 14px;
+  color: var(--ink-dim);
+}
+.ammo-label {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--gold-dim);
+}
+.ammo.reloading #ammo-mag {
+  color: var(--gold);
+}
+
+.crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 28px;
+  height: 28px;
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+.crosshair.visible {
+  opacity: 0.9;
+}
+.crosshair span {
+  position: absolute;
+  background: var(--ink);
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.8);
+}
+.crosshair span:nth-child(1) { left: 13px; top: 0; width: 2px; height: 8px; }
+.crosshair span:nth-child(2) { left: 13px; bottom: 0; width: 2px; height: 8px; }
+.crosshair span:nth-child(3) { top: 13px; left: 0; width: 8px; height: 2px; }
+.crosshair span:nth-child(4) { top: 13px; right: 0; width: 8px; height: 2px; }
+.crosshair.spread span:nth-child(1) { top: -5px; }
+.crosshair.spread span:nth-child(2) { bottom: -5px; }
+.crosshair.spread span:nth-child(3) { left: -5px; }
+.crosshair.spread span:nth-child(4) { right: -5px; }
+
+.hitmarker {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 22px;
+  height: 22px;
+  transform: translate(-50%, -50%) rotate(45deg);
+  opacity: 0;
+  pointer-events: none;
+}
+.hitmarker::before,
+.hitmarker::after {
+  content: "";
+  position: absolute;
+  background: #f2d08f;
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.9);
+}
+.hitmarker::before { left: 10px; top: 0; width: 2px; height: 22px; }
+.hitmarker::after { top: 10px; left: 0; width: 22px; height: 2px; }
+.hitmarker.visible {
+  opacity: 1;
+  transition: none;
+}
+.hitmarker.fading {
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+.hitmarker.kill::before,
+.hitmarker.kill::after {
+  background: #e04a3a;
+}
+
+.damage-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, rgba(120, 0, 0, 0) 45%, rgba(140, 10, 10, 0.75) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.damage-vignette.visible {
+  opacity: 1;
+  transition: opacity 0.05s ease;
+}
+
+.vehicle-hud {
+  position: absolute;
+  right: 32px;
+  bottom: 30px;
+  display: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.9);
+}
+.vehicle-hud.visible {
+  display: flex;
+}
+.vehicle-name {
+  font-size: 11px;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.vehicle-speed {
+  font-family: var(--font-title);
+  font-size: 34px;
+  color: var(--ink);
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.vehicle-speed .unit {
+  font-size: 13px;
+  color: var(--ink-dim);
+}
+.vehicle-alt {
+  font-size: 13px;
+  color: var(--ink-dim);
+  margin-left: 10px;
+}
+.vehicle-hint {
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+
+.inventory {
+  position: absolute;
+  right: 32px;
+  top: 90px;
+  width: 260px;
+  padding: 14px 16px;
+  background: var(--panel);
+  border: 1px solid rgba(201, 162, 74, 0.35);
+  display: none;
+}
+.inventory.visible {
+  display: block;
+}
+.inventory-title {
+  font-family: var(--font-title);
+  font-size: 16px;
+  letter-spacing: 0.08em;
+  color: var(--gold);
+  margin-bottom: 10px;
+}
+.inventory-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.inventory-list li {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+}
+.inventory-list li span:last-child {
+  color: var(--ink-dim);
+}
+.inventory-list li.empty {
+  color: var(--ink-dim);
+  font-style: italic;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 4, 3, 0.72);
+  pointer-events: auto;
+}
+.overlay.visible {
+  display: flex;
+}
+.overlay-card {
+  width: min(420px, 86vw);
+  padding: 28px 32px;
+  background: var(--panel);
+  border: 1px solid rgba(201, 162, 74, 0.4);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: center;
+}
+.overlay-card.wide {
+  width: min(560px, 90vw);
+}
+.overlay-card h2 {
+  font-family: var(--font-title);
+  font-weight: normal;
+  font-size: 30px;
+  letter-spacing: 0.08em;
+  margin: 0;
+}
+.overlay-kicker {
+  font-size: 11px;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: var(--gold);
+  margin: 0;
+}
+.mission-end-text {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink);
+  margin: 0;
+}
+.mission-end-stats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 18px;
+  font-size: 13px;
+  color: var(--ink-dim);
+  text-align: left;
+}
+.mission-end-stats li span:last-child {
+  float: right;
+  color: var(--ink);
+}
+.overlay-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.death .overlay-card h2 {
+  color: #e0b0a0;
+}

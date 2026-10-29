@@ -448,8 +448,10 @@ def smooth_by_angle(obj: bpy.types.Object, deg: float = 32.0):
     bm.free()
 
 
-def finish(objs: list[bpy.types.Object], root_name: str, smooth=True) -> bpy.types.Object:
-    """Aplica modificadores, UVs e suavização; junta por material; agrupa sob um Empty raiz."""
+def finish(objs: list[bpy.types.Object], root_name: str, smooth=True, group_key=None, pivot_groups: tuple[str, ...] = ()) -> bpy.types.Object:
+    """Aplica modificadores, UVs e suavização; junta por material (ou por `group_key(obj)` quando dado);
+    agrupa sob um Empty raiz. Grupos cujo nome começa por um prefixo de `pivot_groups` ganham a origem no
+    centro da própria geometria (peças que giram no jogo, como rodas)."""
     root = bpy.data.objects.new(root_name, None)
     bpy.context.scene.collection.objects.link(root)
     by_mat: dict[str, list[bpy.types.Object]] = {}
@@ -459,7 +461,11 @@ def finish(objs: list[bpy.types.Object], root_name: str, smooth=True) -> bpy.typ
             box_uv(o)
             if smooth:
                 smooth_by_angle(o)
-        key = o.data.materials[0].name if o.data.materials else "none"
+        key = None
+        if group_key is not None:
+            key = group_key(o)
+        if key is None:
+            key = o.data.materials[0].name if o.data.materials else "none"
         if o.name.startswith("COL_"):
             key = "COL:" + o.name
         by_mat.setdefault(key, []).append(o)
@@ -474,6 +480,9 @@ def finish(objs: list[bpy.types.Object], root_name: str, smooth=True) -> bpy.typ
             obj = group[0]
             if not key.startswith("COL:"):
                 obj.name = f"{root_name}_{key}"
+        if any(key.startswith(p) for p in pivot_groups):
+            with bpy.context.temp_override(object=obj, active_object=obj, selected_objects=[obj], selected_editable_objects=[obj]):
+                bpy.ops.object.origin_set(type="ORIGIN_GEOMETRY", center="BOUNDS")
         obj.parent = root
         out.append(obj)
     return root

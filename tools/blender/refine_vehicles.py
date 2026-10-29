@@ -173,7 +173,22 @@ def refine(name: str) -> None:
         wavy_plane("lona_cobertura", 1.22, 1.22, (0, 0.76, 1.66), V["tarp_sand"], nx=10, ny=10, amp=0.03, freq=2.0)
         for k, (x, y, mat) in enumerate(((-0.22, 0.5, V["aged_wood"]), (0.2, 0.92, M["produce_brown"]), (0.22, 0.45, V["aged_wood"]))):
             box(f"carga_{k}", (0.42, 0.38, 0.30), (x, y, 0.97), mat, rot=(0, 0, k * 0.3), bevel=0.01)
-    root = finish(list(env._parts), name)
+    # rodas: cada roda (pneu + cubo + eixo + raios) vira UMA malha com origem no centro, nomeada WHEEL_<id>,
+    # para o jogo girar/esterçar a peça (src/vehicles). O resto junta por material como no ambiente.
+    import re
+
+    wheel_re = re.compile(r"^(roda_[^_]+_[^_]+|roda_-?1_-?[0-9.]+|traseira_-?1|dianteira)_(pneu|cubo|eixo|raio_\d+)(\.\d+)?$")
+
+    rotor_re = re.compile(r"^(helice_-?1)_\d+(\.\d+)?$")
+
+    def group_key(o):
+        m = wheel_re.match(o.name)
+        if m:
+            return f"WHEEL_{m.group(1)}"
+        r = rotor_re.match(o.name)
+        return f"ROTOR_{r.group(1)}" if r else None
+
+    root = finish(list(env._parts), name, group_key=group_key, pivot_groups=("WHEEL_", "ROTOR_"))
     os.makedirs(OUT, exist_ok=True)
     export([root], os.path.join(OUT, f"{name}.glb"))
 

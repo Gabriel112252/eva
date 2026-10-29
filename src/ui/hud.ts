@@ -1,5 +1,6 @@
 import type { DialogueChoice } from "@/narrative/dialogue";
 import type { InputManager, GameAction } from "@/core/input";
+import { TypedEvent } from "@/core/events";
 
 function el<T extends HTMLElement = HTMLElement>(id: string): T {
   const e = document.getElementById(id);
@@ -24,6 +25,33 @@ export class Hud {
   private subtitleText = el("subtitle-text");
   private choices = el("choices");
   private fade = el("fade");
+  private vitals = el("vitals");
+  private healthBar = el("health-bar");
+  private ammo = el("ammo");
+  private ammoMag = el("ammo-mag");
+  private ammoReserve = el("ammo-reserve");
+  private ammoLabel = el("ammo-label");
+  private crosshair = el("crosshair");
+  private hitmarker = el("hitmarker");
+  private damageVignette = el("damage-vignette");
+  private vehicleHud = el("vehicle-hud");
+  private vehicleName = el("vehicle-name");
+  private vehicleSpeed = el("vehicle-speed");
+  private vehicleAlt = el("vehicle-alt");
+  private vehicleHint = el("vehicle-hint");
+  private inventory = el("inventory");
+  private inventoryList = el("inventory-list");
+  private death = el("death");
+  private deathText = el("death-text");
+  private missionEnd = el("mission-end");
+  private missionEndTitle = el("mission-end-title");
+  private missionEndText = el("mission-end-text");
+  private missionEndStats = el("mission-end-stats");
+  readonly onRetry = new TypedEvent<void>();
+  readonly onMissionContinue = new TypedEvent<void>();
+  readonly onMissionMenu = new TypedEvent<void>();
+  private hitTimer = 0;
+  private vignetteTimer = 0;
   private noticeTimer = 0;
   private typingTimer = 0;
   private choiceResolver: ((index: number) => void) | null = null;
@@ -33,6 +61,121 @@ export class Hud {
 
   constructor(private readonly input: InputManager) {
     input.onAction.on((a) => this.handleAction(a));
+    el("btn-retry").addEventListener("click", () => this.onRetry.emit());
+    el("btn-mission-continue").addEventListener("click", () => this.onMissionContinue.emit());
+    el("btn-mission-menu").addEventListener("click", () => this.onMissionMenu.emit());
+  }
+
+  // --- vertical slice: vitais, mira, veículo, mochila, morte, fim de missão ----------------------
+  /** Barra de vida (0..1). `visible` false esconde o bloco todo (antes de Matias ter uma arma). */
+  setVitals(visible: boolean, health01: number): void {
+    this.vitals.classList.toggle("visible", visible);
+    const pct = Math.max(0, Math.min(1, health01));
+    this.healthBar.style.width = `${(pct * 100).toFixed(0)}%`;
+    this.healthBar.classList.toggle("low", pct < 0.3);
+  }
+
+  setAmmo(weaponName: string | null, mag: number, reserve: number, reloading: boolean): void {
+    if (!weaponName) {
+      this.ammo.style.display = "none";
+      return;
+    }
+    this.ammo.style.display = "flex";
+    this.ammoMag.textContent = reloading ? "…" : String(mag);
+    this.ammoReserve.textContent = `/ ${reserve}`;
+    this.ammoLabel.textContent = weaponName;
+    this.ammo.classList.toggle("reloading", reloading);
+  }
+
+  setCrosshair(visible: boolean, spread = false): void {
+    this.crosshair.classList.toggle("visible", visible);
+    this.crosshair.classList.toggle("spread", spread);
+  }
+
+  /** Marcador de acerto (X) — vermelho quando o tiro derrubou o alvo. */
+  showHitMarker(kill: boolean): void {
+    window.clearTimeout(this.hitTimer);
+    this.hitmarker.classList.remove("fading");
+    this.hitmarker.classList.toggle("kill", kill);
+    this.hitmarker.classList.add("visible");
+    this.hitTimer = window.setTimeout(() => {
+      this.hitmarker.classList.add("fading");
+      this.hitmarker.classList.remove("visible");
+    }, 90);
+  }
+
+  /** Vinheta vermelha ao sofrer dano. */
+  flashDamage(): void {
+    window.clearTimeout(this.vignetteTimer);
+    this.damageVignette.classList.add("visible");
+    this.vignetteTimer = window.setTimeout(() => this.damageVignette.classList.remove("visible"), 220);
+  }
+
+  setVehicle(name: string | null, hint = ""): void {
+    this.vehicleHud.classList.toggle("visible", !!name);
+    if (name) {
+      this.vehicleName.textContent = name;
+      this.vehicleHint.textContent = hint;
+    }
+  }
+
+  setVehicleSpeed(kmh: number, altitude: number | null): void {
+    const v = String(Math.round(kmh));
+    if (this.vehicleSpeed.textContent !== v) this.vehicleSpeed.textContent = v;
+    this.vehicleAlt.textContent = altitude === null ? "" : `alt ${altitude.toFixed(1)} m`;
+  }
+
+  setInventory(visible: boolean, items: Array<{ name: string; count: number; note?: string }>): void {
+    this.inventory.classList.toggle("visible", visible);
+    if (!visible) return;
+    this.inventoryList.replaceChildren(
+      ...(items.length
+        ? items.map((it) => {
+            const li = document.createElement("li");
+            const a = document.createElement("span");
+            a.textContent = it.name;
+            const b = document.createElement("span");
+            b.textContent = it.note ? `${it.count} · ${it.note}` : String(it.count);
+            li.append(a, b);
+            return li;
+          })
+        : [Object.assign(document.createElement("li"), { textContent: "Nada além das ferramentas", className: "empty" })]),
+    );
+  }
+
+  get inventoryVisible(): boolean {
+    return this.inventory.classList.contains("visible");
+  }
+
+  showDeath(text: string): void {
+    this.deathText.textContent = text;
+    this.death.classList.add("visible");
+    el("btn-retry").focus();
+  }
+
+  hideDeath(): void {
+    this.death.classList.remove("visible");
+  }
+
+  showMissionEnd(title: string, text: string, stats: Array<[string, string]>): void {
+    this.missionEndTitle.textContent = title;
+    this.missionEndText.textContent = text;
+    this.missionEndStats.replaceChildren(
+      ...stats.map(([k, v]) => {
+        const li = document.createElement("li");
+        const a = document.createElement("span");
+        a.textContent = k;
+        const b = document.createElement("span");
+        b.textContent = v;
+        li.append(a, b);
+        return li;
+      }),
+    );
+    this.missionEnd.classList.add("visible");
+  }
+
+  hideMissionEnd(): void {
+    this.missionEnd.classList.remove("visible");
   }
 
   show(): void {

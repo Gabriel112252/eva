@@ -127,6 +127,73 @@ export class AudioEngine {
     put("chime", synth.chime(sr, 520));
     put("objective", synth.chime(sr, 392));
     put("paper", synth.paperRustle(sr, 5));
+    // vertical slice (sintetizados, provisórios)
+    put("engine_car", synth.engineLoop(sr, 1.5, 21));
+    put("engine_trike", synth.engineLoop(sr, 1.2, 23));
+    put("rotor", synth.rotorLoop(sr, 2.0, 25));
+    for (let i = 0; i < 3; i++) {
+      put(`gunshot_${i}`, synth.gunshot(sr, 31 + i));
+      put(`ricochet_${i}`, synth.ricochet(sr, 41 + i));
+      put(`hurt_${i}`, synth.hurtGrunt(sr, 51 + i, 1 - i * 0.1));
+    }
+    put("mag_click", synth.magazineClick(sr, 61));
+    put("car_impact", synth.carImpact(sr, 71));
+  }
+
+  // --- motor do veículo (loop com tom e volume controlados por rotação) ------------------------
+  private engineSource: AudioBufferSourceNode | null = null;
+  private engineGain: GainNode | null = null;
+  private engineKind: "car" | "trike" | "hover" | null = null;
+
+  startEngine(kind: "car" | "trike" | "hover"): void {
+    if (!this.ctx || !this.buses) return;
+    this.stopEngine();
+    const key = kind === "hover" ? "rotor" : kind === "trike" ? "engine_trike" : "engine_car";
+    const buf = this.buffers.get(key);
+    if (!buf) return;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    const gain = this.ctx.createGain();
+    gain.gain.value = 0.0001;
+    src.connect(gain);
+    gain.connect(this.buses.sfx);
+    src.start();
+    this.engineSource = src;
+    this.engineGain = gain;
+    this.engineKind = kind;
+    gain.gain.setTargetAtTime(kind === "hover" ? 0.5 : 0.35, this.ctx.currentTime, 0.4);
+  }
+
+  /** `rpm` 0..1 (rotação normalizada), `load` 0..1 (acelerador). */
+  updateEngine(rpm: number, load: number): void {
+    if (!this.ctx || !this.engineSource || !this.engineGain) return;
+    const t = this.ctx.currentTime;
+    const rate = this.engineKind === "hover" ? 0.85 + rpm * 0.5 : 0.8 + rpm * 1.6;
+    this.engineSource.playbackRate.setTargetAtTime(rate, t, 0.12);
+    const vol = (this.engineKind === "hover" ? 0.45 : 0.3) + load * 0.25 + rpm * 0.1;
+    this.engineGain.gain.setTargetAtTime(vol, t, 0.15);
+  }
+
+  stopEngine(): void {
+    if (!this.ctx) return;
+    const src = this.engineSource;
+    const gain = this.engineGain;
+    if (src && gain) {
+      gain.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.25);
+      window.setTimeout(() => {
+        try {
+          src.stop();
+        } catch {
+          /* já parado */
+        }
+        src.disconnect();
+        gain.disconnect();
+      }, 700);
+    }
+    this.engineSource = null;
+    this.engineGain = null;
+    this.engineKind = null;
   }
 
   /** Som não espacial (interface). */

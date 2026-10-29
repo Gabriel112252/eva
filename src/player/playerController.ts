@@ -110,7 +110,7 @@ export class PlayerController {
     this.cc.maxAcceleration = 60;
     const shape = this.cc.shape;
     shape.filterMembershipMask = COLLISION.PLAYER;
-    shape.filterCollideMask = COLLISION.WORLD | COLLISION.PROP | COLLISION.NPC;
+    shape.filterCollideMask = COLLISION.WORLD | COLLISION.PROP | COLLISION.NPC | COLLISION.VEHICLE | COLLISION.ENEMY;
     this.yaw = yaw;
     this.model.setYaw(yaw);
     this.syncModel();
@@ -154,8 +154,30 @@ export class PlayerController {
     this.cc.setShapeOptions({ capsuleHeight: this.capsuleHeight, capsuleRadius: RADIUS }, true);
     const shape = this.cc.shape;
     shape.filterMembershipMask = COLLISION.PLAYER;
-    shape.filterCollideMask = COLLISION.WORLD | COLLISION.PROP | COLLISION.NPC;
+    shape.filterCollideMask = COLLISION.WORLD | COLLISION.PROP | COLLISION.NPC | COLLISION.VEHICLE | COLLISION.ENEMY;
     return true;
+  }
+
+  /** Dentro de um veículo: a cápsula sai do mundo (estacionada bem abaixo) e o modelo passa ao banco. */
+  inVehicle = false;
+
+  detachForVehicle(): void {
+    this.inVehicle = true;
+    this.horizontalSpeed = 0;
+    this.velocity.setAll(0);
+    this.cc.setVelocity(Vector3.Zero());
+    this.cc.setPosition(new Vector3(0, -120, 0));
+    this.state = "idle";
+  }
+
+  /** Volta ao mundo numa posição de pés, virado para `yaw`. */
+  attachFromVehicle(feet: Vector3, yaw: number): void {
+    this.inVehicle = false;
+    this.model.root.parent = null;
+    this.model.root.scaling.setAll(1);
+    this.teleport(feet, yaw);
+    this.modelY = null;
+    this.syncModel();
   }
 
   /** Há espaço acima para levantar? (raio físico contra o mundo estático) */
@@ -170,6 +192,10 @@ export class PlayerController {
   }
 
   update(dt: number, input: InputManager, cameraYaw: number): void {
+    if (this.inVehicle) {
+      this.model.animator.update(dt);
+      return;
+    }
     const support: CharacterSurfaceInfo = this.cc.checkSupport(dt, this.down);
     const axis = this.locked ? { x: 0, y: 0 } : input.moveAxis();
     const moving = axis.x !== 0 || axis.y !== 0;

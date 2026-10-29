@@ -19,6 +19,8 @@ export const COLLISION = {
   NPC: 1 << 2,
   PROP: 1 << 3,
   CAMERA_BLOCKER: 1 << 4, // o que a câmera não atravessa
+  VEHICLE: 1 << 5, // chassis dos veículos jogáveis
+  ENEMY: 1 << 6, // cápsulas dos inimigos (alvos de tiro)
 } as const;
 
 export interface AmbientEmitterSpec {
@@ -191,7 +193,7 @@ export class WorldContext {
     node.rotationQuaternion = Quaternion.FromEulerVector(rotation);
     const shape = new PhysicsShapeBox(Vector3.Zero(), Quaternion.Identity(), new Vector3(size.w, size.h, size.d), this.scene);
     shape.filterMembershipMask = COLLISION.WORLD | (cameraBlocker ? COLLISION.CAMERA_BLOCKER : 0);
-    shape.filterCollideMask = COLLISION.PLAYER | COLLISION.NPC | COLLISION.PROP;
+    shape.filterCollideMask = COLLISION.PLAYER | COLLISION.NPC | COLLISION.PROP | COLLISION.VEHICLE | COLLISION.ENEMY;
     shape.material = { friction: 0.6, restitution: 0.05 };
     const body = new PhysicsBody(node, PhysicsMotionType.STATIC, false, this.scene);
     body.shape = shape;
@@ -204,7 +206,7 @@ export class WorldContext {
     node.position.copyFrom(position);
     const shape = new PhysicsShapeCylinder(new Vector3(0, -height / 2, 0), new Vector3(0, height / 2, 0), radius, this.scene);
     shape.filterMembershipMask = COLLISION.WORLD | COLLISION.CAMERA_BLOCKER;
-    shape.filterCollideMask = COLLISION.PLAYER | COLLISION.NPC | COLLISION.PROP;
+    shape.filterCollideMask = COLLISION.PLAYER | COLLISION.NPC | COLLISION.PROP | COLLISION.VEHICLE | COLLISION.ENEMY;
     const body = new PhysicsBody(node, PhysicsMotionType.STATIC, false, this.scene);
     body.shape = shape;
     this.colliderNodes.push(node);
@@ -216,7 +218,7 @@ export class WorldContext {
     node.position.copyFrom(position);
     const shape = new PhysicsShapeSphere(Vector3.Zero(), radius, this.scene);
     shape.filterMembershipMask = COLLISION.WORLD;
-    shape.filterCollideMask = COLLISION.PLAYER | COLLISION.NPC | COLLISION.PROP;
+    shape.filterCollideMask = COLLISION.PLAYER | COLLISION.NPC | COLLISION.PROP | COLLISION.VEHICLE | COLLISION.ENEMY;
     const body = new PhysicsBody(node, PhysicsMotionType.STATIC, false, this.scene);
     body.shape = shape;
     this.colliderNodes.push(node);
@@ -231,7 +233,7 @@ export class WorldContext {
     mesh.parent = this.dynamicRoot;
     const shape = new PhysicsShapeBox(center, Quaternion.Identity(), new Vector3(size.w, size.h, size.d), this.scene);
     shape.filterMembershipMask = COLLISION.PROP;
-    shape.filterCollideMask = COLLISION.WORLD | COLLISION.PLAYER | COLLISION.NPC | COLLISION.PROP;
+    shape.filterCollideMask = COLLISION.WORLD | COLLISION.PLAYER | COLLISION.NPC | COLLISION.PROP | COLLISION.VEHICLE | COLLISION.ENEMY;
     shape.material = { friction: 0.7, restitution: 0.05 };
     const body = new PhysicsBody(mesh, PhysicsMotionType.DYNAMIC, false, this.scene);
     body.shape = shape;

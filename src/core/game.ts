@@ -12,7 +12,9 @@ import { enableHavok } from "@/physics/havok";
 import { Environment } from "@/world/environment";
 import { buildWorld, type World } from "@/world/worldBuilder";
 import { loadHeroAssets } from "@/world/heroAssets";
-import { loadEvaStaticVehicles } from "@/world/vehiclesPack";
+import { vehicleSpawns } from "@/world/vehiclesPack";
+import { Vehicle } from "@/vehicles/vehicle";
+import { Quaternion } from "@babylonjs/core/Maths/math.vector";
 import { STREET } from "@/world/street";
 import { loadCharacter, type CharacterModel } from "@/characters/characterModel";
 import { Npc } from "@/characters/npc";
@@ -71,6 +73,9 @@ export class Game {
   private advanceResolver: (() => void) | null = null;
   private lockWasAcquired = false;
   private matias!: CharacterModel;
+  /** veículos jogáveis e o que Matias está dirigindo */
+  vehicles: Vehicle[] = [];
+  driving: Vehicle | null = null;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.engine = new Engine(canvas, true, { stencil: true, antialias: true, preserveDrawingBuffer: false, powerPreference: "high-performance" }, false);
@@ -128,11 +133,16 @@ export class Game {
       console.error("[heroAssets] falha ao carregar os módulos da praça", err);
     }
     progress(0.48, "Estacionando os veículos…");
-    try {
-      const vehicles = await loadEvaStaticVehicles(this.scene, this.world.ctx);
-      heroCasters = [...heroCasters, ...vehicles.shadowCasters];
-    } catch (err) {
-      console.error("[vehiclesPack] falha ao carregar os veículos", err);
+    for (const sp of vehicleSpawns()) {
+      try {
+        const v = await Vehicle.load(this.scene, sp.id, sp.position, sp.yaw);
+        v.onEnter = (veh) => this.enterVehicle(veh);
+        this.vehicles.push(v);
+        this.interactables.push(v);
+        heroCasters = [...heroCasters, ...v.meshes.filter((m) => !/vidro|parabrisa|para_brisa|glass/i.test(m.name))];
+      } catch (err) {
+        console.error(`[vehicles] falha ao carregar ${sp.id}`, err);
+      }
     }
     progress(0.5, "Carregando Matias…");
     this.matias = await loadCharacter(this.scene, "matias");
@@ -358,7 +368,12 @@ export class Game {
         if (a === "pause") {
           this.pause();
         } else if (a === "interact") {
-          this.tryInteract();
+          if (this.driving) this.exitVehicle();
+          else this.tryInteract();
+        } else if (a === "lights" && this.driving) {
+          this.driving.setLights(!this.driving.lights);
+        } else if (a === "crouchToggle" && this.driving) {
+          // sem agachar ao volante
         } else if (a === "crouchToggle") {
           if (!this.player.setCrouched(!this.player.crouched)) this.hud.showNotice("Não há espaço para levantar", 1.5);
         } else if (a === "objectives") {
@@ -396,6 +411,7 @@ export class Game {
   // ---------------------------------------------------------------------
   /** Teleporta Matias (pés) para uma posição do mundo. */
   teleportPlayer(x: number, y: number, z: number, yaw: number): void {
+    if (this.driving) this.exitVehicle();
     this.player.teleport(new Vector3(x, y, z), yaw);
     this.camera.snapBehind(yaw);
   }
@@ -484,6 +500,7 @@ export class Game {
       audioReady: this.audio.isReady,
       analog: this.input.analogAxis,
       heldRun: this.input.isHeld("run"),
+      driving: this.driving?.def.id ?? null,
       touch: this.touch.snapshot(),
       quality: this.settings.quality,
     };
@@ -788,21 +805,29 @@ export class Game {
     if (this.input.isHeld("crouchHold")) this.crouchFromHold = true;
 
     const camYaw = this.camera.yaw;
+    for (const v of this.vehicles) v.update(dt);
+    if (this.driving) this.updateDriving(dt);
     this.player.update(dt, this.input, camYaw);
-    const feet = this.player.feet;
+    const feet = this.driving ? this.driving.position : this.player.feet;
     for (const n of this.npcs) n.update(dt, feet);
-    this.camera.update(dt, this.input, feet, this.player.eyeHeight);
+    if (this.driving) this.camera.update(dt, this.input, feet, 0, this.driving.heading);
+    else this.camera.update(dt, this.input, feet, this.player.eyeHeight);
     // oculta Matias quando a câmera encosta nele
-    this.matias.setVisible(this.camera.mode !== "follow" || this.camera.distanceTo(feet.add(new Vector3(0, this.player.eyeHeight, 0))) > 0.75);
+    this.matias.setVisible(this.driving !== null || this.camera.mode !== "follow" || this.camera.distanceTo(feet.add(new Vector3(0, this.player.eyeHeight, 0))) > 0.75);
     // ouvinte de áudio na câmera
     const cam = this.camera.camera;
     const fwd = cam.getDirection(Vector3.Forward());
     this.audio.updateListener(cam.position, fwd, Vector3.Up());
     this.updateLights(dt);
+    this.env.updateTimeOfDay(dt);
     this.updateRadio(dt, feet);
     this.updateTriggers(feet);
 
-    if (this.state === "playing") {
+    if (this.state === "playing" && this.driving) {
+      this.currentPrompt = null;
+      this.hud.setPrompt(this.driving.speedKmh < 8 ? "Sair do veículo" : null);
+      if (this.touch.enabled) this.touch.setInteractAvailable(this.driving.speedKmh < 8);
+    } else if (this.state === "playing") {
       const pick = pickInteractable(this.interactables, { x: feet.x, z: feet.z }, this.player.forward, 0.2);
       this.currentPrompt = pick?.target ?? null;
       this.hud.setPrompt(pick ? pick.prompt : null);
@@ -821,6 +846,74 @@ export class Game {
   }
 
   private crouchFromHold = false;
+
+  // ---------------------------------------------------------------------
+  // Veículos
+  // ---------------------------------------------------------------------
+  enterVehicle(v: Vehicle): void {
+    if (this.state !== "playing" || this.driving || v.occupied) return;
+    this.driving = v;
+    v.occupied = true;
+    v.controls = { throttle: 0, steer: 0, handbrake: false, lift: 0, boost: false };
+    this.player.detachForVehicle();
+    const root = this.matias.root;
+    root.parent = v.seat;
+    root.position.setAll(0);
+    root.rotationQuaternion = Quaternion.Identity();
+    this.matias.animator.play(v.def.driverClip);
+    this.matias.setVisible(true);
+    if (v.hover) v.hover.setPowered(true);
+    this.camera.setProfile({ distance: v.def.camera.distance, shoulder: 0, fov: 1.05, pitch: v.def.camera.pitch, pivotLift: v.def.camera.height, minDistance: 3.5 });
+    this.camera.yaw = v.heading;
+    this.camera.snapBehind(v.heading);
+    const hint = v.def.kind === "hover" ? "W/S empuxo · A/D guinada · Espaço subir · Ctrl descer · Shift turbo · E sair" : "W/S acelerar/frear · A/D virar · Espaço freio de mão · F faróis · E sair";
+    this.hud.setVehicle(v.def.displayName, hint);
+    this.audio.startEngine(v.def.kind);
+    this.audio.playUi("switch", 0.5);
+    if (this.env.isNight) v.setLights(true);
+    this.flags.set(`veiculo.${v.def.id}.entrou`, true);
+  }
+
+  exitVehicle(): void {
+    const v = this.driving;
+    if (!v) return;
+    const pos = v.exitPosition();
+    const d = pos.subtract(v.position);
+    const yaw = Math.atan2(d.x, d.z);
+    v.occupied = false;
+    v.controls = { throttle: 0, steer: 0, handbrake: false, lift: 0, boost: false };
+    if (v.hover) v.hover.setPowered(false);
+    this.driving = null;
+    this.player.attachFromVehicle(pos, yaw);
+    this.matias.animator.play("Idle");
+    this.camera.setWalkProfile();
+    this.camera.yaw = yaw;
+    this.camera.snapBehind(yaw);
+    this.hud.setVehicle(null);
+    this.hud.setPrompt(null);
+    this.audio.stopEngine();
+  }
+
+  private updateDriving(dt: number): void {
+    const v = this.driving!;
+    const axis = this.input.rawAxis();
+    const held = (a: GameAction) => this.input.isHeld(a);
+    v.controls = {
+      throttle: Math.max(-1, Math.min(1, axis.y)),
+      steer: Math.max(-1, Math.min(1, axis.x)),
+      handbrake: v.def.kind !== "hover" && held("advance"),
+      lift: v.def.kind === "hover" ? (held("advance") ? 1 : 0) - (held("crouchHold") || held("crouchToggle") ? 1 : 0) : 0,
+      boost: held("run"),
+    };
+    this.hud.setVehicleSpeed(v.speedKmh, v.def.kind === "hover" ? v.altitude : null);
+    const rpm = Math.min(1, v.speedKmh / (v.def.maxSpeed * 3.6));
+    this.audio.updateEngine(rpm, Math.abs(v.controls.throttle) * (v.def.kind === "hover" ? 1 : 1 - rpm * 0.5));
+    if (v.lastImpact > 0) {
+      this.audio.playAt("car_impact", v.position, Math.min(1, v.lastImpact / 4));
+      v.lastImpact = 0;
+    }
+    void dt;
+  }
 
   private updateLights(dt: number): void {
     const t = performance.now() / 1000;
