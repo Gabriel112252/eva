@@ -25,6 +25,7 @@ export default defineConfig({
       input: {
         main: fileURLToPath(new URL("./index.html", import.meta.url)),
         "preview-veiculos": fileURLToPath(new URL("./preview-veiculos.html", import.meta.url)),
+        "kit-tech": fileURLToPath(new URL("./kit-tech.html", import.meta.url)),
       },
       output: {
         manualChunks: (id) => {
