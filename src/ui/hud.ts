@@ -41,6 +41,26 @@ export class Hud {
   private vehicleHint = el("vehicle-hint");
   private inventory = el("inventory");
   private inventoryList = el("inventory-list");
+  private clueList = el("clue-list");
+  private clueCount = el("inventory-clue-count");
+  private tabItems = el<HTMLButtonElement>("inventory-tab-items");
+  private tabClues = el<HTMLButtonElement>("inventory-tab-clues");
+  private missionTimer = el("mission-timer");
+  private missionTimerLabel = el("mission-timer-label");
+  private missionTimerClock = el("mission-timer-clock");
+  private awareness = el("awareness");
+  private awarenessFill = el("awareness-fill");
+  private awarenessLabel = el("awareness-label");
+  private repair = el("repair");
+  private repairName = el("repair-name");
+  private repairStep = el("repair-step");
+  private repairZone = el("repair-zone");
+  private repairBar = el("repair-bar");
+  private examine = el("examine");
+  private examineTitle = el("examine-title");
+  private examineText = el("examine-text");
+  /** aba ativa da mochila */
+  inventoryTab: "itens" | "pistas" = "itens";
   private death = el("death");
   private deathText = el("death-text");
   private missionEnd = el("mission-end");
@@ -64,6 +84,94 @@ export class Hud {
     el("btn-retry").addEventListener("click", () => this.onRetry.emit());
     el("btn-mission-continue").addEventListener("click", () => this.onMissionContinue.emit());
     el("btn-mission-menu").addEventListener("click", () => this.onMissionMenu.emit());
+    this.tabItems.addEventListener("click", () => this.setInventoryTab("itens"));
+    this.tabClues.addEventListener("click", () => this.setInventoryTab("pistas"));
+  }
+
+  // --- Capítulo 1: pistas, timer, furtividade, reparo, exame -----------------------------------
+  setInventoryTab(tab: "itens" | "pistas"): void {
+    this.inventoryTab = tab;
+    this.tabItems.classList.toggle("active", tab === "itens");
+    this.tabClues.classList.toggle("active", tab === "pistas");
+    this.inventoryList.hidden = tab !== "itens";
+    this.clueList.hidden = tab !== "pistas";
+  }
+
+  /** Aba "Pistas" da mochila (ordem de descoberta). */
+  setClues(clues: Array<{ title: string; text: string; source: string }>): void {
+    this.clueCount.textContent = clues.length ? `(${clues.length})` : "";
+    this.clueList.replaceChildren(
+      ...(clues.length
+        ? clues.map((c) => {
+            const li = document.createElement("li");
+            const t = document.createElement("span");
+            t.className = "clue-title";
+            t.textContent = c.title;
+            const x = document.createElement("span");
+            x.className = "clue-text";
+            x.textContent = c.text;
+            const s = document.createElement("span");
+            s.className = "clue-source";
+            s.textContent = c.source;
+            li.append(t, x, s);
+            return li;
+          })
+        : [Object.assign(document.createElement("li"), { textContent: "Nenhuma pista anotada ainda", className: "empty" })]),
+    );
+  }
+
+  /** Contagem regressiva no canto superior direito; `null` esconde. */
+  setTimer(label: string | null, clock = "", urgent = false): void {
+    this.missionTimer.classList.toggle("visible", label !== null);
+    if (label === null) return;
+    if (this.missionTimerLabel.textContent !== label) this.missionTimerLabel.textContent = label;
+    if (this.missionTimerClock.textContent !== clock) this.missionTimerClock.textContent = clock;
+    this.missionTimer.classList.toggle("urgent", urgent);
+  }
+
+  /**
+   * Olho que enche: `level` 0..1 (0 esconde), `state` muda a cor (suspeito claro, alerta âmbar,
+   * perseguição vermelho).
+   */
+  setAwareness(level: number, state: "calmo" | "suspeito" | "alerta" | "perseguicao"): void {
+    const visible = level > 0.001 && state !== "calmo";
+    this.awareness.classList.toggle("visible", visible);
+    if (!visible) return;
+    const pct = Math.max(0, Math.min(1, level));
+    // o retângulo de recorte sobe do fundo (y=40) até o topo (y=0)
+    this.awarenessFill.setAttribute("y", (40 - pct * 40).toFixed(1));
+    this.awareness.classList.toggle("alert", state === "alerta");
+    this.awareness.classList.toggle("pursuit", state === "perseguicao");
+    const label = state === "suspeito" ? "suspeita" : state === "alerta" ? "alerta" : "perseguição";
+    if (this.awarenessLabel.textContent !== label) this.awarenessLabel.textContent = label;
+  }
+
+  /** Barra do minigame de reparo; `null` esconde. */
+  setRepair(view: { title: string; step: number; steps: number; fill: number; zone: [number, number]; result: "hit" | "miss" | null } | null): void {
+    this.repair.classList.toggle("visible", view !== null);
+    if (!view) return;
+    if (this.repairName.textContent !== view.title) this.repairName.textContent = view.title;
+    const stepText = `passo ${Math.min(view.step + 1, view.steps)}/${view.steps}`;
+    if (this.repairStep.textContent !== stepText) this.repairStep.textContent = stepText;
+    this.repairZone.style.left = `${(view.zone[0] * 100).toFixed(1)}%`;
+    this.repairZone.style.width = `${((view.zone[1] - view.zone[0]) * 100).toFixed(1)}%`;
+    this.repairBar.style.width = `${(Math.max(0, Math.min(1, view.fill)) * 100).toFixed(1)}%`;
+    this.repair.classList.toggle("failed", view.result === "miss");
+    this.repair.classList.toggle("hit", view.result === "hit");
+  }
+
+  showExamine(title: string, text: string): void {
+    this.examineTitle.textContent = title;
+    this.examineText.textContent = text;
+    this.examine.classList.add("visible");
+  }
+
+  hideExamine(): void {
+    this.examine.classList.remove("visible");
+  }
+
+  get examineVisible(): boolean {
+    return this.examine.classList.contains("visible");
   }
 
   // --- vertical slice: vitais, mira, veículo, mochila, morte, fim de missão ----------------------
@@ -314,7 +422,12 @@ export class Hud {
   }
 
   private handleAction(a: GameAction): void {
-    if (!this.choiceResolver) return;
+    if (!this.choiceResolver) {
+      // mochila aberta: 1/2 alternam Mochila/Pistas
+      if (this.inventoryVisible && a === "choice1") this.setInventoryTab("itens");
+      else if (this.inventoryVisible && a === "choice2") this.setInventoryTab("pistas");
+      return;
+    }
     switch (a) {
       case "choice1":
       case "choice2":
