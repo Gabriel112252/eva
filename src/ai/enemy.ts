@@ -3,6 +3,8 @@ import { PhysicsRaycastResult } from "@babylonjs/core/Physics/physicsRaycastResu
 import type { PhysicsEngine } from "@babylonjs/core/Physics/v2/physicsEngine";
 import type { PhysicsBody } from "@babylonjs/core/Physics/v2/physicsBody";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { Color3 } from "@babylonjs/core/Maths/math.color";
+import { SpotLight } from "@babylonjs/core/Lights/spotLight";
 import type { Scene } from "@babylonjs/core/scene";
 import { ArriveBehavior, SeparationBehavior, ObstacleAvoidanceBehavior, Vehicle as YukaVehicle, Vector3 as YVector3, type GameEntity } from "yuka";
 import type { CharacterModel } from "@/characters/characterModel";
@@ -11,8 +13,11 @@ import { COLLISION } from "@/world/context";
 import { GRAVITY } from "@/physics/havok";
 import { Health } from "@/combat/health";
 import { TypedEvent } from "@/core/events";
+import { AWARENESS_DEFAULTS, CUSTODIO_VISION, SAQUEADOR_VISION, createAwareness, curfewVision, inVisionCone, stepAwareness, type Awareness, type AwarenessEvent, type AwarenessParams, type AwarenessState, type VisionParams } from "./stealth";
 
 export type EnemyState = "patrol" | "alert" | "chase" | "attack" | "hurt" | "dead";
+/** saqueador: hostil, atira ao ver. custodio: patrulha com lanterna, dá voz de prisão; só atira se provocado. */
+export type EnemyRole = "saqueador" | "custodio";
 
 export interface EnemyShot {
   from: Vector3;
@@ -31,16 +36,37 @@ export interface EnemyConfig {
   accuracy?: number;
   /** distância preferida de tiro */
   range?: number;
+  /** papel (padrão saqueador) */
+  role?: EnemyRole;
+  /** lanterna acompanhando o olhar (padrão: ligada para custódios) */
+  flashlight?: boolean;
+  /** ajustes de visão (ângulo/alcance) por cima do padrão do papel */
+  vision?: Partial<VisionParams>;
+  /** detecções até virar hostil (custódio; padrão 2) */
+  detectionsToHostile?: number;
+  awareness?: Partial<AwarenessParams>;
+}
+
+export interface DetectionEvent {
+  enemy: Enemy;
+  /** 1ª, 2ª… detecção deste guarda */
+  count: number;
+  /** passou a hostil com esta detecção */
+  hostile: boolean;
 }
 
 const HEIGHT = 1.78;
 const RADIUS = 0.32;
 
 /**
- * Inimigo humano (saqueador): máquina de estados patrulha → alerta → perseguição → ataque, com visão em
- * cone + linha de visada por raio físico, audição de tiros, movimento por steering (yuka: Arrive +
- * Separation + ObstacleAvoidance) integrado pelo PhysicsCharacterController do Havok, tiros com
- * dispersão/acerto probabilístico e reações de dano/morte animadas.
+ * Inimigo humano: máquina de estados patrulha → alerta → perseguição → ataque, com visão em cone + linha
+ * de visada por raio físico, audição, movimento por steering (yuka: Arrive + Separation +
+ * ObstacleAvoidance) integrado pelo PhysicsCharacterController do Havok, tiros com dispersão/acerto
+ * probabilístico e reações de dano/morte animadas.
+ *
+ * Papel `custodio`: percepção gradual (`stealth.ts`: calmo → suspeito → alerta → perseguição), lanterna
+ * (SpotLight) seguindo o olhar, voz de prisão ao detectar; só vira hostil (atira) se levar tiro ou após
+ * `detectionsToHostile` detecções.
  */
 export class Enemy {
   readonly health: Health;
@@ -49,8 +75,23 @@ export class Enemy {
   readonly onShot = new TypedEvent<EnemyShot>();
   readonly onDeath = new TypedEvent<Enemy>();
   readonly onStateChange = new TypedEvent<EnemyState>();
+  /** custódio: detectou Matias (voz de prisão) */
+  readonly onDetected = new TypedEvent<DetectionEvent>();
+  /** custódio: alcançou Matias em perseguição (prisão) */
+  readonly onCaught = new TypedEvent<Enemy>();
+  /** custódio: mudou de estado de percepção */
+  readonly onAwareness = new TypedEvent<{ enemy: Enemy; state: AwarenessState; event: AwarenessEvent }>();
+  readonly role: EnemyRole;
   state: EnemyState = "patrol";
   yaw = 0;
+  awareness: Awareness = createAwareness();
+  /** custódio: quantas vezes detectou Matias */
+  detections = 0;
+  /** atira ao ver (saqueador sempre; custódio só provocado) */
+  hostile: boolean;
+  /** toque de recolher: visão mais curta, audição mais longa (definido pelo EnemyManager) */
+  curfew = false;
+  flashlight: SpotLight | null = null;
   private feetPos = new Vector3();
   private readonly ray = new PhysicsRaycastResult();
   private readonly engine: PhysicsEngine;
@@ -71,6 +112,14 @@ export class Enemy {
   private readonly accuracy: number;
   private readonly range: number;
   private deadTime = 0;
+  private heardThisFrame = false;
+  private heardAt: Vector3 | null = null;
+  private caughtTimer = 0;
+  private caughtEmitted = false;
+  private searchLook = 0;
+  private readonly baseVision: VisionParams;
+  private readonly awarenessParams: AwarenessParams;
+  private readonly detectionsToHostile: number;
   /** munição que deixa ao morrer */
   dropAmmo = 6;
 
@@ -83,11 +132,16 @@ export class Enemy {
     obstacles: GameEntity[],
   ) {
     this.engine = scene.getPhysicsEngine() as PhysicsEngine;
+    this.role = config.role ?? "saqueador";
     this.health = new Health(config.health ?? 70);
     this.damage = config.damage ?? 9;
     this.accuracy = config.accuracy ?? 0.55;
     this.range = config.range ?? 9;
     this.yaw = yaw;
+    this.hostile = this.role === "saqueador" || config.hostile === true;
+    this.baseVision = { ...(this.role === "custodio" ? CUSTODIO_VISION : SAQUEADOR_VISION), ...config.vision };
+    this.awarenessParams = { ...AWARENESS_DEFAULTS, ...config.awareness };
+    this.detectionsToHostile = config.detectionsToHostile ?? 2;
     this.cc = new PhysicsCharacterController(position.add(new Vector3(0, HEIGHT / 2 + 0.05, 0)), { capsuleHeight: HEIGHT, capsuleRadius: RADIUS }, scene);
     this.cc.maxSlopeCosine = Math.cos((50 * Math.PI) / 180);
     this.cc.maxStepHeight = 0.32;
@@ -123,8 +177,36 @@ export class Enemy {
     model.root.position.copyFrom(position);
     model.setYaw(yaw);
     this.feetPos.copyFrom(position);
+    if (config.flashlight ?? this.role === "custodio") this.createFlashlight();
     if (config.hostile) this.setState("chase");
     this.health.onDeath.on(() => this.die());
+  }
+
+  /** Lanterna presa ao personagem (segue o yaw do modelo). Começa desligada: o gerenciador liga as mais próximas. */
+  private createFlashlight(): void {
+    const light = new SpotLight(`${this.model.root.name}_lanterna`, new Vector3(0.22, 1.38, 0.25), new Vector3(0, -0.12, 1), 0.62, 4, this.scene);
+    light.parent = this.model.root;
+    light.diffuse = new Color3(1.0, 0.95, 0.8);
+    light.specular = new Color3(0.6, 0.6, 0.5);
+    light.intensity = 10;
+    light.range = this.baseVision.range;
+    light.setEnabled(false);
+    this.flashlight = light;
+  }
+
+  /** Visão efetiva (papel + toque de recolher). */
+  get vision(): VisionParams {
+    return curfewVision(this.baseVision, this.curfew);
+  }
+
+  /** Lanterna acesa? (o gerenciador limita quantas ficam ligadas) */
+  setFlashlight(on: boolean): void {
+    if (!this.flashlight) return;
+    if (this.flashlight.isEnabled() !== on) this.flashlight.setEnabled(on);
+  }
+
+  get flashlightOn(): boolean {
+    return this.flashlight?.isEnabled() ?? false;
   }
 
   get feet(): Vector3 {
@@ -153,6 +235,11 @@ export class Enemy {
     return this.deadTime;
   }
 
+  /** Custódio em modo furtivo (percepção gradual, não atira). */
+  get stealthMode(): boolean {
+    return this.role === "custodio" && !this.hostile && this.alive;
+  }
+
   setState(s: EnemyState): void {
     if (this.state === s || this.state === "dead") return;
     this.state = s;
@@ -161,12 +248,29 @@ export class Enemy {
     if (s === "alert") this.alertTimer = 0.8 + Math.random() * 0.5;
   }
 
-  /** Ouviu um tiro/explosão a `distance` metros: inimigos em patrulha ficam alertas e vão investigar. */
+  /**
+   * Ouviu um barulho a `loudness` metros (passos, tiro, motor). Saqueadores em patrulha ficam alertas e
+   * vão investigar; custódios alimentam a percepção gradual (vão olhar o ponto do som).
+   */
   hearNoise(at: Vector3, loudness = 30): void {
+    if (!this.alive) return;
+    const reach = loudness * this.vision.hearing;
+    if (Vector3.Distance(at, this.feetPos) > reach) return;
+    if (this.stealthMode) {
+      this.heardThisFrame = true;
+      this.heardAt = at.clone();
+      return;
+    }
     if (this.state !== "patrol") return;
-    if (Vector3.Distance(at, this.feetPos) > loudness) return;
     this.lastKnownPlayer = at.clone();
     this.setState("alert");
+  }
+
+  /** Torna o custódio hostil (levou tiro / detecções demais): passa à FSM de combate. */
+  makeHostile(): void {
+    if (this.hostile || !this.alive) return;
+    this.hostile = true;
+    if (this.state === "patrol" || this.state === "alert") this.setState("chase");
   }
 
   /** Dano recebido; devolve se morreu com este dano. */
@@ -175,6 +279,7 @@ export class Enemy {
     this.health.damage({ amount, from: { x: from.x, y: from.y, z: from.z }, headshot });
     if (!this.health.alive) return true;
     this.lastKnownPlayer = from.clone();
+    if (this.role === "custodio" && !this.hostile) this.makeHostile();
     if (this.state === "patrol" || this.state === "alert") this.setState("chase");
     if (this.state !== "dead") {
       this.hurtTimer = 0.45;
@@ -190,20 +295,18 @@ export class Enemy {
     this.model.animator.setOverlay(null);
     this.model.animator.playOneShot("Death");
     this.arrive.active = false;
+    this.setFlashlight(false);
     // tira a cápsula do caminho (o corpo fica só visual)
     this.cc.setPosition(new Vector3(0, -140, 0));
     this.onDeath.emit(this);
   }
 
-  /** Vê o jogador? cone de 110° e linha de visada livre até o peito. */
+  /** Vê o jogador? cone do papel (saqueador 110°/28 m, custódio 70°/22 m, menos à noite) e linha de visada livre até o peito. */
   canSee(playerChest: Vector3): boolean {
     const d = playerChest.subtract(this.eyes);
     const dist = d.length();
-    if (dist > 28) return false;
-    const fx = Math.sin(this.yaw);
-    const fz = Math.cos(this.yaw);
-    const cos = (d.x * fx + d.z * fz) / Math.max(1e-3, Math.hypot(d.x, d.z));
-    if (cos < Math.cos((55 * Math.PI) / 180) && dist > 2.5) return false;
+    const fwd = { x: Math.sin(this.yaw), z: Math.cos(this.yaw) };
+    if (!inVisionCone(fwd, { x: d.x, z: d.z }, dist, this.vision)) return false;
     return this.hasLineOfSight(playerChest);
   }
 
@@ -226,78 +329,77 @@ export class Enemy {
     const toPlayer = playerFeet.subtract(this.feetPos);
     const dist = Math.hypot(toPlayer.x, toPlayer.z);
     const sees = playerAlive && this.canSee(playerChest);
-    if (sees) this.lastKnownPlayer = playerFeet.clone();
+    if (sees && !this.stealthMode) this.lastKnownPlayer = playerFeet.clone();
 
-    // --- transições -------------------------------------------------------------------------
-    switch (this.state) {
-      case "patrol":
-        if (sees) this.setState("chase");
-        break;
-      case "alert":
-        this.alertTimer -= dt;
-        if (sees) this.setState("chase");
-        else if (this.alertTimer <= 0) this.setState("chase"); // vai investigar o último ponto conhecido
-        break;
-      case "chase":
-        if (!playerAlive) this.setState("patrol");
-        else if (sees && dist < this.range + 2) this.setState("attack");
-        break;
-      case "attack":
-        if (!playerAlive) this.setState("patrol");
-        else if (!sees || dist > this.range + 6) this.setState("chase");
-        break;
-      case "hurt":
-        this.hurtTimer -= dt;
-        if (this.hurtTimer <= 0) this.setState(playerAlive ? "attack" : "patrol");
-        break;
-      default:
-        break;
-    }
-
-    // --- alvo de movimento --------------------------------------------------------------------
     let moveTarget: Vector3 | null = null;
     let runSpeed = 1.6;
-    switch (this.state) {
-      case "patrol": {
-        const pts = this.config.patrol;
-        if (pts.length > 0) {
-          const p = pts[this.patrolIndex % pts.length]!;
-          if (Vector3.Distance(new Vector3(p.x, 0, p.z), new Vector3(this.feetPos.x, 0, this.feetPos.z)) < 0.8) {
-            this.patrolWait -= dt;
-            if (this.patrolWait <= 0) {
-              this.patrolIndex++;
-              this.patrolWait = 1.5 + Math.random() * 2.5;
-            }
-          } else {
+    let faceYaw: number | null = null;
+    if (this.stealthMode) {
+      const r = this.updateStealth(dt, playerFeet, playerAlive, sees, dist);
+      moveTarget = r.moveTarget;
+      runSpeed = r.runSpeed;
+      faceYaw = r.faceYaw;
+    } else {
+      // --- transições (combate) -------------------------------------------------------------------
+      switch (this.state) {
+        case "patrol":
+          if (sees) this.setState("chase");
+          break;
+        case "alert":
+          this.alertTimer -= dt;
+          if (sees) this.setState("chase");
+          else if (this.alertTimer <= 0) this.setState("chase"); // vai investigar o último ponto conhecido
+          break;
+        case "chase":
+          if (!playerAlive) this.setState("patrol");
+          else if (sees && dist < this.range + 2) this.setState("attack");
+          break;
+        case "attack":
+          if (!playerAlive) this.setState("patrol");
+          else if (!sees || dist > this.range + 6) this.setState("chase");
+          break;
+        case "hurt":
+          this.hurtTimer -= dt;
+          if (this.hurtTimer <= 0) this.setState(playerAlive ? "attack" : "patrol");
+          break;
+        default:
+          break;
+      }
+
+      // --- alvo de movimento ------------------------------------------------------------------------
+      switch (this.state) {
+        case "patrol": {
+          const p = this.patrolTarget(dt);
+          if (p) {
             moveTarget = p;
             runSpeed = 1.3;
           }
+          break;
         }
-        break;
-      }
-      case "alert":
-      case "chase": {
-        const goal = this.lastKnownPlayer ?? playerFeet;
-        moveTarget = goal;
-        runSpeed = this.state === "alert" ? 1.6 : 4.2;
-        break;
-      }
-      case "attack": {
-        // mantém distância e desloca-se lateralmente de tempos em tempos
-        this.strafeTimer -= dt;
-        if (this.strafeTimer <= 0) {
-          this.strafeTimer = 2 + Math.random() * 2.5;
-          this.strafeSide = Math.random() < 0.5 ? -1 : 1;
+        case "alert":
+        case "chase": {
+          const goal = this.lastKnownPlayer ?? playerFeet;
+          moveTarget = goal;
+          runSpeed = this.state === "alert" ? 1.6 : 4.2;
+          break;
         }
-        const dir = toPlayer.normalizeToNew();
-        const side = new Vector3(-dir.z, 0, dir.x).scaleInPlace(this.strafeSide * 2.2);
-        const want = dist > this.range + 1 ? playerFeet.subtract(dir.scale(this.range)) : dist < this.range - 2.5 ? this.feetPos.subtract(dir.scale(2)) : this.feetPos.add(side);
-        moveTarget = want;
-        runSpeed = 1.5;
-        break;
+        case "attack": {
+          // mantém distância e desloca-se lateralmente de tempos em tempos
+          this.strafeTimer -= dt;
+          if (this.strafeTimer <= 0) {
+            this.strafeTimer = 2 + Math.random() * 2.5;
+            this.strafeSide = Math.random() < 0.5 ? -1 : 1;
+          }
+          const dir = toPlayer.normalizeToNew();
+          const side = new Vector3(-dir.z, 0, dir.x).scaleInPlace(this.strafeSide * 2.2);
+          const want = dist > this.range + 1 ? playerFeet.subtract(dir.scale(this.range)) : dist < this.range - 2.5 ? this.feetPos.subtract(dir.scale(2)) : this.feetPos.add(side);
+          moveTarget = want;
+          runSpeed = 1.5;
+          break;
+        }
+        default:
+          break;
       }
-      default:
-        break;
     }
 
     // --- steering (yuka) → velocidade desejada → controlador do Havok --------------------------
@@ -312,7 +414,6 @@ export class Enemy {
     }
     this.steering.update(dt);
     const desired = new Vector3(this.steering.velocity.x, 0, this.steering.velocity.z);
-    const desiredSpeed = desired.length();
     const support = this.cc.checkSupport(dt, new Vector3(0, -1, 0));
     let output: Vector3;
     const up = Vector3.Up();
@@ -334,14 +435,15 @@ export class Enemy {
 
     // --- orientação: para onde anda, ou para o jogador quando ataca -------------------------------
     let targetYaw = this.yaw;
-    if (this.state === "attack" || (this.state === "hurt" && playerAlive)) targetYaw = Math.atan2(toPlayer.x, toPlayer.z);
+    if (faceYaw !== null) targetYaw = faceYaw;
+    else if (this.state === "attack" || (this.state === "hurt" && playerAlive)) targetYaw = Math.atan2(toPlayer.x, toPlayer.z);
     else if (this.horizontalSpeed > 0.3) targetYaw = Math.atan2(output.x, output.z);
     const delta = angleDelta(this.yaw, targetYaw);
     this.yaw += Math.sign(delta) * Math.min(Math.abs(delta), 7 * dt);
     this.model.setYaw(this.yaw);
 
     // --- tiro -----------------------------------------------------------------------------------
-    if (this.state === "attack" && playerAlive) {
+    if (this.state === "attack" && playerAlive && this.hostile) {
       this.fireTimer -= dt;
       if (this.fireTimer <= 0 && Math.abs(delta) < 0.35) {
         this.fireTimer = 1.1 + Math.random() * 0.9;
@@ -359,6 +461,91 @@ export class Enemy {
       else anim.play("Idle");
     }
     anim.update(dt);
+    this.heardThisFrame = false;
+  }
+
+  /** Próximo ponto de patrulha (ou null quando parado esperando). */
+  private patrolTarget(dt: number): Vector3 | null {
+    const pts = this.config.patrol;
+    if (pts.length === 0) return null;
+    const p = pts[this.patrolIndex % pts.length]!;
+    if (Vector3.Distance(new Vector3(p.x, 0, p.z), new Vector3(this.feetPos.x, 0, this.feetPos.z)) < 0.8) {
+      this.patrolWait -= dt;
+      if (this.patrolWait <= 0) {
+        this.patrolIndex++;
+        this.patrolWait = 1.5 + Math.random() * 2.5;
+      }
+      return null;
+    }
+    return p;
+  }
+
+  /**
+   * Custódio em modo furtivo: percepção gradual decide o estado de patrulha (`EnemyState` espelha:
+   * calmo→patrol, suspeito/alerta→alert, perseguição→chase) e o movimento.
+   */
+  private updateStealth(dt: number, playerFeet: Vector3, playerAlive: boolean, sees: boolean, dist: number): { moveTarget: Vector3 | null; runSpeed: number; faceYaw: number | null } {
+    const vision = this.vision;
+    const proximity = Math.max(0, Math.min(1, 1 - dist / Math.max(1, vision.range)));
+    const lastKnown = this.lastKnownPlayer;
+    const atLastKnown = !lastKnown || Vector3.Distance(new Vector3(lastKnown.x, 0, lastKnown.z), new Vector3(this.feetPos.x, 0, this.feetPos.z)) < 1.4;
+    const before = this.awareness.state;
+    const { next, event } = stepAwareness(this.awareness, { sees: sees && playerAlive, heard: this.heardThisFrame, proximity, atLastKnown, dt }, this.awarenessParams);
+    this.awareness = next;
+    if (sees && playerAlive) this.lastKnownPlayer = playerFeet.clone();
+    else if (this.heardThisFrame && this.heardAt) this.lastKnownPlayer = this.heardAt.clone();
+    if (event === "detectou") {
+      this.detections++;
+      const hostile = this.detections >= this.detectionsToHostile;
+      this.caughtTimer = 0;
+      this.caughtEmitted = false;
+      this.onDetected.emit({ enemy: this, count: this.detections, hostile });
+      if (hostile) {
+        this.makeHostile();
+        this.onAwareness.emit({ enemy: this, state: next.state, event });
+        return { moveTarget: this.lastKnownPlayer, runSpeed: 4.2, faceYaw: null };
+      }
+    }
+    if (next.state !== before || event) this.onAwareness.emit({ enemy: this, state: next.state, event });
+
+    // estado de combate espelhado (HUD/animação: alerta saca a arma)
+    const mirror: EnemyState = next.state === "calmo" ? "patrol" : next.state === "perseguicao" ? "chase" : "alert";
+    if (this.state !== mirror && this.state !== "hurt") this.setState(mirror);
+
+    const toPlayer = playerFeet.subtract(this.feetPos);
+    switch (next.state) {
+      case "calmo": {
+        const p = this.patrolTarget(dt);
+        return { moveTarget: p, runSpeed: 1.3, faceYaw: null };
+      }
+      case "suspeito": {
+        // para e encara o ponto suspeito
+        const look = this.lastKnownPlayer ?? playerFeet;
+        return { moveTarget: null, runSpeed: 0, faceYaw: Math.atan2(look.x - this.feetPos.x, look.z - this.feetPos.z) };
+      }
+      case "alerta": {
+        if (!atLastKnown && lastKnown) return { moveTarget: lastKnown, runSpeed: 1.6, faceYaw: null };
+        // chegou: varre a lanterna de um lado para o outro
+        this.searchLook += dt;
+        const base = lastKnown ? Math.atan2(lastKnown.x - this.feetPos.x, lastKnown.z - this.feetPos.z) : this.yaw;
+        return { moveTarget: null, runSpeed: 0, faceYaw: base + Math.sin(this.searchLook * 1.1) * 0.9 };
+      }
+      case "perseguicao": {
+        // corre atrás; alcançou por ~0,8 s a menos de 1,6 m → prisão
+        if (sees && dist < 1.6) {
+          this.caughtTimer += dt;
+          if (this.caughtTimer > 0.8 && !this.caughtEmitted) {
+            this.caughtEmitted = true;
+            this.onCaught.emit(this);
+          }
+        } else this.caughtTimer = 0;
+        const goal = sees ? playerFeet : (this.lastKnownPlayer ?? playerFeet);
+        const face = sees ? Math.atan2(toPlayer.x, toPlayer.z) : null;
+        return { moveTarget: dist > 1.2 ? goal : null, runSpeed: 4.2, faceYaw: dist <= 1.2 ? face : null };
+      }
+      default:
+        return { moveTarget: null, runSpeed: 0, faceYaw: null };
+    }
   }
 
   private fireAt(playerChest: Vector3, dist: number): void {
@@ -373,6 +560,8 @@ export class Enemy {
   }
 
   dispose(): void {
+    this.flashlight?.dispose();
+    this.flashlight = null;
     this.cc.dispose();
     this.model.dispose();
   }

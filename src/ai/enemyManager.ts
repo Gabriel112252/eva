@@ -5,13 +5,19 @@ import { loadCharacter, type CharacterModel } from "@/characters/characterModel"
 import { ENEMY_VARIANTS, type CharacterVariant } from "@/data/characters";
 import type { HitResolver } from "@/combat/playerCombat";
 import { TypedEvent } from "@/core/events";
-import { Enemy, type EnemyConfig, type EnemyShot } from "./enemy";
+import { Enemy, type DetectionEvent, type EnemyConfig, type EnemyShot } from "./enemy";
+import { AWARENESS_RANK, awarenessLevel, type AwarenessEvent, type AwarenessState } from "./stealth";
 
 export interface EnemySpawnSpec extends EnemyConfig {
   position: Vector3;
   yaw: number;
   variant?: CharacterVariant;
 }
+
+/** Quantas lanternas podem ficar acesas ao mesmo tempo (limite de luzes por material no WebGL). */
+export const MAX_FLASHLIGHTS = 2;
+/** Lanternas além desta distância do jogador ficam apagadas. */
+export const FLASHLIGHT_CULL_DISTANCE = 45;
 
 /**
  * Distância ao longo do raio (`from + dir·t`, dir unitário) em que ele entra no cilindro vertical de
@@ -60,11 +66,48 @@ export class EnemyManager implements HitResolver {
   readonly onEnemyShot = new TypedEvent<{ enemy: Enemy; shot: EnemyShot }>();
   readonly onEnemyDeath = new TypedEvent<Enemy>();
   readonly onAllDead = new TypedEvent<void>();
+  /** custódio detectou Matias (voz de prisão) */
+  readonly onDetected = new TypedEvent<DetectionEvent>();
+  /** custódio alcançou Matias em perseguição */
+  readonly onCaught = new TypedEvent<Enemy>();
+  readonly onAwareness = new TypedEvent<{ enemy: Enemy; state: AwarenessState; event: AwarenessEvent }>();
   private models = new Map<CharacterVariant, Promise<CharacterModel>>();
   private spawnCounter = 0;
   private aliveWatch = false;
+  private curfewOn = false;
+  private flashlightsOn = true;
 
   constructor(private readonly scene: Scene) {}
+
+  /** Toque de recolher: visão 30 % mais curta e audição 50 % mais longa para todos (atuais e futuros). */
+  setCurfew(on: boolean): void {
+    this.curfewOn = on;
+    for (const e of this.enemies) e.curfew = on;
+  }
+
+  get curfew(): boolean {
+    return this.curfewOn;
+  }
+
+  /** Lanternas dos custódios (desligar de dia). */
+  setFlashlights(on: boolean): void {
+    this.flashlightsOn = on;
+    if (!on) for (const e of this.enemies) e.setFlashlight(false);
+  }
+
+  /** Pior estado de percepção entre os custódios vivos (HUD: olho que enche). */
+  awarenessSummary(): { state: AwarenessState; level: number } {
+    let best: { state: AwarenessState; level: number } = { state: "calmo", level: 0 };
+    for (const e of this.enemies) {
+      if (!e.alive || e.role !== "custodio") continue;
+      if (e.hostile) return { state: "perseguicao", level: 1 };
+      const a = e.awareness;
+      const rank = AWARENESS_RANK[a.state];
+      const level = awarenessLevel(a);
+      if (rank > AWARENESS_RANK[best.state] || (rank === AWARENESS_RANK[best.state] && level > best.level)) best = { state: a.state, level };
+    }
+    return best;
+  }
 
   /** Esfera de desvio de obstáculo (posição no mundo + raio horizontal). */
   addObstacle(position: Vector3, radius: number): void {
@@ -93,7 +136,11 @@ export class EnemyManager implements HitResolver {
     const variant = spec.variant ?? ENEMY_VARIANTS[this.spawnCounter % ENEMY_VARIANTS.length]!;
     const model = await this.loadModel(variant, `_inimigo_${this.spawnCounter++}`);
     const enemy = new Enemy(this.scene, model, spec.position, spec.yaw, spec, this.obstacles);
+    enemy.curfew = this.curfewOn;
     enemy.onShot.on((shot) => this.onEnemyShot.emit({ enemy, shot }));
+    enemy.onDetected.on((ev) => this.onDetected.emit(ev));
+    enemy.onCaught.on((e) => this.onCaught.emit(e));
+    enemy.onAwareness.on((ev) => this.onAwareness.emit(ev));
     enemy.onDeath.on((e) => {
       this.onEnemyDeath.emit(e);
       if (this.aliveWatch && this.aliveCount === 0) {
@@ -153,6 +200,16 @@ export class EnemyManager implements HitResolver {
         this.enemies.splice(i, 1);
       }
     }
+    this.updateFlashlights(playerFeet);
+  }
+
+  /** Acende só as `MAX_FLASHLIGHTS` lanternas mais próximas do jogador (e dentro do raio de corte). */
+  private updateFlashlights(playerFeet: Vector3): void {
+    if (!this.flashlightsOn) return;
+    const candidates = this.enemies.filter((e) => e.alive && e.flashlight).map((e) => ({ e, d: Vector3.Distance(e.feet, playerFeet) }));
+    if (candidates.length === 0) return;
+    candidates.sort((a, b) => a.d - b.d);
+    candidates.forEach(({ e, d }, i) => e.setFlashlight(i < MAX_FLASHLIGHTS && d < FLASHLIGHT_CULL_DISTANCE));
   }
 
   /** Remove todos (reinício de missão). */

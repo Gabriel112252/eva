@@ -10,6 +10,7 @@ import { TypedEvent } from "@/core/events";
 import { COLLISION } from "@/world/context";
 import { surfaceForHit, type Surface } from "@/world/surfaces";
 import { GRAVITY } from "@/physics/havok";
+import { noiseRadiusFor } from "@/ai/stealth";
 
 export type MoveState = "idle" | "walk" | "run" | "crouchIdle" | "crouchWalk";
 export type FootstepKind = "walk" | "run" | "crouch";
@@ -137,6 +138,20 @@ export class PlayerController {
 
   get isMoving(): boolean {
     return this.horizontalSpeed > 0.15;
+  }
+
+  /** Velocidade horizontal atual (m/s). */
+  get speed(): number {
+    return this.horizontalSpeed;
+  }
+
+  /**
+   * Raio (m) em que os passos são ouvidos pela IA: parado 0, agachado 4, andando 9, correndo 15
+   * (ver `src/ai/stealth.ts`). Zero dentro de veículo (o veículo tem o próprio ruído) ou parado.
+   */
+  get noiseRadius(): number {
+    if (this.inVehicle || this.horizontalSpeed < 0.2) return 0;
+    return noiseRadiusFor(this.state);
   }
 
   teleport(feet: Vector3, yaw: number): void {
