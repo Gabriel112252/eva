@@ -44,3 +44,13 @@ Regra do projeto: **nenhum asset sem origem e licença registradas aqui.** Nada 
 ## Referências privadas (NÃO commitadas)
 
 A fotografia do criador usada como referência visual de Matias é privada e **não** está no repositório, conforme `docs/ARQUITETURA.md`. O manequim atual apenas segue as características descritas no cânone (pele morena, cabelo escuro curto, óculos, roupa de trabalho sem marcas).
+
+## Referências de arte geradas (Kairogen)
+
+Imagens de **referência artística** (não são assets do jogo) geradas pelo criador na conta Kairogen dele, a partir de descrições do cânone. Servem de guia visual para o kit modular e as texturas; nenhuma é carregada pelo jogo.
+
+| Arquivo | Modelo | Custo |
+| --- | --- | --- |
+| `docs/concept/sp_velha_praca_01.jpg` — praça do Setor 17 ao entardecer (prédios recuperados, painéis solares, feira, chafariz seco) | Z-Image Turbo (via Kairogen), 29/10/2026 | 1 crédito |
+
+Teste de voz (PT-BR, ElevenLabs Multilingual v2 via Kairogen, voz "Antonio de Jesus", 1 crédito) realizado na mesma data; o arquivo não foi incorporado porque o domínio `cdn.kairogen.ai` ainda não é acessível deste ambiente.
