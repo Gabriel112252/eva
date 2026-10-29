@@ -52,5 +52,7 @@ Imagens de **referência artística** (não são assets do jogo) geradas pelo cr
 | Arquivo | Modelo | Custo |
 | --- | --- | --- |
 | `docs/concept/sp_velha_praca_01.jpg` — praça do Setor 17 ao entardecer (prédios recuperados, painéis solares, feira, chafariz seco) | Z-Image Turbo (via Kairogen), 29/10/2026 | 1 crédito |
+| `docs/concept/sp_velha_praca_02_camada_tech.jpg` — mesma praça com a camada tecnológica de 2040–56 remendada (pele fotovoltaica, anexos modulares, posto da Central, Custódios, triciclo) | Z-Image Turbo (via Kairogen), 29/10/2026 | 1 crédito |
+| `docs/concept/sp_velha_praca_03_monumental.jpg` — variante marcante: viaduto de maglev morto sobre a feira, torre com fazenda vertical, caminhão blindado | Z-Image Turbo (via Kairogen), 29/10/2026 | 1 crédito |
 
 Teste de voz (PT-BR, ElevenLabs Multilingual v2 via Kairogen, voz "Antonio de Jesus", 1 crédito) realizado na mesma data; o arquivo não foi incorporado porque o domínio `cdn.kairogen.ai` ainda não é acessível deste ambiente.
