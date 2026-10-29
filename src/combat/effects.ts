@@ -57,12 +57,14 @@ export class CombatEffects {
     this.flashMat.disableLighting = true;
     this.flashMat.backFaceCulling = false;
     this.flashMat.alphaMode = Engine.ALPHA_ADD;
-    this.flashMesh = MeshBuilder.CreatePlane("fx_flash_plane", { size: 0.42 }, scene);
+    this.flashMesh = MeshBuilder.CreatePlane("fx_flash_plane", { size: 0.3 }, scene);
     this.flashMesh.material = this.flashMat;
     this.flashMesh.billboardMode = Mesh.BILLBOARDMODE_ALL;
     this.flashMesh.isPickable = false;
     this.flashMesh.isVisible = false;
     this.flashMesh.renderingGroupId = 0;
+    // o clarão dura 1–2 quadros: compila o shader já, senão o primeiro tiro não mostra nada
+    void this.flashMat.forceCompilationAsync(this.flashMesh).catch(() => undefined);
 
     const tex = this.makeSpotTexture();
     this.sparks = this.makeParticles("fx_sparks", tex, new Color4(1, 0.8, 0.4, 1), new Color4(1, 0.4, 0.1, 0), 0.03, 0.07, 5, 9, 0.25, 0.5);

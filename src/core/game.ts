@@ -972,8 +972,9 @@ export class Game {
     this.touch.setArmed(this.combat.armed && !this.driving && !this.combat.dead && this.state === "playing");
     if (this.combat.weapon) this.hud.setAmmo(this.combat.weapon.weapon.displayName, this.combat.weapon.magazine, this.combat.weapon.reserve, this.combat.weapon.phase === "reloading");
     this.hud.setVitals(this.combat.armed || this.combat.health.current < this.combat.health.max, this.combat.health.fraction);
-    // oculta Matias quando a câmera encosta nele
-    this.matias.setVisible(this.driving !== null || this.camera.mode !== "follow" || this.camera.distanceTo(feet.add(new Vector3(0, this.player.eyeHeight, 0))) > 0.75);
+    // oculta Matias quando a câmera encosta nele (no close-up de exame, quando passa por cima do ombro dele)
+    const headDist = this.camera.distanceTo(feet.add(new Vector3(0, this.player.eyeHeight, 0)));
+    this.matias.setVisible(this.driving !== null || (this.camera.mode === "inspect" ? headDist > 1.25 : this.camera.mode !== "follow" || headDist > 0.75));
     // ouvinte de áudio na câmera
     const cam = this.camera.camera;
     const fwd = cam.getDirection(Vector3.Forward());
