@@ -69,7 +69,12 @@ O jogo roda no navegador (Chrome/Edge/Firefox recentes no desktop; Chrome/Safari
 - Renderização por software (sem GPU) fica em ~2–5 FPS — só para testes automatizados; no Chromium headless o pointer lock ativo deixa os frames 5–10× mais lentos, por isso o teste visual roda com `?pointerlock=0` (`--lock` para o caminho com cursor travado).
 - A voz sintetizada depende das vozes instaladas no sistema do jogador (Chrome tem vozes pt-BR online; Firefox depende do SO; no celular costuma haver uma voz pt-BR).
 - O caminho até a praça não tem ainda a "área inacessível" para o tutorial de agachar.
-- O clarão do cano é um quad sem textura (aparece como um quadrado amarelo em `docs/videos/combate.mp4`); trocar por sprite com alfa/partículas.
+- O clarão do cano agora é um sprite aditivo com alfa radial + raios e 2–3 partículas de fumaça (`src/combat/effects.ts`); o vídeo `docs/videos/combate.mp4` ainda mostra o quad antigo e precisa ser regravado.
+- Sistemas do Capítulo 1 (`docs/SISTEMAS_CAP1.md`): a voz de prisão do Custódio é TTS provisório; o botão E de toque é "toque curto" (o reparo aceita toque para começar e toque para soltar — segurar de verdade exige o agente de UI mudar o botão para `bindHold`); a lanterna do Custódio só acende no toque de recolher/noite e no máximo 2 ao mesmo tempo; o Custódio não usa navmesh (steering + desvio de obstáculos), então patrulhas por ruas estreitas do mapa novo devem ter pontos próximos; a carga visível usa posições por tabela (`CARGO_PLACEMENTS`) porque os GLB dos veículos não têm nó de carga; a "prisão" (Custódio alcança Matias) só emite `enemies.onCaught` — o roteiro decide a consequência.
+
+## Sistemas do Capítulo 1 (branch `agente/gameplay`) ✅
+
+Entregues e cobertos por testes (`tests/unit/cap1Narrative.test.ts`, `tests/unit/cap1Stealth.test.ts`, `node tools/gameplay-test.mjs --only sistemas`): diário de pistas com aba na mochila e save; examinar com close-up; reparo em 3 passos; furtividade (ruído por estado, cone 70°/22 m com lanterna, calmo → suspeito → alerta → perseguição, Custódio que dá voz de prisão e só atira provocado, toque de recolher); timers com HUD mm:ss e carga visível no Atlas; gatilhos `MissionTrigger` por dados com zonas; clarão/fumaça/poeira novos. Guia de uso por dados em `docs/SISTEMAS_CAP1.md`.
 
 ## Próxima etapa
 
