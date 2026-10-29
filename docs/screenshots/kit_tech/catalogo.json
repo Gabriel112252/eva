@@ -1,0 +1,678 @@
+{
+ "bytes": 5137576,
+ "generatedAt": "2026-10-29T23:50:56.620Z",
+ "pieces": [
+  {
+   "name": "FACHADA_terreo_loja_0",
+   "category": "FACHADA",
+   "tris": 946,
+   "draws": 11,
+   "colliders": 2,
+   "size": [
+    6.7,
+    3,
+    1.63
+   ]
+  },
+  {
+   "name": "FACHADA_terreo_casa_0",
+   "category": "FACHADA",
+   "tris": 1250,
+   "draws": 14,
+   "colliders": 2,
+   "size": [
+    6,
+    3.01,
+    0.97
+   ]
+  },
+  {
+   "name": "FACHADA_apto_janelas_0",
+   "category": "FACHADA",
+   "tris": 1136,
+   "draws": 9,
+   "colliders": 1,
+   "size": [
+    6.1,
+    3,
+    0.96
+   ]
+  },
+  {
+   "name": "FACHADA_apto_sacada_0",
+   "category": "FACHADA",
+   "tris": 1036,
+   "draws": 8,
+   "colliders": 2,
+   "size": [
+    6.1,
+    3.63,
+    1.72
+   ]
+  },
+  {
+   "name": "FACHADA_apto_servico_0",
+   "category": "FACHADA",
+   "tris": 1110,
+   "draws": 11,
+   "colliders": 1,
+   "size": [
+    6.1,
+    3.03,
+    1.1
+   ]
+  },
+  {
+   "name": "FACHADA_galpao_0",
+   "category": "FACHADA",
+   "tris": 836,
+   "draws": 11,
+   "colliders": 1,
+   "size": [
+    6.1,
+    3,
+    0.87
+   ]
+  },
+  {
+   "name": "FACHADA_esquina_0",
+   "category": "FACHADA",
+   "tris": 260,
+   "draws": 6,
+   "colliders": 1,
+   "size": [
+    0.8,
+    3.02,
+    0.87
+   ]
+  },
+  {
+   "name": "FACHADA_topo_0",
+   "category": "FACHADA",
+   "tris": 220,
+   "draws": 4,
+   "colliders": 1,
+   "size": [
+    6.2,
+    1.39,
+    0.86
+   ]
+  },
+  {
+   "name": "FACHADA_terreo_loja_1",
+   "category": "FACHADA",
+   "tris": 946,
+   "draws": 11,
+   "colliders": 2,
+   "size": [
+    6.7,
+    3,
+    1.63
+   ]
+  },
+  {
+   "name": "FACHADA_terreo_casa_1",
+   "category": "FACHADA",
+   "tris": 1366,
+   "draws": 14,
+   "colliders": 2,
+   "size": [
+    6,
+    3.01,
+    0.97
+   ]
+  },
+  {
+   "name": "FACHADA_apto_janelas_1",
+   "category": "FACHADA",
+   "tris": 1136,
+   "draws": 9,
+   "colliders": 1,
+   "size": [
+    6.1,
+    3,
+    0.96
+   ]
+  },
+  {
+   "name": "FACHADA_apto_sacada_1",
+   "category": "FACHADA",
+   "tris": 1036,
+   "draws": 10,
+   "colliders": 2,
+   "size": [
+    6.1,
+    3.63,
+    1.72
+   ]
+  },
+  {
+   "name": "FACHADA_apto_servico_1",
+   "category": "FACHADA",
+   "tris": 1110,
+   "draws": 11,
+   "colliders": 1,
+   "size": [
+    6.1,
+    3.03,
+    1.1
+   ]
+  },
+  {
+   "name": "FACHADA_galpao_1",
+   "category": "FACHADA",
+   "tris": 668,
+   "draws": 11,
+   "colliders": 1,
+   "size": [
+    6.1,
+    3,
+    0.87
+   ]
+  },
+  {
+   "name": "FACHADA_esquina_1",
+   "category": "FACHADA",
+   "tris": 262,
+   "draws": 7,
+   "colliders": 1,
+   "size": [
+    0.8,
+    3.02,
+    0.87
+   ]
+  },
+  {
+   "name": "FACHADA_topo_1",
+   "category": "FACHADA",
+   "tris": 778,
+   "draws": 7,
+   "colliders": 1,
+   "size": [
+    6.2,
+    3.45,
+    2.89
+   ]
+  },
+  {
+   "name": "TECH_pele_fotovoltaica_inteira",
+   "category": "TECH",
+   "tris": 410,
+   "draws": 6,
+   "colliders": 1,
+   "size": [
+    5.94,
+    2.91,
+    0.51
+   ]
+  },
+  {
+   "name": "TECH_pele_fotovoltaica_rasgada",
+   "category": "TECH",
+   "tris": 414,
+   "draws": 7,
+   "colliders": 1,
+   "size": [
+    5.94,
+    2.91,
+    1.24
+   ]
+  },
+  {
+   "name": "TECH_canopy_solar",
+   "category": "TECH",
+   "tris": 320,
+   "draws": 5,
+   "colliders": 1,
+   "size": [
+    5.7,
+    2.35,
+    2.9
+   ]
+  },
+  {
+   "name": "TECH_anexo_modular",
+   "category": "TECH",
+   "tris": 908,
+   "draws": 12,
+   "colliders": 1,
+   "size": [
+    6.57,
+    3.18,
+    3.05
+   ]
+  },
+  {
+   "name": "TECH_reciclador_agua",
+   "category": "TECH",
+   "tris": 808,
+   "draws": 12,
+   "colliders": 1,
+   "size": [
+    2.8,
+    2.19,
+    1.85
+   ]
+  },
+  {
+   "name": "TECH_poste_sensor",
+   "category": "TECH",
+   "tris": 898,
+   "draws": 13,
+   "colliders": 1,
+   "size": [
+    2.7,
+    9.9,
+    1.03
+   ]
+  },
+  {
+   "name": "TECH_letreiro_led_farmacia",
+   "category": "TECH",
+   "tris": 112,
+   "draws": 3,
+   "colliders": 0,
+   "size": [
+    0.14,
+    2.56,
+    0.95
+   ]
+  },
+  {
+   "name": "TECH_letreiro_led_agua",
+   "category": "TECH",
+   "tris": 112,
+   "draws": 3,
+   "colliders": 0,
+   "size": [
+    0.14,
+    2.56,
+    0.95
+   ]
+  },
+  {
+   "name": "TECH_totem_recarga",
+   "category": "TECH",
+   "tris": 736,
+   "draws": 8,
+   "colliders": 1,
+   "size": [
+    1.25,
+    1.71,
+    0.64
+   ]
+  },
+  {
+   "name": "TECH_caixa_baterias",
+   "category": "TECH",
+   "tris": 760,
+   "draws": 10,
+   "colliders": 1,
+   "size": [
+    1.43,
+    1.09,
+    0.67
+   ]
+  },
+  {
+   "name": "REMENDO_fiacao_6m",
+   "category": "REMENDO",
+   "tris": 592,
+   "draws": 3,
+   "colliders": 0,
+   "size": [
+    6.12,
+    2.41,
+    0.32
+   ]
+  },
+  {
+   "name": "REMENDO_fiacao_12m",
+   "category": "REMENDO",
+   "tris": 944,
+   "draws": 4,
+   "colliders": 0,
+   "size": [
+    12.12,
+    2.83,
+    0.32
+   ]
+  },
+  {
+   "name": "REMENDO_lona",
+   "category": "REMENDO",
+   "tris": 584,
+   "draws": 5,
+   "colliders": 2,
+   "size": [
+    3.97,
+    3.03,
+    3.33
+   ]
+  },
+  {
+   "name": "REMENDO_toldo",
+   "category": "REMENDO",
+   "tris": 312,
+   "draws": 3,
+   "colliders": 0,
+   "size": [
+    3.1,
+    1.07,
+    1.73
+   ]
+  },
+  {
+   "name": "REMENDO_varal",
+   "category": "REMENDO",
+   "tris": 472,
+   "draws": 5,
+   "colliders": 0,
+   "size": [
+    3.1,
+    1.01,
+    0.52
+   ]
+  },
+  {
+   "name": "REMENDO_tubo_agua",
+   "category": "REMENDO",
+   "tris": 608,
+   "draws": 8,
+   "colliders": 1,
+   "size": [
+    5.15,
+    2.5,
+    0.93
+   ]
+  },
+  {
+   "name": "REMENDO_ar_condicionado",
+   "category": "REMENDO",
+   "tris": 344,
+   "draws": 7,
+   "colliders": 0,
+   "size": [
+    0.86,
+    1.53,
+    0.59
+   ]
+  },
+  {
+   "name": "REMENDO_caixa_dagua",
+   "category": "REMENDO",
+   "tris": 948,
+   "draws": 5,
+   "colliders": 1,
+   "size": [
+    1.84,
+    1.82,
+    1.44
+   ]
+  },
+  {
+   "name": "MARCO_viaduto_maglev",
+   "category": "MARCO",
+   "tris": 1892,
+   "draws": 14,
+   "colliders": 3,
+   "size": [
+    24.27,
+    15.96,
+    21.95
+   ]
+  },
+  {
+   "name": "MARCO_torre_fazenda",
+   "category": "MARCO",
+   "tris": 3150,
+   "draws": 17,
+   "colliders": 13,
+   "size": [
+    12.6,
+    12.5,
+    12.6
+   ]
+  },
+  {
+   "name": "PROP_banca_dobravel",
+   "category": "PROP",
+   "tris": 536,
+   "draws": 6,
+   "colliders": 1,
+   "size": [
+    2.5,
+    2.13,
+    1.53
+   ]
+  },
+  {
+   "name": "PROP_botijao",
+   "category": "PROP",
+   "tris": 406,
+   "draws": 2,
+   "colliders": 1,
+   "size": [
+    0.38,
+    0.73,
+    0.37
+   ]
+  },
+  {
+   "name": "PROP_gerador",
+   "category": "PROP",
+   "tris": 456,
+   "draws": 7,
+   "colliders": 1,
+   "size": [
+    1.58,
+    1.03,
+    1.12
+   ]
+  },
+  {
+   "name": "PROP_caixa_distribuicao",
+   "category": "PROP",
+   "tris": 310,
+   "draws": 7,
+   "colliders": 1,
+   "size": [
+    0.8,
+    2.05,
+    0.5
+   ]
+  },
+  {
+   "name": "PROP_bancada_oficina",
+   "category": "PROP",
+   "tris": 418,
+   "draws": 8,
+   "colliders": 1,
+   "size": [
+    2,
+    1.9,
+    1.02
+   ]
+  },
+  {
+   "name": "PROP_bicicleta",
+   "category": "PROP",
+   "tris": 572,
+   "draws": 7,
+   "colliders": 1,
+   "size": [
+    1.77,
+    1.18,
+    0.6
+   ]
+  },
+  {
+   "name": "PROP_placa_rua",
+   "category": "PROP",
+   "tris": 80,
+   "draws": 6,
+   "colliders": 1,
+   "size": [
+    1.21,
+    2.6,
+    0.08
+   ]
+  },
+  {
+   "name": "PROP_grade",
+   "category": "PROP",
+   "tris": 282,
+   "draws": 2,
+   "colliders": 1,
+   "size": [
+    2.05,
+    2,
+    0.06
+   ]
+  },
+  {
+   "name": "PROP_carrinho_mao",
+   "category": "PROP",
+   "tris": 208,
+   "draws": 6,
+   "colliders": 1,
+   "size": [
+    1.61,
+    0.78,
+    0.9
+   ]
+  },
+  {
+   "name": "PROP_barril_metalico",
+   "category": "PROP",
+   "tris": 348,
+   "draws": 2,
+   "colliders": 1,
+   "size": [
+    0.61,
+    0.9,
+    0.61
+   ]
+  },
+  {
+   "name": "PROP_conteiner_pequeno",
+   "category": "PROP",
+   "tris": 472,
+   "draws": 5,
+   "colliders": 1,
+   "size": [
+    3.18,
+    2.6,
+    2.69
+   ]
+  },
+  {
+   "name": "PROP_mesa_bar",
+   "category": "PROP",
+   "tris": 280,
+   "draws": 2,
+   "colliders": 1,
+   "size": [
+    0.72,
+    0.73,
+    0.71
+   ]
+  },
+  {
+   "name": "PROP_cadeira_plastica",
+   "category": "PROP",
+   "tris": 248,
+   "draws": 1,
+   "colliders": 1,
+   "size": [
+    0.53,
+    0.91,
+    0.51
+   ]
+  },
+  {
+   "name": "PROP_cavalete",
+   "category": "PROP",
+   "tris": 92,
+   "draws": 2,
+   "colliders": 1,
+   "size": [
+    1.9,
+    1.22,
+    0.64
+   ]
+  },
+  {
+   "name": "PROP_pneu",
+   "category": "PROP",
+   "tris": 332,
+   "draws": 2,
+   "colliders": 1,
+   "size": [
+    0.76,
+    0.2,
+    0.75
+   ]
+  },
+  {
+   "name": "PROP_saco_lixo",
+   "category": "PROP",
+   "tris": 340,
+   "draws": 1,
+   "colliders": 1,
+   "size": [
+    0.74,
+    0.56,
+    0.65
+   ]
+  },
+  {
+   "name": "PROP_cone",
+   "category": "PROP",
+   "tris": 116,
+   "draws": 3,
+   "colliders": 1,
+   "size": [
+    0.4,
+    0.73,
+    0.4
+   ]
+  },
+  {
+   "name": "PROP_banco_praca",
+   "category": "PROP",
+   "tris": 184,
+   "draws": 2,
+   "colliders": 1,
+   "size": [
+    1.8,
+    0.85,
+    0.58
+   ]
+  },
+  {
+   "name": "PROP_engradado",
+   "category": "PROP",
+   "tris": 452,
+   "draws": 3,
+   "colliders": 1,
+   "size": [
+    0.54,
+    0.31,
+    0.39
+   ]
+  },
+  {
+   "name": "PROP_caixa_hidrante",
+   "category": "PROP",
+   "tris": 528,
+   "draws": 7,
+   "colliders": 1,
+   "size": [
+    1.3,
+    1.03,
+    0.42
+   ]
+  }
+ ]
+}
