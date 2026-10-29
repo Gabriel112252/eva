@@ -28,7 +28,7 @@ export const CAP1_FLAGS = {
   documento: "cap1.m3.documento",
   /** M4: "vai" | "fica" — decisão da Ana */
   ana: "cap1.m4.ana",
-  /** confiança no sistema (herdada do prólogo): "sim" | "nao" */
+  /** confiança no sistema (herdada do prólogo): booleana (true = confia), como o prólogo grava */
   matiasConfia: "matiasTrustsSystem",
 } as const;
 
