@@ -42,6 +42,16 @@ import { Menus } from "@/ui/menus";
 import { TouchControls } from "@/ui/touchControls";
 import { openStore } from "@/persistence/saveStore";
 import { SaveSystem, createEmptySave, type SaveData } from "@/persistence/saveSystem";
+import { ClueLog } from "@/narrative/clues";
+import { CLUES } from "@/data/clues";
+import { MissionTimers, formatClock } from "@/narrative/timers";
+import { MissionScript, type ZoneSpec } from "@/narrative/missionScript";
+import { DeliveryCargo } from "@/narrative/delivery";
+import { ExamineController, type ExaminableSpec } from "@/interaction/examinable";
+import { RepairController, type RepairSpec } from "@/interaction/repair";
+import type { EnemySpawnSpec } from "@/ai/enemyManager";
+import { VEHICLE_NOISE } from "@/ai/stealth";
+import type { MissionTrigger } from "@/data/cap1Contracts";
 
 export type GameState = "loading" | "menu" | "playing" | "paused" | "dialogue";
 
@@ -91,6 +101,14 @@ export class Game {
   inventory = new Inventory();
   pickups: Pickup[] = [];
   director!: MissionDirector;
+  /** sistemas genéricos do Capítulo 1 (ver docs/SISTEMAS_CAP1.md) */
+  clues = new ClueLog(CLUES);
+  timers = new MissionTimers();
+  script = new MissionScript();
+  examine!: ExamineController;
+  repair!: RepairController;
+  cargo!: DeliveryCargo;
+  private noiseTimer = 0;
   private deathTimer = -1;
   private cameraShake = 0;
   private boundsNoticeShown = false;
@@ -177,6 +195,7 @@ export class Game {
     this.director = new MissionDirector(this.missionHost());
     this.registerObstacles();
     this.wireCombat();
+    this.setupChapterSystems();
 
     for (let i = 0; i < NPC_VARIANTS.length; i++) {
       const v = NPC_VARIANTS[i]!;
@@ -284,6 +303,7 @@ export class Game {
       void this.saves.saveSettings(s);
     });
     this.dialogue.onEffect.on((e) => this.applyDialogueEffect(e));
+    this.bindDialogueTriggers();
     this.bindQuestLog();
     this.flags.onChange.on(() => {
       if (this.state !== "loading" && this.state !== "menu") void this.saveGame(false);
@@ -307,6 +327,7 @@ export class Game {
     this.quests = new QuestLog(QUESTS);
     this.dialogue = new DialogueRunner(this.flags, SPEAKER_NAMES);
     this.dialogue.onEffect.on((e) => this.applyDialogueEffect(e));
+    this.bindDialogueTriggers();
     this.bindQuestLog();
     this.playTime = 0;
     this.resetWorldState();
@@ -372,8 +393,8 @@ export class Game {
   private resume(): void {
     if (this.state !== "paused") return;
     this.menus.show("none");
-    this.state = this.dialogue.isRunning ? "dialogue" : "playing";
-    this.player.locked = this.state === "dialogue";
+    this.state = this.dialogue.isRunning || this.examine.active ? "dialogue" : "playing";
+    this.player.locked = this.state === "dialogue" || this.repair.active !== null;
     this.hud.show();
     void this.audio.resume();
     if (this.touch.enabled) this.touch.setMode(this.state === "dialogue" ? (this.hud.hasPendingChoice ? "choices" : "dialogue") : "play");
@@ -398,12 +419,15 @@ export class Game {
       case "playing":
         if (a === "pause") {
           this.pause();
+        } else if (a === "interact" && this.repair.active) {
+          this.repair.press();
         } else if (a === "interact") {
           if (this.driving) this.exitVehicle();
           else this.tryInteract();
         } else if (a === "lights" && this.driving) {
           this.driving.setLights(!this.driving.lights);
         } else if (a === "inventory") {
+          this.hud.setClues(this.clues.list());
           this.hud.setInventory(!this.hud.inventoryVisible, this.inventory.list());
         } else if (a === "heal") {
           this.useMedkit();
@@ -417,7 +441,9 @@ export class Game {
         }
         break;
       case "dialogue":
-        if (a === "pause") {
+        if (a === "pause" && this.examine.active) {
+          this.examine.close();
+        } else if (a === "pause") {
           this.pause();
         } else if ((a === "advance" || a === "interact") && this.advanceResolver && !this.hud.hasPendingChoice) {
           const r = this.advanceResolver;
@@ -556,6 +582,16 @@ export class Game {
       overlay: this.matias?.animator.currentOverlay ?? null,
       touch: this.touch.snapshot(),
       quality: this.settings.quality,
+      // sistemas do Capítulo 1
+      awareness: this.enemies ? { ...this.enemies.awarenessSummary(), perEnemy: this.enemies.enemies.map((e) => ({ role: e.role, state: e.awareness.state, suspicion: Number(e.awareness.suspicion.toFixed(2)), hostile: e.hostile, detections: e.detections, flashlight: e.flashlightOn })) } : null,
+      clues: this.clues.toJSON(),
+      timers: this.timers.toJSON(),
+      examining: this.examine?.active?.spec.id ?? null,
+      repair: this.repair?.active ? this.repair.active.game.view : null,
+      cargo: this.cargo?.attachedTo ?? null,
+      curfew: this.enemies?.curfew ?? false,
+      triggers: this.script.history.slice(-8),
+      zonesInside: [...this.script.zones.keys()].filter((id) => this.script.isInside(id)),
     };
   }
 
@@ -785,6 +821,8 @@ export class Game {
       ...(this.driving ? { drivingId: this.driving.def.id } : {}),
     };
     data.inventory = this.inventory.toJSON();
+    data.clues = this.clues.toJSON();
+    data.timers = this.timers.toJSON();
     data.playTimeSeconds = this.playTime;
     return data;
   }
@@ -816,6 +854,7 @@ export class Game {
     this.dialogue = new DialogueRunner(this.flags, SPEAKER_NAMES);
     this.dialogue.history.push(...data.dialogueHistory);
     this.dialogue.onEffect.on((e) => this.applyDialogueEffect(e));
+    this.bindDialogueTriggers();
     this.playTime = data.playTimeSeconds;
     this.radioOn = data.world.radioOn !== false;
     this.radioIndex = typeof data.world.radioIndex === "number" ? data.world.radioIndex : 0;
@@ -827,6 +866,8 @@ export class Game {
     if (data.player.crouched) this.player.setCrouched(true);
     this.resetSliceState();
     this.inventory.load(data.inventory);
+    this.clues.load(data.clues);
+    this.timers.load(data.timers);
     const w = data.world;
     if (typeof w.vehicles === "string") {
       try {
@@ -861,6 +902,7 @@ export class Game {
       this.camera.invertY = s.invertY;
     }
     if (this.hud) this.hud.subtitlesEnabled = s.subtitles;
+    this.effects?.setQuality(s.quality);
     if (this.voice) this.voice.enabled = s.voiceTts;
   }
 
@@ -910,11 +952,19 @@ export class Game {
     for (const p of this.pickups) p.update(dt);
     this.effects.update(dt);
     if (this.state === "playing") this.director.update(dt);
+    // sistemas do Capítulo 1: timers só correm jogando (pausa/menus congelam), reparo, zonas, ruído, HUD
+    if (this.state === "playing") {
+      this.timers.update(dt);
+      this.repair.update(dt);
+      this.script.update(feet, this.driving !== null);
+    }
+    this.updateNoise(dt, feet);
+    this.updateChapterHud();
     this.updateDeath(dt);
     if (this.driving) this.camera.update(dt, this.input, feet, 0, this.driving.heading);
     else this.camera.update(dt, this.input, feet, this.player.eyeHeight);
     this.applyCameraShake(dt);
-    if (!this.driving) {
+    if (!this.driving && this.camera.mode === "follow") {
       const profile = aiming ? { distance: 1.75, shoulder: 0.6, fov: 0.72, minDistance: 1.2 } : { distance: 2.9, shoulder: 0.42, fov: 0.95, minDistance: 1.4 };
       if (this.camera.fovTarget !== profile.fov) this.camera.setProfile(profile);
     }
@@ -938,6 +988,8 @@ export class Game {
       this.currentPrompt = null;
       this.hud.setPrompt(this.driving.speedKmh < 8 ? "Sair do veículo" : null);
       if (this.touch.enabled) this.touch.setInteractAvailable(this.driving.speedKmh < 8);
+    } else if (this.state === "playing" && this.repair.active) {
+      this.currentPrompt = null; // o E vai para o minigame; o prompt dá lugar à barra
     } else if (this.state === "playing") {
       const pick = pickInteractable(this.interactables, { x: feet.x, z: feet.z }, this.player.forward, 0.2);
       this.currentPrompt = pick?.target ?? null;
@@ -984,7 +1036,7 @@ export class Game {
       this.hud.setCrosshair(false);
     });
     this.enemies.onEnemyShot.on(({ enemy, shot }) => {
-      this.effects.muzzleFlash(shot.from);
+      this.effects.muzzleFlash(shot.from, shot.to.subtract(shot.from));
       this.effects.tracer(shot.from, shot.to);
       this.audio.playAt(this.audio.pickVariation("gunshot", 3, "switch"), shot.from, 0.8, 4, 60);
       if (shot.hitPlayer && !this.driving && enemy.hasLineOfSight(this.player.feet.add(new Vector3(0, 1.25, 0)))) {
@@ -1187,6 +1239,18 @@ export class Game {
     this.hud.setInventory(false, []);
     this.deathTimer = -1;
     for (const v of this.vehicles) v.setLights(false);
+    // sistemas do Capítulo 1
+    this.examine.close();
+    this.repair.cancel();
+    this.clues.clear();
+    this.timers.clear();
+    this.script.resetZones();
+    this.cargo.detach();
+    this.enemies.setCurfew(false);
+    this.enemies.setFlashlights(false);
+    this.hud.setClues([]);
+    this.hud.setTimer(null);
+    this.hud.setAwareness(0, "calmo");
   }
 
   /** Interface que o diretor da missão usa para agir sobre o jogo. */
@@ -1225,6 +1289,163 @@ export class Game {
     };
   }
 
+  // ---------------------------------------------------------------------
+  // Sistemas genéricos do Capítulo 1: pistas, exame, reparo, furtividade, timers, gatilhos, carga
+  // ---------------------------------------------------------------------
+  private setupChapterSystems(): void {
+    this.effects.setQuality(this.settings.quality);
+    this.cargo = new DeliveryCargo(this.scene);
+    // exame: close-up + texto; usa o estado "dialogue" (movimento travado, prompt escondido, toque avança)
+    this.examine = new ExamineController({
+      camera: this.camera,
+      hud: this.hud,
+      flags: this.flags,
+      clues: this.clues,
+      viewerHead: () => this.player.feet.add(new Vector3(0, 1.62, 0)),
+      begin: () => {
+        this.state = "dialogue";
+        this.player.locked = true;
+        this.hud.setPrompt(null);
+        this.hud.setObjectiveVisible(false);
+        this.touch.setInteractAvailable(false);
+        this.touch.setMode("dialogue");
+        this.matias.animator.setOverlay(null);
+        this.advanceResolver = () => this.examine.close();
+      },
+      end: () => {
+        this.advanceResolver = null;
+        this.hud.setObjectiveVisible(true);
+        this.camera.setFollow();
+        this.camera.snapBehind(this.player.yaw);
+        if (this.state === "dialogue") {
+          this.state = "playing";
+          this.player.locked = false;
+          this.touch.setMode("play");
+        }
+      },
+    });
+    this.examine.onExamined.on(({ spec }) => this.script.fire({ kind: "examinar", objeto: spec.id }));
+    // reparo: minigame no prompt (E segurar/soltar), jogador travado enquanto dura
+    this.repair = new RepairController({
+      hud: this.hud,
+      flags: this.flags,
+      begin: () => {
+        this.player.locked = true;
+        this.hud.setPrompt(null);
+        this.touch.setInteractAvailable(true);
+      },
+      end: () => {
+        if (this.state === "playing") this.player.locked = false;
+      },
+      sound: (kind) => {
+        if (kind === "done") this.audio.playUi("objective", 0.6);
+        else this.audio.playUi(this.audio.pickVariation("switch", 3, "switch"), kind === "miss" ? 0.35 : 0.6);
+      },
+    });
+    this.repair.onComplete.on(({ spec }) => {
+      this.hud.showNotice(`${spec.title}: reparo concluído`, 3);
+      this.script.fire({ kind: "reparo", maquina: spec.id });
+    });
+    this.input.onActionReleased.on((a) => {
+      if (a === "interact" && this.repair.active && this.state === "playing") this.repair.release();
+    });
+    // pistas: aviso na HUD, aba da mochila, gatilho e autosave
+    this.clues.onAdded.on((c) => {
+      this.audio.playUi("paper", 0.5);
+      this.hud.showNotice(`Nova pista: ${c.title}`, 3.5);
+      this.hud.setClues(this.clues.list());
+      this.script.fire({ kind: "pista", id: c.id });
+      void this.saveGame(false);
+    });
+    // timers: gatilho ao zerar
+    this.timers.onExpired.on((t) => {
+      this.audio.playUi("ui_click", 0.6);
+      this.script.fire({ kind: "timer", id: t.id, segundos: t.total });
+    });
+    // furtividade: voz de prisão (fala provisória sintetizada) e gatilho de detecção
+    this.enemies.onDetected.on(({ count, hostile }) => {
+      const line = hostile ? "Última vez! Mãos para cima — vocês da oficina nunca aprendem." : count > 1 ? "De novo você? Parado aí, Setor 17, vou te levar." : "Toque de recolher! Parado aí — identifique-se!";
+      this.hud.showSubtitle(CHARACTERS.custodio.displayName, line, false);
+      const playback = this.voice.speak(line, CHARACTERS.custodio.voice);
+      void playback.done.then(() => {
+        if (this.state === "playing") this.hud.hideSubtitle();
+      });
+      this.audio.playUi("objective", 0.5);
+      this.script.fire({ kind: "detectado" });
+    });
+    this.enemies.onCaught.on(() => this.hud.showNotice("Um Custódio alcançou Matias.", 3));
+  }
+
+  /** Nó de diálogo alcançado → gatilho `{kind:"dialogo"}` (ligado a cada DialogueRunner novo). */
+  private bindDialogueTriggers(): void {
+    this.dialogue.onLine.on(({ graph, line }) => this.script.fire({ kind: "dialogo", npc: graph.id, no: line.id }));
+  }
+
+  /** Ruído de Matias/veículo para a IA (passos por estado, motor), amostrado 5× por segundo. */
+  private updateNoise(dt: number, feet: Vector3): void {
+    this.noiseTimer -= dt;
+    if (this.noiseTimer > 0) return;
+    this.noiseTimer = 0.2;
+    const radius = this.driving ? (Math.abs(this.driving.speed) > 1.5 ? VEHICLE_NOISE : 0) : this.player.noiseRadius;
+    if (radius > 0) this.enemies.noise(feet, radius);
+  }
+
+  /** HUD dos sistemas: olho de detecção e timer. */
+  private updateChapterHud(): void {
+    const aw = this.enemies.awarenessSummary();
+    this.hud.setAwareness(aw.level, aw.state);
+    const t = this.timers.display;
+    this.hud.setTimer(t ? (t.label ?? "") : null, t ? formatClock(t.remaining) : "", t ? t.remaining <= 15 : false);
+  }
+
+  // --- utilitários de depuração/roteiro (window.eva) --------------------------------------------
+  /** Gatilhos de missão (fire manual: `eva.triggers.fire({kind:"zona", id:"x"})`). */
+  get triggers(): MissionScript {
+    return this.script;
+  }
+
+  addZone(spec: ZoneSpec): void {
+    this.script.addZone(spec);
+  }
+
+  /** Cria um objeto examinável no mundo (dados). */
+  addExaminable(spec: ExaminableSpec): void {
+    this.interactables.push(this.examine.create(spec));
+  }
+
+  /** Cria uma máquina reparável no mundo (dados). */
+  addRepairable(spec: RepairSpec): void {
+    this.interactables.push(this.repair.create(spec));
+  }
+
+  /** Spawn de um Custódio de patrulha (não atira até ser provocado). */
+  spawnCustodio(x: number, z: number, yaw: number, patrol: Array<[number, number]> = [], extra: Partial<EnemySpawnSpec> = {}): Promise<import("@/ai/enemy").Enemy> {
+    return this.enemies.spawn({ position: new Vector3(x, 0.12, z), yaw, patrol: patrol.map(([px, pz]) => new Vector3(px, 0.12, pz)), role: "custodio", variant: "custodio", ...extra });
+  }
+
+  /** Toque de recolher: visão curta + audição longa dos guardas e lanternas acesas. */
+  setCurfew(on: boolean): void {
+    this.enemies.setCurfew(on);
+    this.enemies.setFlashlights(on || this.env.isNight);
+  }
+
+  /** Prende a carga visível a um veículo (entrega ativa) ou solta (`null`). */
+  setCargo(vehicleId: string | null): boolean {
+    if (!vehicleId) {
+      this.cargo.detach();
+      return true;
+    }
+    const v = this.vehicles.find((x) => x.def.id === vehicleId);
+    if (!v) return false;
+    this.cargo.attach(v);
+    return true;
+  }
+
+  /** Último gatilho disparado (testes). */
+  lastTrigger(): MissionTrigger | null {
+    return this.script.history[this.script.history.length - 1] ?? null;
+  }
+
   /** Diálogo pelo rádio: sem NPC presente, a câmera fica em Matias e a voz vem com estática. */
   private async startRadioDialogue(remote: Npc, graph: DialogueGraph): Promise<void> {
     if (this.state !== "playing" || this.dialogue.isRunning) return;
@@ -1261,6 +1482,7 @@ export class Game {
     this.audio.playUi("switch", 0.5);
     if (this.env.isNight) v.setLights(true);
     this.flags.set(`veiculo.${v.def.id}.entrou`, true);
+    this.script.fire({ kind: "veiculo", id: v.def.id, dentro: true });
   }
 
   exitVehicle(): void {
@@ -1286,6 +1508,7 @@ export class Game {
     this.hud.setVehicle(null);
     this.hud.setPrompt(null);
     this.audio.stopEngine();
+    this.script.fire({ kind: "veiculo", id: v.def.id, dentro: false });
   }
 
   private updateDriving(dt: number): void {
