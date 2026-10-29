@@ -10,6 +10,7 @@ import { loadPlaywright, serveDist, CHROMIUM_ARGS, argValue } from "./lib/harnes
 
 const { chromium } = loadPlaywright();
 const SHOTS = argValue("--shots", "");
+const ONLY = argValue("--only", ""); // "veiculos" | "missao" | "" (tudo)
 if (SHOTS) mkdirSync(resolve(SHOTS), { recursive: true });
 const { base, close } = await serveDist();
 const browser = await chromium.launch({ headless: true, args: CHROMIUM_ARGS });
@@ -40,8 +41,10 @@ try {
   await page.waitForFunction(() => window.eva.state === "playing");
   await page.waitForTimeout(1500);
   await page.evaluate(() => window.eva.captureStart(30));
+  let s;
 
   // ---------------- Javali: entrar, acelerar, virar, sair ----------------
+  if (ONLY !== "missao") {
   console.log("Veículos");
   const jav = await page.evaluate(() => {
     const v = window.eva.vehicles.find((x) => x.def.id === "javali_vb4");
@@ -50,7 +53,7 @@ try {
   });
   await page.evaluate(([x, z]) => window.eva.teleportPlayer(x, 0.22, z - 2.6, 0), [jav.x, jav.z]);
   await step(15);
-  let s = await snap();
+  s = await snap();
   check(/Entrar/.test(s.prompt ?? ""), `prompt de entrar no Javali: "${s.prompt}"`);
   await press("interact", true);
   await press("interact", false);
@@ -60,14 +63,14 @@ try {
   await shot("veiculo_javali_entrou");
   const before = await page.evaluate(() => { const p = window.eva.driving.position; return [p.x, p.y, p.z]; });
   await press("forward", true);
-  await step(90); // 3 s
+  await step(45); // 1,5 s (a praça é curta para mais que isso a 50 km/h)
   const after = await page.evaluate(() => { const v = window.eva.driving; const p = v.position; return { p: [p.x, p.y, p.z], speed: v.speed, up: v.isUpright, contacts: v.rv?.wheelsInContact ?? -1 }; });
   const moved = Math.hypot(after.p[0] - before[0], after.p[2] - before[2]);
-  check(moved > 6 && after.speed > 3, `Javali acelerou: ${moved.toFixed(1)} m em 3 s, ${(after.speed * 3.6).toFixed(0)} km/h, ${after.contacts} rodas no chão`);
+  check(moved > 4 && after.speed > 3, `Javali acelerou: ${moved.toFixed(1)} m em 1,5 s, ${(after.speed * 3.6).toFixed(0)} km/h, ${after.contacts} rodas no chão`);
   check(after.up && Math.abs(after.p[1] - before[1]) < 1.5, `Javali estável (y ${after.p[1].toFixed(2)})`);
   await shot("veiculo_javali_andando");
   await press("left", true);
-  await step(45);
+  await step(30);
   await press("left", false);
   await press("forward", false);
   const turned = await page.evaluate(() => window.eva.driving.heading);
@@ -120,6 +123,164 @@ try {
   await step(10);
   s = await snap();
   check(s.driving === null, "Matias desceu da aeromoto");
+  }
+  if (ONLY !== "veiculos") {
+
+  // ---------------- Combate e missão "O Carregamento" ----------------
+  console.log("Combate e missão");
+  // avança a narrativa até o Custódio armar Matias (flags da fase), como se os diálogos tivessem ocorrido
+  await page.evaluate(() => {
+    const g = window.eva;
+    g.flags.set("cartao.pego", true);
+    g.flags.set("apuracao.concluida", true);
+    g.flags.set("custodio.avisouLote", true);
+    g.quests.start("o_carregamento");
+    g.teleportPlayer(30.5, 0.22, 12.5, Math.PI);
+  });
+  await step(30);
+  await page.evaluate(() => { window.eva.flags.set("carregamento.anoitecer", true); window.eva.flags.set("carregamento.armado", true); });
+  // espera a pistola carregar e a primeira onda surgir (3 s de jogo + carga dos GLB)
+  for (let i = 0; i < 40; i++) {
+    await step(10);
+    const sn = await snap();
+    if (sn.enemies && sn.enemies.total >= 3 && sn.ammo) break;
+  }
+  s = await snap();
+  check(s.ammo && s.ammo.mag === 12, `pistola equipada (${s.ammo?.mag}/${s.ammo?.reserve})`);
+  check(s.enemies && s.enemies.total === 3, `primeira onda em campo (${s.enemies?.total} inimigos, estados ${JSON.stringify(s.enemies?.states)})`);
+  check(s.phase === "onda1", `fase da missão: ${s.phase}`);
+  await shot("combate_onda1");
+  // mira no inimigo mais próximo e atira até derrubá-lo
+  const target = await page.evaluate(() => {
+    const e = window.eva.enemies.nearest(window.eva.player.feet);
+    const c = e.chest;
+    return { x: c.x, y: c.y, z: c.z, hp: e.health.current, dist: window.eva.player.feet.subtract(e.feet).length() };
+  });
+  await press("aim", true);
+  await step(15);
+  s = await snap();
+  check(s.aiming === true && s.overlay === "PistolAim", `mirando (overlay ${s.overlay})`);
+  let fired = 0;
+  let hp = target.hp;
+  for (let i = 0; i < 11 && hp > 0; i++) {
+    await page.evaluate(() => { const e = window.eva.enemies.enemies.find((x) => x.alive); const c = e.chest; window.eva.aimAt(c.x, c.y, c.z); });
+    await step(3);
+    await press("fire", true);
+    await step(2);
+    await press("fire", false);
+    await step(6);
+    fired++;
+    hp = await page.evaluate(() => { const e = window.eva.enemies.enemies.find((x) => x.alive); return e ? e.health.current : 0; });
+  }
+  await press("aim", false);
+  s = await snap();
+  const stats = await page.evaluate(() => window.eva.combat.stats);
+  check(stats.hits > 0, `acertou o inimigo (${stats.hits}/${stats.shots} disparos, munição ${s.ammo?.mag}/${s.ammo?.reserve})`);
+  check(stats.kills >= 1 || s.enemies.alive < 3, `inimigo derrubado (vivos: ${s.enemies?.alive})`);
+  check(s.ammo && s.ammo.mag < 12, `munição consumida (${s.ammo?.mag})`);
+  await shot("combate_tiro");
+  // recarga
+  await press("reload", true);
+  await step(3);
+  await press("reload", false);
+  await step(70);
+  s = await snap();
+  check(s.ammo && s.ammo.mag === 12 && s.ammo.reserve < 36, `recarregou (${s.ammo?.mag}/${s.ammo?.reserve})`);
+  // inimigos reagem: alguém atirou em Matias?
+  await step(90);
+  s = await snap();
+  console.log(`  vida de Matias após 3 s sob fogo: ${s.health}`);
+  // encerra a onda 1 por depuração e confere a transição para a onda 2
+  await page.evaluate(() => { for (const e of window.eva.enemies.enemies) if (e.alive) e.takeDamage(999, window.eva.player.feet, false); });
+  for (let i = 0; i < 30; i++) {
+    await step(10);
+    const sn = await snap();
+    if (sn.phase === "onda2" && sn.enemies.alive >= 4) break;
+  }
+  s = await snap();
+  check(s.phase === "onda2" && s.enemies.alive >= 4, `segunda onda (${s.enemies?.alive} vivos, fase ${s.phase})`);
+  await page.evaluate(() => { for (const e of window.eva.enemies.enemies) if (e.alive) e.takeDamage(999, window.eva.player.feet, false); });
+  await step(20);
+  s = await snap();
+  check(s.phase === "fuga", `praça limpa → fase ${s.phase}`);
+  // o Custódio ferido puxa conversa quando Matias está perto: avança as falas
+  let sawCustodio = false;
+  for (let i = 0; i < 14; i++) {
+    await page.waitForTimeout(600);
+    const st = await page.evaluate(() => window.eva.state);
+    if (st !== "dialogue") {
+      if (sawCustodio) break;
+      await step(5);
+      continue;
+    }
+    sawCustodio = true;
+    await press("advance", true);
+    await press("advance", false);
+  }
+  check(sawCustodio, "Custódio ferido falou com Matias após o combate");
+  // entra na van e leva até a oficina
+  const van = await page.evaluate(() => { const v = window.eva.vehicles.find((x) => x.def.id === "modulo_v7"); const p = v.position; return [p.x, p.z]; });
+  await page.evaluate(([x, z]) => window.eva.teleportPlayer(x + 0.3, 0.22, z + 2.2, Math.PI), van);
+  await step(10);
+  s = await snap();
+  const vinfo = await page.evaluate(() => { const v = window.eva.vehicles.find((x) => x.def.id === "modulo_v7"); const p = v.position; return { p: [p.x, p.y, p.z].map((n) => +n.toFixed(2)), up: v.isUpright, occ: v.occupied, prompt: v.getPrompt(), feet: window.eva.snapshot().feet }; });
+  check(/Entrar/.test(s.prompt ?? ""), `prompt da van: "${s.prompt}" (${JSON.stringify(vinfo)})`);
+  await press("interact", true);
+  await press("interact", false);
+  await step(15);
+  s = await snap();
+  check(s.driving === "modulo_v7" && s.phase === "entrega", `na van (${s.driving}), fase ${s.phase}`);
+  if (s.driving !== "modulo_v7") throw new Error("não entrou na van");
+  await page.evaluate(() => { const v = window.eva.driving; v.teleport(v.position.constructor.FromArray([-30, 0.12, -2.5]), -Math.PI / 2); });
+  await step(30);
+  s = await snap();
+  check(s.phase === "trancar", `van na oficina → fase ${s.phase}`);
+  await press("interact", true);
+  await press("interact", false);
+  await step(10);
+  await page.evaluate(() => window.eva.teleportPlayer(-30, 0.12, -5.6, Math.PI));
+  await step(10);
+  s = await snap();
+  check(/Trancar/.test(s.prompt ?? ""), `prompt da porta: "${s.prompt}"`);
+  await press("interact", true);
+  await press("interact", false);
+  let radioStarted = false;
+  for (let i = 0; i < 40; i++) {
+    await step(5);
+    await page.waitForTimeout(300);
+    if ((await page.evaluate(() => window.eva.state)) === "dialogue") {
+      radioStarted = true;
+      break;
+    }
+  }
+  check(radioStarted, `rádio final iniciado (fase ${await page.evaluate(() => window.eva.director.phase)})`);
+  // avança o diálogo até a escolha e escolhe a primeira opção
+  for (let i = 0; i < 12; i++) {
+    await page.waitForTimeout(700);
+    const pending = await page.evaluate(() => window.eva["hud"].hasPendingChoice);
+    if (pending) break;
+    await press("advance", true);
+    await press("advance", false);
+  }
+  await press("choice1", true);
+  await press("choice1", false);
+  for (let i = 0; i < 8; i++) {
+    await page.waitForTimeout(700);
+    const st = await page.evaluate(() => window.eva.state);
+    if (st === "playing") break;
+    await press("advance", true);
+    await press("advance", false);
+  }
+  let end = null;
+  for (let i = 0; i < 30; i++) {
+    await step(5);
+    await page.waitForTimeout(300);
+    end = await page.evaluate(() => ({ phase: window.eva.director.phase, visible: document.getElementById("mission-end")?.classList.contains("visible"), decision: window.eva.flags.get("carregamento.decisao") }));
+    if (end.visible) break;
+  }
+  check(end.phase === "concluida" && end.visible === true, `missão concluída (fase ${end.phase}, decisão ${end.decision}, tela final ${end.visible})`);
+  await shot("missao_fim");
+  }
 
   await page.evaluate(() => window.eva.captureStop());
 } finally {

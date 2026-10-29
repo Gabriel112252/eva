@@ -83,6 +83,8 @@ export class Vehicle implements Interactable {
   private readonly engine: PhysicsEngine;
   /** último contato forte (para som/dano) */
   lastImpact = 0;
+  /** fora da área do quarteirão (aeromoto) */
+  outOfBounds = false;
 
   private constructor(
     readonly scene: Scene,
@@ -147,8 +149,9 @@ export class Vehicle implements Interactable {
       const light = new SpotLight(`${this.id}_farol_${i}`, lp.clone(), new Vector3(0, -0.18, 1), Math.PI * 0.55, 6, scene);
       light.parent = this.anchor;
       light.diffuse = new Color3(1.0, 0.9, 0.75);
-      light.intensity = 0;
+      light.intensity = 18;
       light.range = 28;
+      light.setEnabled(false); // luzes desligadas não entram nos shaders (limite de blocos uniformes)
       this.headlights.push(light);
     }
 
@@ -243,6 +246,16 @@ export class Vehicle implements Interactable {
       const c = this.controls;
       const hc: HoverControls | null = this.occupied ? { throttle: c.throttle, steer: c.steer, lift: c.lift, boost: c.boost } : null;
       this.hover.step(dt, hc);
+      // cerca invisível: além de ~170 m do centro do quarteirão, empurra de volta (o mundo acaba ali)
+      const p = this.anchor.getAbsolutePosition();
+      const dx = p.x - 0;
+      const dz = p.z - 0;
+      const r = Math.hypot(dx, dz);
+      if (r > 170) {
+        const k = (r - 170) * 1.5 * this.def.mass;
+        this.body.applyImpulse(new Vector3((-dx / r) * k * dt, 0, (-dz / r) * k * dt), p);
+        this.outOfBounds = true;
+      } else this.outOfBounds = false;
     }
   }
 
@@ -279,7 +292,7 @@ export class Vehicle implements Interactable {
 
   setLights(on: boolean): void {
     this.lightsOn = on;
-    for (const l of this.headlights) l.intensity = on ? 18 : 0;
+    for (const l of this.headlights) l.setEnabled(on);
   }
 
   get lights(): boolean {

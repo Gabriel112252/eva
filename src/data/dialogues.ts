@@ -1,5 +1,5 @@
 import type { DialogueGraph } from "@/narrative/dialogue";
-import { QUEST_APURACAO } from "./quests";
+import { QUEST_APURACAO, QUEST_CARREGAMENTO } from "./quests";
 
 /**
  * Diálogos do prólogo "A Apuração" em português brasileiro.
@@ -16,6 +16,7 @@ export const SPEAKER_NAMES: Record<string, string> = {
   raquel: "Raquel",
   ana: "Ana",
   radio: "Rádio do Setor",
+  desviador: "Desviador",
 };
 
 export const RADIO_BULLETIN = [
@@ -231,11 +232,78 @@ export const DIALOGUE_MIRIAM: DialogueGraph = {
 export const DIALOGUE_CUSTODIO: DialogueGraph = {
   id: "custodio",
   start: [
+    { condition: { flag: "carregamento.fuga", is: true }, node: "fuga_repete" },
+    { condition: { flag: "carregamento.vencido", is: true }, node: "fuga" },
+    { condition: { flag: "carregamento.armado", is: true }, node: "combate_repete" },
+    { condition: { flag: "carregamento.anoitecer", is: true }, node: "noite" },
+    { condition: { flag: "apuracao.concluida", is: true }, node: "tarde" },
     { condition: { flag: "apuracao.postura", is: "confronto" }, node: "aviso" },
     { condition: { flag: "custodio.conversou", is: true }, node: "repete" },
     { node: "inicio" },
   ],
   lines: {
+    // --- O Carregamento ---------------------------------------------------------------------
+    tarde: {
+      id: "tarde",
+      speaker: "custodio",
+      text: "A Miriam falou demais, eu vi a cara do senhor. Olha: o lote sai da Central hoje, na van, assim que escurecer. Ordem do conselho. Se quiser ver com os próprios olhos, fique longe do portão até lá.",
+      effects: [
+        { type: "setFlag", key: "custodio.avisouLote", value: true },
+        { type: "startQuest", quest: QUEST_CARREGAMENTO },
+      ],
+      next: "tarde_m",
+      shot: "speaker",
+    },
+    tarde_m: { id: "tarde_m", speaker: "matias", text: "Então eu volto quando escurecer.", shot: "listener" },
+    noite: {
+      id: "noite",
+      speaker: "custodio",
+      text: "Senhor Matias, não é hora. Tem gente armada vindo pela rua — não são nossos. Dois caminhões de homens, e eu sou um.",
+      next: "noite_m1",
+      shot: "speaker",
+    },
+    noite_m1: { id: "noite_m1", speaker: "matias", text: "Desviadores. Querem o lote.", next: "noite_c2", shot: "listener" },
+    noite_c2: {
+      id: "noite_c2",
+      speaker: "custodio",
+      text: "O senhor foi segurança da EVA. Sabe usar isto. Não me obrigue a me arrepender.",
+      next: "noite_m2",
+      shot: "speaker",
+    },
+    noite_m2: {
+      id: "noite_m2",
+      speaker: "matias",
+      text: "Doze no pente. Fica atrás da van e não levanta a cabeça.",
+      effects: [
+        { type: "setFlag", key: "carregamento.armado", value: true },
+        { type: "questObjective", quest: QUEST_CARREGAMENTO, objective: "portao" },
+      ],
+      shot: "listener",
+    },
+    combate_repete: { id: "combate_repete", speaker: "custodio", text: "Eles estão vindo pela praça. Atira só em quem atirar.", shot: "speaker" },
+    fuga: {
+      id: "fuga",
+      speaker: "custodio",
+      text: "Pegou de raspão... eu fico. Leva a van — o lote está nela. Pra oficina do senhor, longe do portão. Amanhã eu digo ao conselho que o carregamento sumiu no tiroteio.",
+      next: "fuga_m",
+      shot: "speaker",
+    },
+    fuga_m: {
+      id: "fuga_m",
+      speaker: "matias",
+      text: "Você está mentindo pro conselho por um lote.",
+      next: "fuga_c",
+      shot: "listener",
+    },
+    fuga_c: {
+      id: "fuga_c",
+      speaker: "custodio",
+      text: "Estou mentindo por uma menina de quinze anos. Vai.",
+      effects: [{ type: "setFlag", key: "carregamento.fuga", value: true }],
+      shot: "speaker",
+    },
+    fuga_repete: { id: "fuga_repete", speaker: "custodio", text: "A van, senhor Matias. Antes que voltem.", shot: "speaker" },
+    // --- A Apuração -------------------------------------------------------------------------
     inicio: { id: "inicio", speaker: "custodio", text: "Senhor Matias. Hoje é dia de Apuração. Fila organizada, voz baixa. Ninguém passa do portão.", next: "m1", shot: "speaker" },
     m1: { id: "m1", speaker: "matias", text: "Eu vim pelo registro da minha filha.", next: "c2", shot: "listener" },
     c2: {
@@ -262,6 +330,40 @@ export const DIALOGUE_CUSTODIO: DialogueGraph = {
       speaker: "custodio",
       text: "Já ouvi o senhor lá no balcão. Respeito a preocupação. Mas se levantar a voz de novo, eu tiro o senhor da praça. Sem prazer nenhum nisso.",
       effects: [{ type: "setFlag", key: "custodio.avisou", value: true }],
+      shot: "speaker",
+    },
+  },
+};
+
+/** Decisão final no rádio da oficina (Raquel chama). Não decide a história: registra a postura de Matias. */
+export const DIALOGUE_RADIO_FINAL: DialogueGraph = {
+  id: "radio_final",
+  start: [{ node: "r1" }],
+  lines: {
+    r1: { id: "r1", speaker: "raquel", text: "Matias? É a Raquel. O Custódio me chamou pelo rádio da praça. Disse que o lote está com você. Está inteiro?", next: "m1", shot: "speaker" },
+    m1: { id: "m1", speaker: "matias", text: "Inteiro. Soro, antibiótico, o que a Ana precisa e mais gente também. Não está nas cotas de ninguém.", next: "r2", shot: "listener" },
+    r2: {
+      id: "r2",
+      speaker: "raquel",
+      text: "Então ele é de quem? Se eu usar isso no posto amanhã, o conselho pergunta de onde veio. Se eu não usar, a fórmula continua certa e a Ana continua sem.",
+      choices: [
+        { text: "Entrega ao posto. Com registro. Eu assino de onde veio.", next: "fim_sistema", effects: [{ type: "setFlag", key: "carregamento.decisao", value: "registro" }, { type: "increment", key: "matiasDefendeSistema" }] },
+        { text: "Distribui em silêncio. Os Silenciosos sabem fazer isso.", next: "fim_silencio", effects: [{ type: "setFlag", key: "carregamento.decisao", value: "silencio" }, { type: "increment", key: "matiasContestaSistema" }] },
+      ],
+      shot: "speaker",
+    },
+    fim_sistema: {
+      id: "fim_sistema",
+      speaker: "raquel",
+      text: "Vai dar problema. Mas dá pra defender. Deixa a van trancada; eu passo aí ao amanhecer.",
+      effects: [{ type: "questObjective", quest: QUEST_CARREGAMENTO, objective: "decisao" }],
+      shot: "speaker",
+    },
+    fim_silencio: {
+      id: "fim_silencio",
+      speaker: "raquel",
+      text: "Então ninguém sabe de nada. Nem eu. Trava a van e dorme, se conseguir. Eu passo aí ao amanhecer.",
+      effects: [{ type: "questObjective", quest: QUEST_CARREGAMENTO, objective: "decisao" }],
       shot: "speaker",
     },
   },

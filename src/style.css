@@ -984,3 +984,11 @@ body.touch-mode .subtitle {
 .death .overlay-card h2 {
   color: #e0b0a0;
 }
+
+/* botões de combate no toque: só aparecem quando Matias está armado (classe no body) */
+.tc-combat {
+  display: none;
+}
+body.armed .tc-combat {
+  display: flex;
+}

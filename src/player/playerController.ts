@@ -75,6 +75,8 @@ export class PlayerController {
   state: MoveState = "idle";
   /** bloqueia movimento (diálogo, menus) */
   locked = false;
+  /** mirando: encara esta direção (yaw da câmera) em vez da direção do movimento; velocidade de caminhada */
+  aimYaw: number | null = null;
 
   private velocity = new Vector3();
   private horizontalSpeed = 0;
@@ -199,7 +201,7 @@ export class PlayerController {
     const support: CharacterSurfaceInfo = this.cc.checkSupport(dt, this.down);
     const axis = this.locked ? { x: 0, y: 0 } : input.moveAxis();
     const moving = axis.x !== 0 || axis.y !== 0;
-    const running = !this.locked && this.crouched === false && input.isHeld("run") && moving;
+    const running = !this.locked && this.crouched === false && input.isHeld("run") && moving && this.aimYaw === null;
 
     // agachar segurando Ctrl (C alterna via evento no Game)
     if (!this.locked && input.isHeld("crouchHold") && !this.crouched) this.setCrouched(true);
@@ -207,8 +209,12 @@ export class PlayerController {
     const targetSpeed = !moving ? 0 : this.crouched ? PLAYER_SPEEDS.crouch : running ? PLAYER_SPEEDS.run : PLAYER_SPEEDS.walk;
     const dir = cameraRelativeDirection(axis, cameraYaw);
 
-    // rotação suave do personagem para a direção do movimento
-    if (moving) {
+    // rotação suave do personagem para a direção do movimento (ou para a mira)
+    if (this.aimYaw !== null) {
+      const delta = angleDelta(this.yaw, this.aimYaw);
+      this.yaw += Math.sign(delta) * Math.min(Math.abs(delta), 14 * dt);
+      this.model.setYaw(this.yaw);
+    } else if (moving) {
       const targetYaw = Math.atan2(dir.x, dir.z);
       const delta = angleDelta(this.yaw, targetYaw);
       const turnSpeed = this.crouched ? 8 : 11;

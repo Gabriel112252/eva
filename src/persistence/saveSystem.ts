@@ -21,8 +21,10 @@ export interface SaveData {
   flags: Record<string, FlagValue>;
   quests: QuestSnapshot;
   dialogueHistory: string[];
-  /** estado de objetos do mundo (rádio desligado, cartão pego, etc.) */
+  /** estado de objetos do mundo (rádio desligado, cartão pego, veículos, munição) */
   world: Record<string, FlagValue>;
+  /** mochila (item → quantidade) */
+  inventory?: Record<string, number>;
   playTimeSeconds: number;
 }
 

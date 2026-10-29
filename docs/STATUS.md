@@ -2,7 +2,11 @@
 
 Atualizado em 25/10/2026 (personagens realistas, controles de toque, animações CC0 retargeteadas).
 
-## Marco atual: **M0 — primeiro protótipo jogável** ✅
+## Marco atual: **Vertical slice jogável — "A Apuração" + "O Carregamento"** ✅
+
+Jogável de ponta a ponta (10–15 min): exploração e diálogos → confronto com desviadores (pistola, mira, recarga, IA que patrulha/persegue/ataca, vida/dano/morte/reinício) → fuga com a van Módulo V-7 → entrega na oficina → decisão final pelo rádio → tela de conclusão. Quatro veículos jogáveis (Javali, Módulo, Atlas dirigíveis; Rastro AV-4 voando). Detalhes e créditos de código reaproveitado em `docs/VERTICAL_SLICE.md`.
+
+### Marco anterior: M0 — primeiro protótipo jogável ✅
 
 O jogo roda no navegador (Chrome/Edge/Firefox recentes no desktop; Chrome/Safari no celular, de preferência na horizontal) em Babylon.js 9 + Havok, com Matias em terceira pessoa num quarteirão de São Paulo Velha.
 
@@ -40,7 +44,8 @@ O jogo roda no navegador (Chrome/Edge/Firefox recentes no desktop; Chrome/Safari
 - **Personagens**: gerados por `tools/blender/make_character.py` (Blender headless via `pip install bpy`) a partir de **dados CC0 do MakeHuman** vendorizados em `tools/blender/data/makehuman` — malha base hm08, targets (raça/sexo/idade/peso + detalhes faciais), rig Mixamo com pesos, máscaras de pele e olhos. Anatomia e rosto são reais; pele é procedural bakeada (2048 px Matias / 1024 px NPCs); cabelo é uma calota esculpida (sem fios); roupas são cascas conformadas ao corpo (sem rugas/tecido); acessórios (óculos, mochila, cinto, boné, lenço, jaleco, avental) são primitivas ou camadas do corpo. Sem marcas; sem a fotografia do criador (o rosto de Matias não tem semelhança com ele). Pré-visualizações em `docs/screenshots/characters/`. **Animações não são provisórias**: biblioteca CC0 da Quaternius (ver acima); vídeo de avaliação em `docs/videos/locomocao.mp4`.
 - **MPFB/asset packs**: o plugin MPFB foi clonado mas **não é executado** (o gerador é código próprio que lê só os dados CC0). Os pacotes de assets do MakeHuman (peles fotográficas, cabelos, roupas) **não estão instalados** — o site makehumancommunity.org é inacessível deste ambiente. Rodar o MPFB com `makehuman_system_assets` na máquina do criador é o próximo salto de qualidade.
 - **Cenário**: a praça da Apuração ("hero corner" M1.1) usa o kit GLB `public/assets/environments/praca_hero.glb` (fachada da Central com vãos reais, sobrados com varandas/grades/varais, posto, banca, gerador, tambores, caixotes, poste, árvores com folhagem alpha-test) e materiais PBR fotográficos CC0 da ambientCG (reboco, pedra portuguesa, concreto, telha, ferrugem). O resto da rua ainda é geometria em blocos com texturas procedurais. Comparações A/B com câmera idêntica em `docs/screenshots/m1/` (`antes_*` vs `depois_*`); passeio pelo canto em `docs/videos/praca_hero.mp4`.
-- **Veículos (PR #1)**: Javali VB-4, Atlas T-3 e Módulo V-7 integrados como props estáticos com colisão (`src/world/vehiclesPack.ts`), modelos refinados no Blender a partir do gerador da PR (`public/assets/vehicles/`); Rastro AV-4 e Janus só no visualizador `preview-veiculos.html`. Ainda são **protótipos modulares** (silhuetas simples), não arte final. A/B em `docs/screenshots/veiculos/`; `npm run test:vehicles`.
+- **Veículos (PR #1)**: Javali VB-4, Atlas T-3, Módulo V-7 **dirigíveis** e Rastro AV-4 **pilotável** (física em `src/vehicles/`), modelos refinados no Blender a partir do gerador da PR (`public/assets/vehicles/`); Janus só no visualizador `preview-veiculos.html`. Modelos ainda são **protótipos modulares** (silhuetas simples), não arte final. `npm run test:gameplay`.
+- **Combate/IA/itens**: pistola, caixa de munição e kit médico modelados no pipeline (`public/assets/props/`); sons de tiro/motor/rotores **sintetizados** (provisórios); inimigos usam os personagens `saqueador_a/b` (MakeHuman CC0 + animações UAL).
 - **Som**: passos e impactos gravados (Kenney, CC0); ambiente e interface sintetizados.
 - **Voz**: TTS do navegador.
 
@@ -64,7 +69,14 @@ O jogo roda no navegador (Chrome/Edge/Firefox recentes no desktop; Chrome/Safari
 - A voz sintetizada depende das vozes instaladas no sistema do jogador (Chrome tem vozes pt-BR online; Firefox depende do SO; no celular costuma haver uma voz pt-BR).
 - O caminho até a praça não tem ainda a "área inacessível" para o tutorial de agachar.
 
-## Próxima etapa (M1)
+## Próxima etapa
+
+1. Gravações CC0 para tiros, motor, rotores e reações (hoje sintetizados); dublagem.
+2. IA com cobertura e navmesh (Recast) para ruas estreitas; inimigos em veículos.
+3. Missões seguintes do capítulo 1 (Estação Nove, Nova Aurora) e uso narrativo do Javali/Rastro.
+4. Arte: fachadas da rua no kit GLB (M1.2), armadura do Custódio, passe de modelagem nos veículos.
+
+## Plano anterior (M1)
 
 1. Elevar os personagens: pele fotográfica/cabelo/roupas via MPFB + asset packs na máquina do criador (animações já resolvidas com a UAL; rig compatível com mais clipes dela e do Mixamo).
 2. Fechar os beats 4 e 5: mensageiro, multidão na fila com reações, Custódio pedindo calma, depósito com a pista física e a decisão final em tensão.

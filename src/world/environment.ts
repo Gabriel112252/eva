@@ -114,6 +114,10 @@ export class Environment {
     return this.dusk > 0.5;
   }
 
+  get duskLevel(): number {
+    return this.dusk;
+  }
+
   /** Alvo da transição tarde→anoitecer (0..1); a cena interpola em ~segundos. */
   setDusk(target: number): void {
     this.duskTarget = Math.max(0, Math.min(1, target));

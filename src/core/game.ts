@@ -24,9 +24,17 @@ import { pickInteractable, type Interactable } from "@/interaction/interactable"
 import { GameFlags } from "@/narrative/flags";
 import { DialogueRunner, type DialogueChoice, type DialogueEffect, type DialogueLine, type DialoguePresenter } from "@/narrative/dialogue";
 import { QuestLog } from "@/narrative/quests";
-import { QUESTS, QUEST_APURACAO } from "@/data/quests";
-import { DIALOGUES, RADIO_BULLETIN, SPEAKER_NAMES } from "@/data/dialogues";
-import { CHARACTERS, type CharacterVariant } from "@/data/characters";
+import { QUESTS, QUEST_APURACAO, QUEST_CARREGAMENTO } from "@/data/quests";
+import { DIALOGUES, DIALOGUE_RADIO_FINAL, RADIO_BULLETIN, SPEAKER_NAMES } from "@/data/dialogues";
+import type { DialogueGraph } from "@/narrative/dialogue";
+import { PlayerCombat, propUrl } from "@/combat/playerCombat";
+import { CombatEffects } from "@/combat/effects";
+import { EnemyManager } from "@/ai/enemyManager";
+import { Inventory } from "@/items/inventory";
+import { Pickup, type PickupSpec } from "@/items/pickup";
+import { MissionDirector, MISSION_POINTS, type MissionHost } from "@/narrative/missionDirector";
+import { WORKSHOP } from "@/world/workshop";
+import { CHARACTERS, characterUrl, type CharacterVariant } from "@/data/characters";
 import { AudioEngine } from "@/audio/audioEngine";
 import { VoiceService } from "@/audio/voice";
 import { Hud } from "@/ui/hud";
@@ -49,12 +57,12 @@ export class Game {
 
   private env!: Environment;
   private world!: World;
-  private player!: PlayerController;
-  private camera!: ThirdPersonCamera;
+  player!: PlayerController;
+  camera!: ThirdPersonCamera;
   private npcs: Npc[] = [];
   private interactables: Interactable[] = [];
-  private flags = new GameFlags();
-  private quests = new QuestLog(QUESTS);
+  flags = new GameFlags();
+  quests = new QuestLog(QUESTS);
   private dialogue = new DialogueRunner(this.flags, SPEAKER_NAMES);
   private audio!: AudioEngine;
   private voice!: VoiceService;
@@ -76,6 +84,16 @@ export class Game {
   /** veículos jogáveis e o que Matias está dirigindo */
   vehicles: Vehicle[] = [];
   driving: Vehicle | null = null;
+  /** combate, inimigos, itens e missão (vertical slice) */
+  combat!: PlayerCombat;
+  effects!: CombatEffects;
+  enemies!: EnemyManager;
+  inventory = new Inventory();
+  pickups: Pickup[] = [];
+  director!: MissionDirector;
+  private deathTimer = -1;
+  private cameraShake = 0;
+  private boundsNoticeShown = false;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.engine = new Engine(canvas, true, { stencil: true, antialias: true, preserveDrawingBuffer: false, powerPreference: "high-performance" }, false);
@@ -151,6 +169,13 @@ export class Game {
     this.player.onFootstep.on((step) => this.audio.playFootstep(step.kind, step.surface));
     this.camera = new ThirdPersonCamera(this.scene, spawn.yaw);
     this.scene.activeCamera = this.camera.camera;
+    this.effects = new CombatEffects(this.scene);
+    this.enemies = new EnemyManager(this.scene);
+    this.combat = new PlayerCombat(this.scene, this.matias, this.effects);
+    this.combat.resolver = this.enemies;
+    this.director = new MissionDirector(this.missionHost());
+    this.registerObstacles();
+    this.wireCombat();
 
     for (let i = 0; i < NPC_VARIANTS.length; i++) {
       const v = NPC_VARIANTS[i]!;
@@ -162,6 +187,9 @@ export class Game {
       this.npcs.push(npc);
       this.interactables.push(npc);
     }
+    // aquece o cache HTTP dos modelos dos inimigos e dos props da missão (carregados sob demanda no confronto)
+    for (const v of ["saqueador_a", "saqueador_b"] as const) void fetch(characterUrl(v)).catch(() => undefined);
+    for (const p of ["pistola", "caixa_municao", "kit_medico"]) void fetch(propUrl(p)).catch(() => undefined);
     progress(0.92, "Sombras e pós-processamento…");
     // em qualidade baixa só Matias projeta sombra (NPCs são o custo dominante de skinning no mapa de sombras)
     this.env.addShadowCasters([...this.world.shadowCasters, ...heroCasters, ...this.matias.meshes, ...(this.settings.quality === "baixa" ? [] : this.npcs.flatMap((n) => n.model.meshes))]);
@@ -281,10 +309,12 @@ export class Game {
     this.bindQuestLog();
     this.playTime = 0;
     this.resetWorldState();
+    this.resetSliceState();
     const spawn = this.world.spawns.get("oficina")!;
     this.player.setCrouched(false);
     this.player.teleport(spawn.position, spawn.yaw);
     this.quests.start(QUEST_APURACAO);
+    this.director = new MissionDirector(this.missionHost());
     await this.enterPlay(spawn.yaw);
     this.hud.showNotice("São Paulo Velha · Setor 17 · 2072", 4.5);
     window.setTimeout(() => this.hud.showNotice("Dia de Apuração", 3.5), 5200);
@@ -372,6 +402,10 @@ export class Game {
           else this.tryInteract();
         } else if (a === "lights" && this.driving) {
           this.driving.setLights(!this.driving.lights);
+        } else if (a === "inventory") {
+          this.hud.setInventory(!this.hud.inventoryVisible, this.inventory.list());
+        } else if (a === "heal") {
+          this.useMedkit();
         } else if (a === "crouchToggle" && this.driving) {
           // sem agachar ao volante
         } else if (a === "crouchToggle") {
@@ -409,6 +443,15 @@ export class Game {
   // ---------------------------------------------------------------------
   // Utilitários de depuração/teste (expostos em window.eva)
   // ---------------------------------------------------------------------
+  /** Aponta a câmera (e Matias, se estiver mirando) para um ponto do mundo — testes. */
+  aimAt(x: number, y: number, z: number): void {
+    // a partir da posição atual da câmera (o tiro sai do centro da tela)
+    const eye = this.camera.camera.position;
+    const d = new Vector3(x, y, z).subtract(eye);
+    this.camera.yaw = Math.atan2(d.x, d.z);
+    this.camera.pitch = -Math.atan2(d.y, Math.hypot(d.x, d.z));
+  }
+
   /** Teleporta Matias (pés) para uma posição do mundo. */
   teleportPlayer(x: number, y: number, z: number, yaw: number): void {
     if (this.driving) this.exitVehicle();
@@ -501,6 +544,14 @@ export class Game {
       analog: this.input.analogAxis,
       heldRun: this.input.isHeld("run"),
       driving: this.driving?.def.id ?? null,
+      health: this.combat?.health.current ?? null,
+      ammo: this.combat?.weapon ? { mag: this.combat.weapon.magazine, reserve: this.combat.weapon.reserve, phase: this.combat.weapon.phase } : null,
+      aiming: this.combat?.aiming ?? false,
+      dead: this.combat?.dead ?? false,
+      enemies: this.enemies ? { total: this.enemies.enemies.length, alive: this.enemies.aliveCount, states: this.enemies.enemies.map((e) => e.state) } : null,
+      phase: this.director?.phase ?? null,
+      inventory: this.inventory.toJSON(),
+      overlay: this.matias?.animator.currentOverlay ?? null,
       touch: this.touch.snapshot(),
       quality: this.settings.quality,
     };
@@ -532,6 +583,7 @@ export class Game {
     this.audio.playUi(this.audio.pickVariation("pickup", 3, "paper"), 0.6);
     this.audio.playUi("paper", 0.5);
     this.hud.showNotice("Cartão de Registro — Matias · Setor 17 · Apuração 15h", 4);
+    this.inventory.add("cartao", 1);
     this.quests.completeObjective(QUEST_APURACAO, "cartao");
   }
 
@@ -569,10 +621,11 @@ export class Game {
   // ---------------------------------------------------------------------
   // Diálogo
   // ---------------------------------------------------------------------
-  private async startDialogue(npc: Npc): Promise<void> {
+  private async startDialogue(npc: Npc, graphOverride?: DialogueGraph): Promise<void> {
     if (this.state !== "playing" || this.dialogue.isRunning) return;
-    const graph = DIALOGUES[npc.variant];
+    const graph = graphOverride ?? DIALOGUES[npc.variant];
     if (!graph) return;
+    if (this.driving) this.exitVehicle();
     this.state = "dialogue";
     this.player.locked = true;
     this.hud.setPrompt(null);
@@ -583,10 +636,11 @@ export class Game {
     this.audio.duck(true);
     const playerFeet = this.player.feet;
     npc.setAttention(playerFeet);
-    // Matias encara o NPC
+    // Matias encara o NPC (sem a pose de pistola durante a conversa)
     const d = npc.getPosition().subtract(playerFeet);
     this.player.yaw = Math.atan2(d.x, d.z);
     this.matias.setYaw(this.player.yaw);
+    this.matias.animator.setOverlay(null);
     this.matias.animator.play("Idle");
 
     const presenter: DialoguePresenter = {
@@ -698,7 +752,8 @@ export class Game {
         this.audio.playUi("objective", 0.6);
         this.hud.showNotice(`Objetivo concluído: ${objective.text}`, 3.2);
       }
-      if (state.status === "completed") this.hud.showNotice(`${quest.title} — fim do protótipo M0. A escolha de Matias continua na próxima etapa.`, 7);
+      if (state.status === "completed" && quest.id === QUEST_APURACAO) this.hud.showNotice(`${quest.title} concluída. O Custódio no portão sabe mais sobre o lote.`, 6);
+      if (state.status === "completed" && quest.id === QUEST_CARREGAMENTO) window.setTimeout(() => this.showMissionEnd(), 1500);
       this.refreshObjective();
       void this.saveGame(false);
     });
@@ -714,12 +769,20 @@ export class Game {
   // Salvamento
   // ---------------------------------------------------------------------
   private buildSave(): SaveData {
-    const feet = this.player.feet;
+    const feet = this.driving ? this.driving.exitPosition() : this.player.feet;
     const data = createEmptySave({ position: { x: feet.x, y: feet.y, z: feet.z }, yaw: this.player.yaw, crouched: this.player.crouched });
     data.flags = this.flags.toJSON();
     data.quests = this.quests.toJSON();
     data.dialogueHistory = [...this.dialogue.history];
-    data.world = { radioOn: this.radioOn, radioIndex: this.radioIndex };
+    data.world = {
+      radioOn: this.radioOn,
+      radioIndex: this.radioIndex,
+      vehicles: JSON.stringify(this.vehicles.map((v) => ({ id: v.def.id, x: v.position.x, y: v.position.y, z: v.position.z, yaw: v.heading }))),
+      ammoReserve: this.combat.weapon?.reserve ?? 0,
+      ammoMag: this.combat.weapon?.magazine ?? 0,
+      ...(this.driving ? { drivingId: this.driving.def.id } : {}),
+    };
+    data.inventory = this.inventory.toJSON();
     data.playTimeSeconds = this.playTime;
     return data;
   }
@@ -757,8 +820,32 @@ export class Game {
     this.world.workshop.radioLed.isVisible = this.radioOn;
     this.world.workshop.card.isVisible = !this.flags.getBool("cartao.pego");
     this.player.setCrouched(false);
+    if (this.driving) this.exitVehicle();
     this.player.teleport(new Vector3(data.player.position.x, data.player.position.y, data.player.position.z), data.player.yaw);
     if (data.player.crouched) this.player.setCrouched(true);
+    this.resetSliceState();
+    this.inventory.load(data.inventory);
+    const w = data.world;
+    if (typeof w.vehicles === "string") {
+      try {
+        const list = JSON.parse(w.vehicles) as Array<{ id: string; x: number; y: number; z: number; yaw: number }>;
+        for (const e of list) {
+          const v = this.vehicles.find((x) => x.def.id === e.id);
+          if (v) v.teleport(new Vector3(e.x, e.y, e.z), e.yaw);
+        }
+      } catch {
+        /* ignora */
+      }
+    }
+    if (this.flags.getBool("carregamento.armado")) void this.combat.equipPistol(typeof w.ammoReserve === "number" ? w.ammoReserve : 24).then(() => {
+      if (this.combat.weapon && typeof w.ammoMag === "number") this.combat.weapon.magazine = w.ammoMag;
+    });
+    this.director = new MissionDirector(this.missionHost());
+    this.director.syncFromFlags();
+    if (typeof w.drivingId === "string") {
+      const v = this.vehicles.find((x) => x.def.id === w.drivingId);
+      if (v) window.setTimeout(() => this.enterVehicle(v), 50);
+    }
   }
 
   // ---------------------------------------------------------------------
@@ -807,11 +894,32 @@ export class Game {
     const camYaw = this.camera.yaw;
     for (const v of this.vehicles) v.update(dt);
     if (this.driving) this.updateDriving(dt);
+    // combate: mira/tiro/recarga (antes do movimento, para o personagem encarar a câmera ao mirar)
+    const camNode = this.camera.camera;
+    const camFwd = camNode.getDirection(Vector3.Forward());
+    const aiming = this.combat.update(dt, this.input, camNode.position, camFwd, this.camera.pitch, this.state !== "playing" || this.player.locked, this.driving !== null);
+    this.player.aimYaw = aiming ? this.camera.yaw : null;
+    this.player.locked = this.player.locked || this.combat.dead;
     this.player.update(dt, this.input, camYaw);
     const feet = this.driving ? this.driving.position : this.player.feet;
     for (const n of this.npcs) n.update(dt, feet);
+    this.enemies.update(dt, this.player.feet, !this.combat.dead && !this.driving);
+    this.runOverEnemies();
+    for (const p of this.pickups) p.update(dt);
+    this.effects.update(dt);
+    if (this.state === "playing") this.director.update(dt);
+    this.updateDeath(dt);
     if (this.driving) this.camera.update(dt, this.input, feet, 0, this.driving.heading);
     else this.camera.update(dt, this.input, feet, this.player.eyeHeight);
+    this.applyCameraShake(dt);
+    if (!this.driving) {
+      const profile = aiming ? { distance: 1.75, shoulder: 0.6, fov: 0.72, minDistance: 1.2 } : { distance: 2.9, shoulder: 0.42, fov: 0.95, minDistance: 1.4 };
+      if (this.camera.fovTarget !== profile.fov) this.camera.setProfile(profile);
+    }
+    this.hud.setCrosshair(this.combat.armed && !this.driving && !this.combat.dead && this.state === "playing", !aiming);
+    this.touch.setArmed(this.combat.armed && !this.driving && !this.combat.dead && this.state === "playing");
+    if (this.combat.weapon) this.hud.setAmmo(this.combat.weapon.weapon.displayName, this.combat.weapon.magazine, this.combat.weapon.reserve, this.combat.weapon.phase === "reloading");
+    this.hud.setVitals(this.combat.armed || this.combat.health.current < this.combat.health.max, this.combat.health.fraction);
     // oculta Matias quando a câmera encosta nele
     this.matias.setVisible(this.driving !== null || this.camera.mode !== "follow" || this.camera.distanceTo(feet.add(new Vector3(0, this.player.eyeHeight, 0))) > 0.75);
     // ouvinte de áudio na câmera
@@ -848,6 +956,282 @@ export class Game {
   private crouchFromHold = false;
 
   // ---------------------------------------------------------------------
+  // Combate, itens e missão (vertical slice)
+  // ---------------------------------------------------------------------
+  private wireCombat(): void {
+    this.combat.onShot.on((e) => {
+      this.audio.playUi(this.audio.pickVariation("gunshot", 3, "switch"), 0.9);
+      this.enemies.noise(this.player.feet, 34);
+      if (e.enemyHit) this.hud.showHitMarker(e.enemyHit.killed);
+      else if (e.hit) this.audio.playAt(this.audio.pickVariation("ricochet", 3, "switch"), e.hit.point, 0.5);
+      this.camera.pitch -= this.combat.weapon?.weapon.recoil ?? 0;
+      this.cameraShake = Math.max(this.cameraShake, 0.35);
+    });
+    this.combat.onReloadStart.on(() => this.audio.playUi("mag_click", 0.6));
+    this.combat.onReloadEnd.on(() => this.audio.playUi("mag_click", 0.5));
+    this.combat.onEmptyClick.on(() => this.audio.playUi("ui_click", 0.4));
+    this.combat.health.onDamage.on(() => {
+      this.hud.flashDamage();
+      this.audio.playUi(this.audio.pickVariation("hurt", 3, "paper"), 0.5);
+      this.cameraShake = Math.max(this.cameraShake, 0.6);
+    });
+    this.combat.health.onDeath.on(() => {
+      this.deathTimer = 2.4;
+      this.hud.setPrompt(null);
+      this.hud.setCrosshair(false);
+    });
+    this.enemies.onEnemyShot.on(({ enemy, shot }) => {
+      this.effects.muzzleFlash(shot.from);
+      this.effects.tracer(shot.from, shot.to);
+      this.audio.playAt(this.audio.pickVariation("gunshot", 3, "switch"), shot.from, 0.8, 4, 60);
+      if (shot.hitPlayer && !this.driving && enemy.hasLineOfSight(this.player.feet.add(new Vector3(0, 1.25, 0)))) {
+        this.combat.takeDamage(shot.damage, enemy.feet);
+      } else if (!shot.hitPlayer) {
+        // o tiro passa perto: impacto no mundo atrás de Matias
+        this.effects.impact(shot.to, new Vector3(0, 1, 0));
+      }
+    });
+    this.enemies.onEnemyDeath.on((enemy) => {
+      this.audio.playAt(this.audio.pickVariation("hurt", 3, "paper"), enemy.chest, 0.6);
+      // deixa munição no chão
+      void this.spawnPickup({ id: `municao_${Date.now()}_${Math.floor(Math.random() * 1000)}`, item: "municao_pistola", amount: enemy.dropAmmo, position: enemy.feet.add(new Vector3(0.4, 0, 0.3)), model: "caixa_municao", prompt: `Pegar munição (${enemy.dropAmmo})` });
+    });
+    this.hud.onRetry.on(() => this.retryFromCheckpoint());
+    this.hud.onMissionContinue.on(() => {
+      this.hud.hideMissionEnd();
+      if (!this.touch.enabled) void this.input.requestPointerLock();
+    });
+    this.hud.onMissionMenu.on(() => {
+      this.hud.hideMissionEnd();
+      void this.quitToMenu();
+    });
+    this.inventory.onChange.on(() => {
+      if (this.hud.inventoryVisible) this.hud.setInventory(true, this.inventory.list());
+    });
+    // porta da oficina: trancar o carregamento
+    const door = new Vector3(WORKSHOP.doorX, 0.12, WORKSHOP.zFront + 0.6);
+    this.interactables.push({
+      id: "oficina_porta",
+      radius: 2.4,
+      getPosition: () => door,
+      getPrompt: () => (this.director.phase === "trancar" && !this.driving ? "Trancar o carregamento na oficina" : null),
+      interact: () => {
+        if (this.director.phase !== "trancar") return;
+        this.flags.set("carregamento.trancado", true);
+        this.audio.playUi(this.audio.pickVariation("switch", 3, "switch"), 0.7);
+        this.quests.completeObjective(QUEST_CARREGAMENTO, "trancar");
+      },
+    });
+  }
+
+  /** Esferas de desvio para a IA dos inimigos a partir dos colisores estáticos pequenos da praça e dos veículos. */
+  private registerObstacles(): void {
+    const engine = this.scene.getPhysicsEngine() as import("@babylonjs/core/Physics/v2/physicsEngine").PhysicsEngine | null;
+    if (!engine) return;
+    for (const body of engine.getBodies()) {
+      const node = body.transformNode;
+      if (!node || !node.name.startsWith("col_")) continue;
+      const shape = body.shape;
+      if (!shape) continue;
+      const bb = shape.getBoundingBox();
+      const ext = bb.extendSize;
+      const r = Math.max(ext.x, ext.z) * Math.max(Math.abs(node.scaling.x), Math.abs(node.scaling.z));
+      if (r > 3.5 || r < 0.2) continue; // prédios e muros não; postes/bancos/árvores/caixas sim
+      const p = node.getAbsolutePosition();
+      if (p.x < STREET.plaza.x0 - 2 || p.x > STREET.plaza.x1 + 2 || p.z < STREET.plaza.z0 - 2 || p.z > STREET.plaza.z1 + 2) continue;
+      this.enemies.addObstacle(new Vector3(p.x, 0, p.z), r + 0.3);
+    }
+    for (const v of this.vehicles) {
+      const e = this.enemies.addDynamicObstacle(v.position, Math.max(v.def.chassisSize.x, v.def.chassisSize.z) / 2 + 0.4);
+      this.scene.onBeforeRenderObservable.add(() => {
+        const p = v.position;
+        e.position.set(p.x, 0, p.z);
+      });
+    }
+  }
+
+  async spawnPickup(spec: PickupSpec): Promise<void> {
+    if (this.flags.getBool(`pickup.${spec.id}`)) return; // já recolhido (jogo carregado)
+    const pickup = new Pickup(this.scene, spec);
+    await pickup.load();
+    pickup.onTaken = (p) => {
+      if (!p.spec.id.startsWith("municao_1") && !/^municao_\d{10,}/.test(p.spec.id)) this.flags.set(`pickup.${p.spec.id}`, true);
+      this.inventory.add(p.spec.item, p.spec.amount);
+      if (p.spec.item === "municao_pistola") {
+        const added = this.combat.addAmmo(p.spec.amount);
+        this.hud.showNotice(added > 0 ? `Munição +${added}` : "Munição cheia", 2);
+      } else {
+        this.hud.showNotice(`${p.spec.prompt.replace(/^Pegar /, "")} na mochila`, 2);
+      }
+      this.audio.playUi(this.audio.pickVariation("pickup", 3, "paper"), 0.6);
+      this.interactables = this.interactables.filter((i) => i !== p);
+      this.pickups = this.pickups.filter((i) => i !== p);
+      p.dispose();
+    };
+    this.pickups.push(pickup);
+    this.interactables.push(pickup);
+    this.env.addShadowCasters(pickup.shadowCasters);
+  }
+
+  /** Veículo em movimento atinge um desviador: dano proporcional à velocidade (só inimigos; NPCs são sólidos). */
+  private runOverEnemies(): void {
+    for (const v of this.vehicles) {
+      const speed = Math.abs(v.speed);
+      if (speed < 3) continue;
+      const inv = v.anchor.getWorldMatrix().clone().invert();
+      const half = v.def.chassisSize.scale(0.5);
+      for (const e of this.enemies.enemies) {
+        if (!e.alive) continue;
+        const local = Vector3.TransformCoordinates(e.chest, inv);
+        if (Math.abs(local.x) < half.x + 0.45 && Math.abs(local.z) < half.z + 0.6 && local.y > -0.2 && local.y < v.def.chassisSize.y + 0.6) {
+          const killed = e.takeDamage(30 + speed * 8, v.position, false);
+          if (killed) this.combat.stats.kills++;
+          this.audio.playAt("car_impact", e.chest, 0.8);
+        }
+      }
+    }
+  }
+
+  private useMedkit(): void {
+    if (this.state !== "playing" || this.combat.dead) return;
+    if (!this.inventory.has("kit_medico")) {
+      this.hud.showNotice("Sem kit médico", 1.5);
+      return;
+    }
+    if (this.combat.health.current >= this.combat.health.max - 1) {
+      this.hud.showNotice("Matias não está ferido", 1.5);
+      return;
+    }
+    this.inventory.remove("kit_medico", 1);
+    this.combat.health.heal(55);
+    this.audio.playUi("paper", 0.6);
+    this.hud.showNotice("Kit médico usado", 2);
+  }
+
+  private updateDeath(dt: number): void {
+    if (this.deathTimer < 0) return;
+    this.deathTimer -= dt;
+    if (this.deathTimer <= 0) {
+      this.deathTimer = -1;
+      this.input.exitPointerLock();
+      this.hud.showDeath(this.director.inCombat || this.director.phase === "onda1" || this.director.phase === "onda2" ? "Os desviadores tomaram a praça. O último ponto é junto à van." : "Volte ao último ponto.");
+    }
+  }
+
+  private retryFromCheckpoint(): void {
+    this.hud.hideDeath();
+    if (this.driving) this.exitVehicle();
+    this.director.restartWave();
+    this.combat.revive();
+    if (this.combat.weapon && this.combat.weapon.reserve < 12) this.combat.weapon.reserve = 12;
+    this.player.locked = false;
+    const rp = this.director.respawnPoint;
+    this.player.teleport(rp, Math.PI);
+    this.camera.setWalkProfile();
+    this.camera.snapBehind(Math.PI);
+    this.hud.setFade(true);
+    window.setTimeout(() => this.hud.setFade(false), 200);
+    if (!this.touch.enabled) void this.input.requestPointerLock();
+    this.hud.showNotice("De volta ao portão.", 2.5);
+  }
+
+  private applyCameraShake(dt: number): void {
+    if (this.cameraShake <= 0) return;
+    this.cameraShake = Math.max(0, this.cameraShake - dt * 2.2);
+    const k = this.cameraShake * 0.02;
+    const cam = this.camera.camera;
+    cam.position.addInPlace(new Vector3((Math.random() - 0.5) * k, (Math.random() - 0.5) * k, (Math.random() - 0.5) * k));
+  }
+
+  private showMissionEnd(): void {
+    if (this.driving) this.exitVehicle();
+    this.input.exitPointerLock();
+    const st = this.combat.stats;
+    const acc = st.shots ? Math.round((st.hits / st.shots) * 100) : 0;
+    const decision = this.flags.get("carregamento.decisao");
+    const text =
+      decision === "registro"
+        ? "O lote vai ao posto médico com registro e assinatura de Matias. O conselho vai perguntar de onde veio — e ele vai responder."
+        : decision === "silencio"
+          ? "O lote some das contas. Os Silenciosos distribuem em silêncio; Ana recebe o que precisa, e ninguém sabe de nada."
+          : "O carregamento está na oficina.";
+    const min = Math.floor(this.playTime / 60);
+    const sec = Math.floor(this.playTime % 60);
+    this.hud.showMissionEnd("O Carregamento", text, [
+      ["Tempo de jogo", `${min}m ${sec.toString().padStart(2, "0")}s`],
+      ["Disparos / acertos", `${st.shots} / ${st.hits} (${acc}%)`],
+      ["Desviadores neutralizados", String(st.kills)],
+      ["Dano sofrido", `${Math.round(st.damageTaken)}`],
+      ["Quedas", String(st.deaths)],
+      ["Postura de Matias", decision === "registro" ? "confia no registro" : decision === "silencio" ? "age em silêncio" : "—"],
+    ]);
+    void this.saveGame(false);
+  }
+
+  private resetSliceState(): void {
+    this.enemies.clear();
+    for (const p of this.pickups) {
+      this.interactables = this.interactables.filter((i) => i !== p);
+      p.dispose();
+    }
+    this.pickups = [];
+    this.inventory.load({});
+    this.combat.revive();
+    this.combat.stats = { shots: 0, hits: 0, kills: 0, damageTaken: 0, deaths: 0 };
+    this.env.setDusk(0);
+    this.hud.hideDeath();
+    this.hud.hideMissionEnd();
+    this.hud.setInventory(false, []);
+    this.deathTimer = -1;
+    for (const v of this.vehicles) v.setLights(false);
+  }
+
+  /** Interface que o diretor da missão usa para agir sobre o jogo. */
+  private missionHost(): MissionHost {
+    return {
+      flags: this.flags,
+      quests: this.quests,
+      enemies: this.enemies,
+      setDusk: (t) => this.env.setDusk(t),
+      dusk: () => this.env.duskLevel,
+      playerFeet: () => this.player.feet,
+      playerAlive: () => !this.combat.dead,
+      drivingId: () => this.driving?.def.id ?? null,
+      vehiclePosition: (id) => this.vehicles.find((v) => v.def.id === id)?.position ?? null,
+      notice: (t, s) => this.hud.showNotice(t, s),
+      equipPistol: async (ammo) => {
+        await this.combat.equipPistol(ammo);
+        this.inventory.add("pistola", 1);
+        this.inventory.add("municao_pistola", ammo);
+      },
+      spawnPickup: (spec) => this.spawnPickup(spec),
+      checkpoint: () => void this.saveGame(false),
+      startRadioFinal: () => {
+        const raquel = this.npcs.find((n) => n.variant === "raquel");
+        if (raquel) void this.startRadioDialogue(raquel, DIALOGUE_RADIO_FINAL);
+      },
+      talkTo: (variant, maxDistance) => {
+        const npc = this.npcs.find((n) => n.variant === variant);
+        if (!npc || this.state !== "playing") return false;
+        if (Vector3.Distance(npc.getPosition(), this.player.feet) > maxDistance) return false;
+        void this.startDialogue(npc);
+        return true;
+      },
+      npcPosition: (variant) => this.npcs.find((n) => n.variant === variant)?.getPosition() ?? null,
+      playSting: (kind) => this.audio.playUi(kind === "vitoria" ? "chime" : "objective", 0.7),
+    };
+  }
+
+  /** Diálogo pelo rádio: sem NPC presente, a câmera fica em Matias e a voz vem com estática. */
+  private async startRadioDialogue(remote: Npc, graph: DialogueGraph): Promise<void> {
+    if (this.state !== "playing" || this.dialogue.isRunning) return;
+    this.audio.playUi("radio_static", 0.3);
+    this.hud.showNotice("O rádio da oficina chama.", 2.5);
+    // usa o fluxo normal de diálogo; o NPC remoto só empresta nome e voz (a câmera enquadra Matias)
+    await this.startDialogue(remote, graph);
+  }
+
+  // ---------------------------------------------------------------------
   // Veículos
   // ---------------------------------------------------------------------
   enterVehicle(v: Vehicle): void {
@@ -860,8 +1244,10 @@ export class Game {
     root.parent = v.seat;
     root.position.setAll(0);
     root.rotationQuaternion = Quaternion.Identity();
+    this.matias.animator.setOverlay(null);
     this.matias.animator.play(v.def.driverClip);
     this.matias.setVisible(true);
+    this.combat.setPistolVisible(false);
     if (v.hover) v.hover.setPowered(true);
     this.camera.setProfile({ distance: v.def.camera.distance, shoulder: 0, fov: 1.05, pitch: v.def.camera.pitch, pivotLift: v.def.camera.height, minDistance: 3.5 });
     this.camera.yaw = v.heading;
@@ -885,7 +1271,8 @@ export class Game {
     if (v.hover) v.hover.setPowered(false);
     this.driving = null;
     this.player.attachFromVehicle(pos, yaw);
-    this.matias.animator.play("Idle");
+    this.matias.animator.play(this.combat.armed ? "PistolIdle" : "Idle");
+    this.combat.setPistolVisible(this.combat.armed);
     this.camera.setWalkProfile();
     this.camera.yaw = yaw;
     this.camera.snapBehind(yaw);
@@ -906,6 +1293,11 @@ export class Game {
       boost: held("run"),
     };
     this.hud.setVehicleSpeed(v.speedKmh, v.def.kind === "hover" ? v.altitude : null);
+    if (v.outOfBounds && !this.boundsNoticeShown) {
+      this.boundsNoticeShown = true;
+      this.hud.showNotice("Limite do setor — volte para o quarteirão.", 3);
+      window.setTimeout(() => (this.boundsNoticeShown = false), 8000);
+    }
     const rpm = Math.min(1, v.speedKmh / (v.def.maxSpeed * 3.6));
     this.audio.updateEngine(rpm, Math.abs(v.controls.throttle) * (v.def.kind === "hover" ? 1 : 1 - rpm * 0.5));
     if (v.lastImpact > 0) {

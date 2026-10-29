@@ -39,6 +39,7 @@ export function buildWorld(scene: Scene, quality: QualityLevel, onProgress?: (la
 
   onProgress?.("Espalhando sinais de ocupação…");
   buildStreetLife(ctx);
+  buildSkyline(ctx);
 
   onProgress?.("Otimizando a cena…");
   ctx.finalize();
@@ -158,4 +159,36 @@ function buildStreetLife(ctx: WorldContext): void {
     width: 0.8,
     height: 1.0,
   });
+}
+
+/**
+ * Silhueta de São Paulo Velha ao redor do quarteirão jogável: blocos de prédios distantes (80–220 m),
+ * sem detalhe, para a aeromoto e as ruas não terminarem num vazio. Sem colisão (a aeromoto é contida por
+ * uma cerca invisível em Game) e sem sombras.
+ */
+function buildSkyline(ctx: WorldContext): void {
+  const { mats } = ctx;
+  const rnd = (seed: number) => {
+    const v = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
+    return v - Math.floor(v);
+  };
+  const palette = [mats.plasterPhoto.gray, mats.plasterPhoto.sand, mats.plasterPhoto.warm, mats.concrete];
+  let i = 0;
+  for (let ring = 0; ring < 3; ring++) {
+    const radius = 95 + ring * 55;
+    const count = 18 + ring * 8;
+    for (let k = 0; k < count; k++) {
+      const a = (k / count) * Math.PI * 2 + rnd(i * 3 + 1) * 0.25;
+      const r = radius + (rnd(i * 3 + 2) - 0.5) * 30;
+      const x = Math.cos(a) * r;
+      const z = Math.sin(a) * r * 0.85;
+      // deixa livre o corredor da rua (oeste) e a praça
+      if (Math.abs(z) < 14 && x < 20 && x > -70) continue;
+      const w = 10 + rnd(i * 3 + 3) * 16;
+      const d = 10 + rnd(i * 7 + 1) * 16;
+      const h = 8 + rnd(i * 7 + 2) * (ring === 0 ? 18 : 34);
+      ctx.box(`skyline_${i}`, { w, h, d }, new Vector3(x, h / 2 - 0.2, z), palette[i % palette.length]!, { collider: false, shadow: false, cameraBlocker: false, rotationY: rnd(i * 7 + 3) * 0.4 });
+      i++;
+    }
+  }
 }

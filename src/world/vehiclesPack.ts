@@ -22,8 +22,8 @@ export function vehicleSpawns(): VehicleSpawn[] {
   return [
     // viatura dos Custódios estacionada no lado leste da praça, nariz para o centro (espaço para manobrar)
     { id: "javali_vb4", position: new Vector3(postX + 6.5, y, -12.5), yaw: -Math.PI / 2 },
-    // van de suprimentos em frente ao posto médico (sul da praça), paralela à fachada
-    { id: "modulo_v7", position: new Vector3(27.5, y, P.z0 + 3.6), yaw: Math.PI / 2 },
+    // van de suprimentos sendo carregada perto do portão da Central (norte da praça), nariz para a rua
+    { id: "modulo_v7", position: new Vector3(26, y, 13), yaw: -Math.PI / 2 },
     // triciclo de carga encostado no meio-fio, em frente à barraca do mercado (lado norte da rua)
     { id: "atlas_t3", position: new Vector3(-5.5, 0, STREET.halfWidth - 1.1), yaw: Math.PI / 2 + 0.25 },
     // aeromoto de patrulha pousada no lado leste da praça, nariz para a praça

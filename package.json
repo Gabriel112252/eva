@@ -20,7 +20,9 @@
     "assets:environment": "python3.11 tools/blender/make_environment.py",
     "assets:vehicles": "node tools/validate-eva-vehicles.mjs && python3.11 tools/blender/refine_vehicles.py",
     "test:vehicles": "node tools/vehicles-test.mjs && node tools/preview-test.mjs",
-    "capture:praca": "node tools/capture-praca.mjs"
+    "capture:praca": "node tools/capture-praca.mjs",
+    "test:gameplay": "node tools/gameplay-test.mjs",
+    "assets:props": "python3.11 tools/blender/make_props.py"
   },
   "dependencies": {
     "@babylonjs/core": "^9.32.0",

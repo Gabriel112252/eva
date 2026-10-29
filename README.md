@@ -21,6 +21,8 @@ Jogo **3D narrativo para navegador**, com exploração em terceira pessoa, mist�
 - **glTF/GLB** — personagens rigados (rig Mixamo, 52 ossos) gerados em Blender headless a partir de dados CC0 do MakeHuman (`tools/blender/make_character.py`), com animações reais da **Quaternius Universal Animation Library** (CC0) retargeteadas por `tools/blender/retarget.py`.
 - **Web Audio** — áudio espacial (HRTF); passos e impactos gravados (Kenney, CC0) por superfície, ambiente/interface sintetizados; **Web Speech API** como voz provisória.
 - **IndexedDB** — salvamento local com esquema versionado.
+- **yuka** 0.7 (MIT) — steering, separação e desvio de obstáculos da IA dos inimigos.
+- Código portado com crédito: `RaycastVehicle` do **cannon-es** (MIT; derivado do `btRaycastVehicle` do Bullet, zlib) em `src/vehicles/raycastVehicle.ts`; controle de voo inspirado no helicóptero do **Sketchbook** (swift502, MIT) em `src/vehicles/hoverBike.ts`.
 - **Vitest** (lógica, GLB, física headless) + **Playwright/Chromium** (teste visual com screenshots).
 - **Docker** (Node build → Nginx) — pronto para Easypanel.
 
@@ -45,16 +47,26 @@ Parâmetros opcionais na URL: `?quality=baixa|media|alta` força a qualidade gr�
 | Tecla | Ação |
 | --- | --- |
 | Mouse | Câmera (clique na cena para travar o cursor; se o navegador recusar — p. ex. dentro de um iframe — arraste com o botão esquerdo) · roda = distância |
-| W A S D / setas | Andar |
-| Shift | Correr |
-| C (alterna) · Ctrl (segurar) | Agachar |
-| E | Interagir (rádio, cartão, NPCs) |
-| Espaço / Enter | Avançar fala |
+| W A S D / setas | Andar (a pé) · acelerar/frear/ré e virar (veículos) · empuxo e guinada (aeromoto) |
+| Shift | Correr · turbo na aeromoto |
+| C (alterna) · Ctrl (segurar) | Agachar · Ctrl = descer na aeromoto |
+| E | Interagir (rádio, cartão, NPCs, itens) · **entrar/sair de veículos** |
+| Botão direito do mouse | Mirar (câmera no ombro; Matias encara a mira) |
+| Botão esquerdo | Atirar (um tiro por clique) |
+| R | Recarregar |
+| I | Mochila (itens) |
+| H | Usar kit médico |
+| F | Faróis do veículo |
+| Espaço | Freio de mão (carros) · subir (aeromoto) · avançar fala |
 | 1–4 · setas + Enter · clique | Escolher resposta |
 | Tab | Mostrar descrição da missão |
 | Esc | Pausa (salvar, opções, voltar ao menu) |
 
-**Celular/tablet** (detectado automaticamente; `?touch=1` força, `?touch=0` desliga): joystick virtual flutuante na metade esquerda da tela (empurrar até a borda = correr), arrastar na metade direita gira a câmera, botões **E** (interagir — acende quando há algo à frente), **Agachar** (alterna), **Correr** (trava) e **Pausa**; toque curto na tela avança as falas; tocar no objetivo mostra a descrição da missão. Sem configuração salva, o celular começa em qualidade **baixa** (mude em Opções). Jogue na horizontal; o navegador tenta entrar em tela cheia ao iniciar.
+**Veículos jogáveis**: Javali VB-4 (viatura blindada, praça leste), Módulo V-7 (van, junto ao portão da Central), Atlas T-3 (triciclo de carga, em frente à barraca do mercado) e Rastro AV-4 (aeromoto, praça leste — voa: Espaço sobe, Ctrl desce, W/S empuxo, A/D guinada). Aproxime-se da porta e pressione **E**.
+
+**Missão (vertical slice, ~10–15 min)**: acordar na oficina → percorrer a rua e falar com os moradores → Raquel e Ana → a Apuração com Miriam → o Custódio revela que o lote sai ao anoitecer → **confronto** com desviadores em duas levas (pistola, mira, recarga, kit médico) → **fuga** com a van Módulo V-7 até a oficina → trancar o carregamento → decisão final pelo rádio. Matias pode cair: a tela "Matias caiu" devolve ao último ponto (junto à van) e a onda recomeça. O progresso é salvo automaticamente (IndexedDB).
+
+**Celular/tablet** (detectado automaticamente; `?touch=1` força, `?touch=0` desliga): joystick virtual flutuante na metade esquerda da tela (empurrar até a borda = correr), arrastar na metade direita gira a câmera, botões **E** (interagir/entrar — acende quando há algo à frente), **Agachar** (alterna), **Correr** (trava), **Pausa** e, quando Matias está armado, **Mirar** (trava), **Atirar** (segurar) e **R** (recarregar); toque curto na tela avança as falas; tocar no objetivo mostra a descrição da missão. Sem configuração salva, o celular começa em qualidade **baixa** (mude em Opções). Jogue na horizontal; o navegador tenta entrar em tela cheia ao iniciar.
 
 ### Validação
 
@@ -79,7 +91,9 @@ npm run capture:video          # grava docs/videos/locomocao.mp4 (andar/correr/a
 npm run capture:praca          # grava docs/videos/praca_hero.mp4 (passeio pelo hero corner da praça)
 npm run assets:environment     # regenera o kit GLB da praça (tools/blender/make_environment.py → public/assets/environments/praca_hero.glb)
 npm run assets:vehicles        # valida os GLB-fonte dos veículos (PR #1) e gera os refinados em public/assets/vehicles/
-npm run test:vehicles          # testa os veículos no jogo construído (colisão, escala, sombras) e o visualizador preview-veiculos.html
+npm run test:vehicles          # veículos como props/visualizador (preview-veiculos.html)
+npm run test:gameplay          # fatia vertical no build: dirigir (Javali), voar (Rastro), combate (mira, tiro, recarga, dano), missão completa até a tela final
+npm run test:gameplay -- --only missao   # só combate e missão (mais rápido); --shots <pasta> salva capturas
 node tools/shot.mjs --out docs/screenshots/x.jpg --cam 24.5,2.4,3 --at 34,1.6,12.5 --player 29,0.22,7,0.9   # screenshot A/B com câmera fixa
 ```
 
@@ -105,15 +119,19 @@ public/assets/licenses/     ASSETS.md — origem e licença de cada asset
 src/core/                   boot, loop, input, configurações, orquestração (game.ts)
 src/world/                  materiais e texturas procedurais, rua, prédios, oficina, praça, props, luz/céu
 src/physics/                carregamento do Havok
-src/player/                 controlador de personagem (Havok) e câmera em terceira pessoa
-src/characters/             carregamento de GLB, animador (cross-fade), NPC
-src/narrative/              flags, diálogos, missões
+src/player/                 controlador de personagem (Havok) e câmera em terceira pessoa (a pé, mira, veículo)
+src/characters/             carregamento de GLB, animador (cross-fade + camadas tronco/pernas), NPC
+src/vehicles/               veículos jogáveis: raycast vehicle (Havok), aeromoto, definições, entrar/sair
+src/combat/                 armas, vida, efeitos (clarão, traçante, impacto), combate de Matias (mira/tiro/recarga)
+src/ai/                     inimigos (FSM patrulha→alerta→perseguição→ataque, steering yuka, tiros) e gerenciador
+src/items/                  mochila e itens no chão (munição, kit médico)
+src/narrative/              flags, diálogos, missões, diretor da missão "O Carregamento"
 src/data/                   diálogos PT-BR, missões, metadados de personagens
 src/audio/                  motor Web Audio, sintetizador de sons, voz
 src/ui/                     HUD, menus e controles de toque
 src/persistence/            IndexedDB e sistema de save
 tests/                      unit, assets, integration (física headless)
-tools/                      gerador de personagens + retarget, validador, testes em navegador (visual e toque), captura de vídeo
+tools/                      geradores Blender (personagens, kit da praça, veículos, props), validadores, testes em navegador (visual, toque, veículos, gameplay), capturas
 docs/                       bíblia canônica, prólogo, arquitetura, STATUS, screenshots
 ```
 

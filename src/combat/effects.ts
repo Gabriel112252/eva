@@ -36,8 +36,9 @@ export class CombatEffects {
 
     this.flashLight = new PointLight("fx_flash", Vector3.Zero(), scene);
     this.flashLight.diffuse = new Color3(1.0, 0.75, 0.4);
-    this.flashLight.intensity = 0;
+    this.flashLight.intensity = 14;
     this.flashLight.range = 9;
+    this.flashLight.setEnabled(false);
 
     const flashMat = new StandardMaterial("fx_flash_mat", scene);
     flashMat.emissiveColor = new Color3(1.0, 0.8, 0.45);
@@ -98,7 +99,7 @@ export class CombatEffects {
   /** Clarão na boca do cano. */
   muzzleFlash(position: Vector3): void {
     this.flashLight.position.copyFrom(position);
-    this.flashLight.intensity = 14;
+    this.flashLight.setEnabled(true);
     this.flashMesh.position.copyFrom(position);
     this.flashMesh.isVisible = true;
     this.flashMesh.rotation.z = Math.random() * Math.PI;
@@ -147,7 +148,7 @@ export class CombatEffects {
     if (this.flashLife > 0) {
       this.flashLife -= dt;
       if (this.flashLife <= 0) {
-        this.flashLight.intensity = 0;
+        this.flashLight.setEnabled(false);
         this.flashMesh.isVisible = false;
       }
     }

@@ -82,6 +82,10 @@ export class TouchControls {
   private readonly btnInteract = el<HTMLButtonElement>("tc-interact");
   private readonly btnCrouch = el<HTMLButtonElement>("tc-crouch");
   private readonly btnRun = el<HTMLButtonElement>("tc-run");
+  private readonly btnAim = el<HTMLButtonElement>("tc-aim");
+  private readonly btnFire = el<HTMLButtonElement>("tc-fire");
+  private readonly btnReload = el<HTMLButtonElement>("tc-reload");
+  private aimLatch = false;
   private readonly btnPause = el<HTMLButtonElement>("tc-pause");
 
   private joyPointer: number | null = null;
@@ -121,6 +125,14 @@ export class TouchControls {
       this.btnRun.classList.toggle("latched", this.runLatch);
       this.updateRun();
     });
+    // combate: mirar alterna (fica travado), atirar enquanto segura, recarregar toca
+    this.bindTap(this.btnAim, () => {
+      this.aimLatch = !this.aimLatch;
+      this.btnAim.classList.toggle("latched", this.aimLatch);
+      this.input.simulate("aim", this.aimLatch);
+    });
+    this.bindHold(this.btnFire, "fire");
+    this.bindPress(this.btnReload, "reload");
     // tocar no objetivo mostra a descrição da missão (equivale ao Tab)
     document.getElementById("objective")?.addEventListener("click", () => {
       if (this.enabled && this.mode === "play") this.press("objectives");
@@ -274,6 +286,38 @@ export class TouchControls {
   private press(action: GameAction): void {
     this.input.simulate(action, true);
     this.input.simulate(action, false);
+  }
+
+  /** Botão que mantém a ação enquanto o dedo está sobre ele (atirar). */
+  private bindHold(button: HTMLButtonElement, action: GameAction): void {
+    let activePointer: number | null = null;
+    button.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (activePointer !== null) return;
+      activePointer = e.pointerId;
+      button.classList.add("pressed");
+      this.input.simulate(action, true);
+    });
+    const release = (e: PointerEvent) => {
+      if (e.pointerId !== activePointer) return;
+      activePointer = null;
+      button.classList.remove("pressed");
+      this.input.simulate(action, false);
+    };
+    button.addEventListener("pointerup", release);
+    button.addEventListener("pointercancel", release);
+    button.addEventListener("pointerleave", release);
+  }
+
+  /** Mostra os botões de combate (Matias armado) e solta a mira ao desarmar/dirigir. */
+  setArmed(armed: boolean): void {
+    document.body.classList.toggle("armed", armed);
+    if (!armed && this.aimLatch) {
+      this.aimLatch = false;
+      this.btnAim.classList.remove("latched");
+      this.input.simulate("aim", false);
+    }
   }
 
   /** Botão que dispara a ação ao encostar (resposta imediata, sem esperar o click de 300 ms). */
