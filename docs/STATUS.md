@@ -68,6 +68,7 @@ O jogo roda no navegador (Chrome/Edge/Firefox recentes no desktop; Chrome/Safari
 - Renderização por software (sem GPU) fica em ~2–5 FPS — só para testes automatizados; no Chromium headless o pointer lock ativo deixa os frames 5–10× mais lentos, por isso o teste visual roda com `?pointerlock=0` (`--lock` para o caminho com cursor travado).
 - A voz sintetizada depende das vozes instaladas no sistema do jogador (Chrome tem vozes pt-BR online; Firefox depende do SO; no celular costuma haver uma voz pt-BR).
 - O caminho até a praça não tem ainda a "área inacessível" para o tutorial de agachar.
+- O clarão do cano é um quad sem textura (aparece como um quadrado amarelo em `docs/videos/combate.mp4`); trocar por sprite com alfa/partículas.
 
 ## Próxima etapa
 
