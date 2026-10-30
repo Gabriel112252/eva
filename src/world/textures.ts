@@ -358,8 +358,10 @@ export function signTexture(scene: Scene, name: string, o: SignOptions): Texture
  * Mapa de detalhe do Babylon (DetailMapConfiguration) em uma textura RGBA tileável:
  * R = variação de albedo (0,5 neutro), G = normal Y, B = variação de rugosidade (0,5 neutro), A = normal X.
  * Grão fino (poros, agregado, riscos) para dar microrrelevo de perto às superfícies grandes do blockout.
+ * Devolve uma fábrica: uma textura por densidade de repetição (arredondada a 0,5), todas dos mesmos texels —
+ * o mapa de detalhe usa a matriz da própria textura, e `clone()` de RawTexture volta com CLAMP e aloca à toa.
  */
-export function detailTexture(scene: Scene, name: string, size: number, seed: number): RawTexture | null {
+export function detailTextures(scene: Scene, size: number, seed: number): ((reps: number) => RawTexture) | null {
   if (!CANVAS_AVAILABLE) return null;
   const grain = heightField(size, 24, 4, seed, 0.55);
   const pits = heightField(size, 9, 3, seed + 7, 0.5);
@@ -389,13 +391,23 @@ export function detailTexture(scene: Scene, name: string, size: number, seed: nu
       data[i + 3] = Math.round(clamp01(nx * 0.5 + 0.5) * 255);
     }
   }
-  const t = RawTexture.CreateRGBATexture(data, size, size, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE);
-  t.name = name;
-  t.gammaSpace = false;
-  t.wrapU = Texture.WRAP_ADDRESSMODE;
-  t.wrapV = Texture.WRAP_ADDRESSMODE;
-  t.anisotropicFilteringLevel = 4;
-  return t;
+  const byReps = new Map<number, RawTexture>();
+  return (reps: number) => {
+    const key = Math.max(1, Math.round(reps * 2) / 2);
+    let t = byReps.get(key);
+    if (!t) {
+      t = RawTexture.CreateRGBATexture(data, size, size, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE);
+      t.name = `detalhe_superficie_x${key}`;
+      t.gammaSpace = false;
+      t.wrapU = Texture.WRAP_ADDRESSMODE;
+      t.wrapV = Texture.WRAP_ADDRESSMODE;
+      t.anisotropicFilteringLevel = 4;
+      t.uScale = key;
+      t.vScale = key;
+      byReps.set(key, t);
+    }
+    return t;
+  };
 }
 
 /**

@@ -2,7 +2,7 @@ import { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { Texture } from "@babylonjs/core/Materials/Textures/texture";
 import type { Scene } from "@babylonjs/core/scene";
-import { CANVAS_AVAILABLE, detailTexture, foliageAlpha, heightField, normalMap, plasterBrickAlbedo, surfaceAlbedo, wetnessTextures, type HeightField } from "./textures";
+import { CANVAS_AVAILABLE, detailTextures, foliageAlpha, heightField, normalMap, plasterBrickAlbedo, surfaceAlbedo, wetnessTextures, type HeightField } from "./textures";
 
 /** Biblioteca de materiais PBR do quarteirão (texturas procedurais provisórias). */
 export class MaterialLibrary {
@@ -197,14 +197,11 @@ export class MaterialLibrary {
    */
   private addSurfaceFinish(ssr: boolean): void {
     const scene = this.scene;
-    const detail = detailTexture(scene, "detalhe_superficie", 256, 917);
+    const detail = detailTextures(scene, 256, 917);
     if (detail) {
       const add = (m: PBRMaterial, o: { albedo: number; rough: number; bump: number } = { albedo: 0.14, rough: 0.25, bump: 0.32 }) => {
-        const t = detail.clone();
-        const reps = Math.max(1, ((m.metadata as { tileSize?: number } | null)?.tileSize || 2) / 0.6);
-        t.uScale = reps;
-        t.vScale = reps;
-        m.detailMap.texture = t;
+        // ~0,6 m por repetição do detalhe (a UV-base repete a cada `tileSize` metros)
+        m.detailMap.texture = detail(((m.metadata as { tileSize?: number } | null)?.tileSize || 2) / 0.6);
         m.detailMap.isEnabled = true;
         m.detailMap.diffuseBlendLevel = o.albedo;
         m.detailMap.roughnessBlendLevel = o.rough;
