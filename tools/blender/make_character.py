@@ -1725,6 +1725,8 @@ def consolidate(objs: list) -> list:
         target = members[0]
         with bpy.context.temp_override(object=target, active_object=target, selected_objects=members, selected_editable_objects=members):
             bpy.ops.object.join()
+        for me in [me for me in bpy.data.meshes if me.users == 0]:
+            bpy.data.meshes.remove(me)  # malhas órfãs do join prenderiam o nome (sairia "x.001" no glTF)
         target.name = canon[k].name.replace("_mat_", "_")
         target.data.name = target.name
         out.append(target)

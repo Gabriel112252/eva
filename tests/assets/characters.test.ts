@@ -20,11 +20,13 @@ function glbMeshNames(bytes: Uint8Array): string[] {
 }
 
 /** Variantes geradas com o passe de roupas volumétricas/equipamento (30/10/2026) e o que cada uma precisa ter. */
-const OUTFITTED: Partial<Record<"brandao" | "elias" | "custodio", string[]>> = {
+const OUTFITTED: Record<"brandao" | "elias" | "custodio", string[]> = {
   // farda cinza sem armadura: gola alta, filetes de cobre, prancheta, papel (crachá/lista)
   brandao: ["brandao_shirt", "brandao_collar", "brandao_trim", "brandao_clipboard", "brandao_paper"],
   // jaqueta aberta (com capuz), camiseta, lenço, bolsa transversal com papéis
   elias: ["elias_jacket", "elias_shirt", "elias_scarf", "elias_bag", "elias_papers"],
+  // armadura humana fabricável: placas de cerâmica, colete índigo, detalhes de cobre e índigo, viseira do capacete
+  custodio: ["custodio_plate", "custodio_vest", "custodio_trim", "custodio_indigo", "custodio_visor"],
 };
 
 describe("Personagens GLB (modelos rigados reais)", () => {
@@ -88,9 +90,9 @@ describe("Personagens GLB (modelos rigados reais)", () => {
     }
   });
 
-  it("Brandão e Elias carregam no Babylon com o mesmo rig (52 ossos) e todos os clipes", async () => {
+  it("Brandão, Elias e o Custódio carregam no Babylon com o mesmo rig (52 ossos) e todos os clipes", async () => {
     const { engine, scene } = await createHeadlessScene(false);
-    for (const v of ["brandao", "elias"] as const) {
+    for (const v of ["brandao", "elias", "custodio"] as const) {
       const model = await loadCharacter(scene, v, `_${v}`, characterDataUrl(v));
       expect(model.skeleton?.bones.length, v).toBe(52);
       for (const clip of ANIMATION_CLIPS) expect(model.animator.has(clip), `${v} ${clip}`).toBe(true);
