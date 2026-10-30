@@ -118,7 +118,7 @@ export class Game {
   private npcRoles = new WeakMap<Npc, string>();
   /** controle automático do veículo (cena de partida do Capítulo 1) */
   private autoDrive: AutoDrive | null = null;
-  private saveQueued = false;
+  private saveQueued: { notify: boolean } | null = null;
   private noiseTimer = 0;
   private deathTimer = -1;
   private cameraShake = 0;
@@ -860,7 +860,7 @@ export class Game {
     if (this.state === "loading" || this.state === "menu") return;
     if (this.saving) {
       // salvamento em curso: grava de novo ao terminar (o checkpoint de uma transição não se perde)
-      this.saveQueued = true;
+      this.saveQueued = { notify: notify || (this.saveQueued?.notify ?? false) };
       return;
     }
     this.saving = true;
@@ -875,9 +875,10 @@ export class Game {
       if (notify) this.menus.setPauseStatus("Falha ao salvar (ver console).");
     } finally {
       this.saving = false;
-      if (this.saveQueued) {
-        this.saveQueued = false;
-        void this.saveGame(false);
+      const queued = this.saveQueued;
+      if (queued) {
+        this.saveQueued = null;
+        void this.saveGame(queued.notify);
       }
     }
   }

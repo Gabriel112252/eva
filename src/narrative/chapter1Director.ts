@@ -144,7 +144,7 @@ export const CAP1_POINTS = {
 
 /** Onde cada ator fica em cada momento. */
 export const CAP1_SPOTS = {
-  raquelVan: at(-26.6, 0.12, -4.4, -0.67),
+  raquelVan: at(-27.2, 0.12, -4.0, -2.39), // de frente para a porta da oficina, junto à traseira da van
   raquelPosto: at(24.4, 0.12, -15.0, 0),
   raquelPortaPosto: at(25.6, 0.12, -15.4, 0),
   anaPosto: at(22.6, 0.12, -13.8, 0.4),
@@ -415,6 +415,9 @@ export interface Chapter1Host {
 
 const dist2d = (a: Vec3, b: Vec3) => Math.hypot(a.x - b.x, a.z - b.z);
 
+/** Transição interrompida por novo jogo/carregamento (não é erro). */
+class TransitionCancelled extends Error {}
+
 /**
  * Diretor do Capítulo 1: monta cada missão (atores, objetos, zonas, ambiente), reage aos gatilhos e conduz as
  * transições entre os dias. O estado durável fica todo em flags/missões/pistas/timers (salvos pelo `Game`);
@@ -423,12 +426,15 @@ const dist2d = (a: Vec3, b: Vec3) => Math.hypot(a.x - b.x, a.z - b.z);
 export class Chapter1Director {
   phase: Chapter1Phase = "inativo";
   private seq: Promise<void> | null = null;
+  /** geração das transições: novo jogo/carregar cancela a que estiver no meio */
+  private gen = 0;
   private notices: Array<{ text: string; seconds: number }> = [];
   private noticeTimer = 1.2;
   private pendingDay2 = false;
   private pendingBrandao = false;
   private pendingEliasExit = false;
   private radioPending = false;
+  private caughtPending = false;
   private raquelAtPosto = false;
   private autoTalked = new Set<string>();
   private zones = new Set<string>();
@@ -496,6 +502,7 @@ export class Chapter1Director {
   }
 
   private clearMemory(): void {
+    this.gen++;
     this.seq = null;
     this.notices = [];
     this.noticeTimer = 1.2;
@@ -503,6 +510,7 @@ export class Chapter1Director {
     this.pendingBrandao = false;
     this.pendingEliasExit = false;
     this.radioPending = false;
+    this.caughtPending = false;
     this.raquelAtPosto = false;
     this.autoTalked.clear();
     for (const id of this.zones) this.host.script.removeZone(id);
@@ -586,7 +594,7 @@ export class Chapter1Director {
     if (f.getBool(X.depositoLiberado) && this.barriers.has("porta_deposito")) {
       h.removeProp("porta_deposito");
       this.barriers.delete("porta_deposito");
-      h.notice("O portão do depósito está aberto. Ordem do Custódio.", 3.5);
+      this.say("O portão do depósito está aberto. Ordem do Custódio.", 3.5);
     }
     // Atlas emprestado encosta na van: as caixas vão para o caixote
     if (f.getBool(X.atlasEmprestado) && !f.getBool(D.cargaNoAtlas) && !f.getBool(D.entregue) && h.drivingId() === "atlas_t3") {
@@ -623,6 +631,11 @@ export class Chapter1Director {
     const h = this.host;
     const f = h.flags;
     const q = h.quests;
+    if (this.caughtPending) {
+      this.caughtPending = false;
+      this.onCaught();
+      return;
+    }
     if (this.pendingEliasExit) {
       this.pendingEliasExit = false;
       this.eliasExit();
@@ -723,14 +736,14 @@ export class Chapter1Director {
     const h = this.host;
     if (this.phase !== "m2" || h.flags.getBool(D.entregue)) return;
     h.flags.set(D.timerEstourou, true);
-    h.notice("Meio-dia: a Central passou recolhendo o que sobrou. Leve as caixas ao posto mesmo assim.", 5);
+    this.say("Meio-dia: a Central passou recolhendo o que sobrou. Leve as caixas ao posto mesmo assim.", 5);
   }
 
   private loadCargo(): void {
     const h = this.host;
     h.flags.set(D.cargaNoAtlas, true);
     h.setCargo("atlas_t3");
-    h.notice("As três caixas da van vão para o caixote do Atlas. Agora, o posto.", 4);
+    this.say("As três caixas da van vão para o caixote do Atlas. Agora, o posto.", 4);
   }
 
   private tryDeliver(): void {
@@ -744,7 +757,7 @@ export class Chapter1Director {
     f.set(D.cargaNoAtlas, false);
     h.dropCargo(CAP1_POINTS.postoCaixa);
     h.quests.completeObjective(QUEST_RASTRO_DO_LOTE, "entrega");
-    h.notice(noPrazo ? "Entregue antes do meio-dia. Desça e fale com Raquel." : "Entregue depois do meio-dia. Desça e fale com Raquel.", 4);
+    this.say(noPrazo ? "Entregue antes do meio-dia. Desça e fale com Raquel." : "Entregue depois do meio-dia. Desça e fale com Raquel.", 4);
     h.checkpoint();
   }
 
@@ -758,7 +771,7 @@ export class Chapter1Director {
     h.quests.start(QUEST_A_VIGILIA);
     this.applyConsequences(QUEST_A_VIGILIA);
     this.enterPhase("m3_tarde", false, new Set<Cap1Actor>(["brandao", "ana", "raquel"]));
-    h.notice("A tarde cai sobre o Setor 17. Volte à oficina: o rádio vai chamar.", 4.5);
+    this.say("A tarde cai sobre o Setor 17. Volte à oficina: o rádio vai chamar.", 4.5);
     h.checkpoint();
   }
 
@@ -768,16 +781,16 @@ export class Chapter1Director {
     void this.run(async () => {
       const h = this.host;
       h.fade(true);
-      await h.wait(800);
+      await this.pause(800);
       h.flags.set(D.entardecer, true);
       // a Rastro da Custódia está na doca do telhado da escola, em manutenção (motivo da ronda)
       h.placeVehicle("rastro_av4", CAP1_POINTS.rastroTelhado);
       this.enterPhase("m3_tarde", true);
       h.checkpoint();
-      await h.wait(400);
+      await this.pause(400);
       h.fade(false);
-      h.notice("Fim de tarde. O rádio da oficina chia.", 3.5);
-      await h.wait(1300);
+      this.say("Fim de tarde. O rádio da oficina chia.", 3.5);
+      await this.pause(1300);
       this.radioPending = true;
     });
   }
@@ -797,7 +810,7 @@ export class Chapter1Director {
     h.flags.set(D.toque, true);
     this.enterPhase("m3_toque", false);
     h.sting("alerta");
-    h.notice("Toque de recolher. Agachado (C/Ctrl) seus passos somem a 4 m; correndo, a 15 m. Evite as lanternas.", 6);
+    this.say("Toque de recolher. Agachado (C/Ctrl) seus passos somem a 4 m; correndo, a 15 m. Evite as lanternas.", 6);
     h.checkpoint();
   }
 
@@ -806,7 +819,7 @@ export class Chapter1Director {
     const q = this.host.quests;
     q.completeObjective(QUEST_A_VIGILIA, "toque");
     q.completeObjective(QUEST_A_VIGILIA, "quadra");
-    this.host.notice("A quadra. Elias espera junto à arquibancada.", 3.5);
+    this.say("A quadra. Elias espera junto à arquibancada.", 3.5);
     this.host.checkpoint();
   }
 
@@ -820,7 +833,7 @@ export class Chapter1Director {
     h.walkNpc("elias", CAP1_SPOTS.eliasSaida, 2.2, true);
     h.spawnPatrol(this.patrolSpec(M3_QUADRA_PATROL, this.patrolLevel()));
     h.checkpoint();
-    h.notice("Lanternas no portão. Saia da quadra e suba ao telhado da escola: escada de serviço do lado do pátio.", 5.5);
+    this.say("Lanternas no portão. Saia da quadra e suba ao telhado da escola: escada de serviço do lado do pátio.", 5.5);
   }
 
   private onTelhado(): void {
@@ -843,7 +856,7 @@ export class Chapter1Director {
     h.quests.completeObjective(QUEST_A_VIGILIA, "voo");
     h.clearPatrols();
     h.placeNpc("ana", CAP1_SPOTS.anaPortaOficina);
-    h.notice("A rua inteira ouviu. Pouse (Ctrl desce) e desça da Rastro (E).", 5);
+    this.say("A rua inteira ouviu. Pouse (Ctrl desce) e desça da Rastro (E).", 5);
     h.checkpoint();
   }
 
@@ -875,18 +888,22 @@ export class Chapter1Director {
   onCaught(): boolean {
     if (!this.isNight()) return false;
     if (this.seq) return true;
+    if (!this.host.isPlaying()) {
+      this.caughtPending = true; // no meio de uma fala/exame: leva preso quando a cena acabar
+      return true;
+    }
     void this.run(async () => {
       const h = this.host;
       h.flags.increment(D.preso);
       h.fade(true);
-      await h.wait(700);
+      await this.pause(700);
       h.exitVehicle();
       const p = this.respawnPoint();
       h.teleportPlayer(p, p.yaw);
       this.spawnPatrols();
-      await h.wait(400);
+      await this.pause(400);
       h.fade(false);
-      h.notice("Preso pelos Custódios e levado de volta. De volta ao último ponto.", 4.5);
+      this.say("Preso pelos Custódios e levado de volta. De volta ao último ponto.", 4.5);
     });
     return true;
   }
@@ -934,7 +951,7 @@ export class Chapter1Director {
     const missing = M4_REQUIRED.filter((o) => !h.quests.isObjectiveDone(QUEST_PARTIDA, o));
     if (missing.length > 0) {
       const def = QUESTS.find((q) => q.id === QUEST_PARTIDA)?.objectives.find((o) => o.id === missing[0]);
-      h.notice(`Ainda não. ${def?.text ?? "Falta resolver algo no setor"}.`, 4);
+      this.say(`Ainda não. ${def?.text ?? "Falta resolver algo no setor"}.`, 4);
       return;
     }
     void this.departure();
@@ -948,9 +965,9 @@ export class Chapter1Director {
       h.setLetterbox(true);
       h.setAutoDrive({ throttle: 0.32, steer: 0, handbrake: false });
       h.setCinematicShot(CAP1_POINTS.guarita, "modulo_v7");
-      await h.wait(2600);
+      await this.pause(2600);
       h.fade(true);
-      await h.wait(1100);
+      await this.pause(1100);
       h.setAutoDrive({ throttle: 0, steer: 0, handbrake: true });
       h.flags.set(D.fim, true);
       h.quests.completeObjective(QUEST_PARTIDA, "partida");
@@ -993,7 +1010,7 @@ export class Chapter1Director {
     return this.run(async () => {
       const h = this.host;
       h.fade(true);
-      await h.wait(900);
+      await this.pause(900);
       h.exitVehicle();
       h.flags.set(D.dia2, true);
       h.quests.start(QUEST_RASTRO_DO_LOTE);
@@ -1004,9 +1021,9 @@ export class Chapter1Director {
       this.enterPhase("m2", true);
       h.teleportPlayer(CAP1_POINTS.oficinaDentro, CAP1_POINTS.oficinaDentro.yaw);
       h.checkpoint();
-      await h.wait(500);
+      await this.pause(500);
       h.fade(false);
-      h.notice("Dia 2 · 6h. Raquel espera junto à van, diante da oficina.", 5);
+      this.say("Dia 2 · 6h. Raquel espera junto à van, diante da oficina.", 5);
     });
   }
 
@@ -1014,9 +1031,9 @@ export class Chapter1Director {
   beginDay3(): Promise<void> {
     return this.run(async () => {
       const h = this.host;
-      await h.wait(500);
+      await this.pause(500);
       h.fade(true);
-      await h.wait(1000);
+      await this.pause(1000);
       h.exitVehicle();
       h.quests.complete(QUEST_A_VIGILIA);
       h.quests.start(QUEST_PARTIDA);
@@ -1027,25 +1044,33 @@ export class Chapter1Director {
       this.enterPhase("m4", true);
       h.teleportPlayer(CAP1_POINTS.oficinaDentro, CAP1_POINTS.oficinaDentro.yaw);
       h.checkpoint();
-      await h.wait(500);
+      await this.pause(500);
       h.fade(false);
-      h.notice("Dia 3 · amanhecer. O Setor 17 carrega as escolhas dos últimos dois dias.", 5);
+      this.say("Dia 3 · amanhecer. O Setor 17 carrega as escolhas dos últimos dois dias.", 5);
     });
   }
 
   private run(fn: () => Promise<void>): Promise<void> {
     if (this.seq) return this.seq;
+    const gen = this.gen;
     const p = (async () => {
       try {
         await fn();
       } catch (err) {
-        console.error("[cap1] transição falhou", err);
+        if (!(err instanceof TransitionCancelled)) console.error("[cap1] transição falhou", err);
       } finally {
-        this.seq = null;
+        if (gen === this.gen) this.seq = null;
       }
     })();
     this.seq = p;
     return p;
+  }
+
+  /** Espera em tempo real dentro de uma transição; aborta se o jogo foi recarregado/reiniciado no meio. */
+  private async pause(ms: number): Promise<void> {
+    const gen = this.gen;
+    await this.host.wait(ms);
+    if (gen !== this.gen) throw new TransitionCancelled();
   }
 
   // ------------------------------------------------------------------ montagem de cada fase
@@ -1129,7 +1154,7 @@ export class Chapter1Director {
       case "m4_partida":
       case "fim":
         this.zone({ id: "rua_amanhecer", center: v3(-30, 0.5, -4.4), radius: 2.8, requires: "pe" });
-        this.zone({ id: "limite_setor", center: v3(72.5, 1, 70.5), radius: 9, requires: "veiculo", once: false });
+        this.zone({ id: "limite_setor", center: v3(72.5, 1, 71), radius: 11, requires: "veiculo", once: false });
         this.addBoards(true);
         if (f.get(F.m2Decisao) === "silencio") {
           h.addProp("lista", "lista", v3(25.9, 0, -16.2), 0);
@@ -1150,6 +1175,8 @@ export class Chapter1Director {
     const estoque = num(f.get(D.estoque), BAIRRO_BASE.estoque);
     const preco = num(f.get(D.preco), BAIRRO_BASE.preco);
     this.host.addExaminable(EXAMES.quadro(agua, withStock ? estoque : null));
+    // a tabela de preços é uma folha num cavalete na ponta sul do balcão da banca da feira
+    this.host.addProp("tabela_banca", "lista", v3(71.9, 0.15, -15.7), Math.PI / 2);
     this.host.addExaminable(EXAMES.tabela(preco));
   }
 
@@ -1211,12 +1238,18 @@ export class Chapter1Director {
     for (const t of texts) this.notices.push({ text: t, seconds: 4.2 });
   }
 
+  /** Aviso imediato do diretor; a fila de avisos espera ele sair da tela. */
+  private say(text: string, seconds = 3.5): void {
+    this.host.notice(text, seconds);
+    this.noticeTimer = Math.max(this.noticeTimer, seconds + 0.4);
+  }
+
   private pumpNotices(dt: number): void {
-    if (this.notices.length === 0) return;
+    if (this.notices.length === 0 || this.seq) return;
     this.noticeTimer -= dt;
     if (this.noticeTimer > 0) return;
     const n = this.notices.shift()!;
-    this.host.notice(n.text, n.seconds);
+    this.say(n.text, n.seconds);
     this.noticeTimer = n.seconds + 0.4;
   }
 
@@ -1323,7 +1356,7 @@ const EXAMES = {
   }),
   tabela: (preco: number): ExaminableSpec => ({
     id: "tabela_banca",
-    position: v3(71.9, 1.3, -15.4),
+    position: v3(71.9, 1.3, -15.7),
     radius: 1.6,
     title: "Tabela da banca (Selos)",
     text:
@@ -1593,8 +1626,9 @@ export class Chapter1Stage implements Chapter1Host {
       return;
     }
     this.walks.set(role, { to, speed, hide: hideAtEnd });
-    this.desired.set(role, hideAtEnd ? null : to);
-    if (!npc && isCastRole(role)) void this.ensureCast(role);
+    if (npc) this.desired.set(role, hideAtEnd ? null : to);
+    // ainda carregando: aparece no ponto de partida (último placeNpc) e então anda
+    else if (isCastRole(role)) void this.ensureCast(role);
   }
 
   stopWalk(role: Cap1Actor): void {

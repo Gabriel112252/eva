@@ -68,6 +68,16 @@ Parâmetros opcionais na URL: `?quality=baixa|media|alta` força a qualidade gr�
 
 **Missão (vertical slice, ~10–15 min)**: acordar na oficina → percorrer a rua e falar com os moradores → Raquel e Ana → a Apuração com Miriam → o Custódio revela que o lote sai ao anoitecer → **confronto** com desviadores em duas levas (pistola, mira, recarga, kit médico) → **fuga** com a van Módulo V-7 até a oficina → trancar o carregamento → decisão final pelo rádio. Matias pode cair: a tela "Matias caiu" devolve ao último ponto (junto à van) e a onda recomeça. O progresso é salvo automaticamente (IndexedDB).
 
+### Capítulo 1 — como jogar
+
+Depois de "O Carregamento", **Continuar explorando** na tela de conclusão amanhece o dia 2 (um jogo salvo nesse ponto amanhece direto ao carregar). O objetivo atual fica no canto da tela; **I** abre a mochila e a aba **Pistas** (diário); **E** examina objetos com prompt "Examinar/Ler…".
+
+1. **Rastro do Lote (manhã)** — fale com Raquel na van diante da oficina e examine o manifesto e os lacres; vá ao portão da Central (Custódio) e ao depósito da zona de distribuição (norte do setor; se o portão estiver fechado, a grade dos fundos, do lado leste, passa **agachado**); examine as caixas atrás dos sacos e o caderno no escritório; pergunte ao comerciante da **feira do viaduto** (avenida, a leste); pegue o **Atlas T-3** ao lado da banca, encoste na van da oficina para carregar as caixas e leve ao posto da praça antes do prazo; escute Brandão e decida.
+2. **A Vigília (noite)** — volte à oficina: o rádio chama. Quando o toque de recolher começar, vá à quadra da escola (ao sul, pela praça → Largo → rua da Escola) **sem ser visto**: agachado (C/Ctrl) os passos somem a 4 m; correndo, a 15 m; fuja das lanternas. Pego pelos Custódios, Matias volta ao último ponto. Na quadra, fale com Elias e examine a folha na bancada; depois suba ao telhado da escola (escada do lado do pátio), entre na Rastro e voe baixo até a rua da oficina.
+3. **Partida (amanhecer)** — o bairro reflete suas escolhas (quadro de avisos da praça: água e caixas; tabela da banca: preços). Fale com Miriam, com o Custódio no portão, com Raquel e com Ana — **ela decide** se vai. Entre na van e siga para o posto de controle norte (fim da avenida).
+
+`npm run test:cap1` (depois de `npm run build`) joga o capítulo inteiro no Chromium headless.
+
 **Celular/tablet** (detectado automaticamente; `?touch=1` força, `?touch=0` desliga): joystick virtual flutuante na metade esquerda da tela (empurrar até a borda = correr), arrastar na metade direita gira a câmera, botões **E** (interagir/entrar — acende quando há algo à frente), **Agachar** (alterna), **Correr** (trava), **Pausa** e, quando Matias está armado, **Mirar** (trava), **Atirar** (segurar) e **R** (recarregar); toque curto na tela avança as falas; tocar no objetivo mostra a descrição da missão. Sem configuração salva, o celular começa em qualidade **baixa** (mude em Opções). Jogue na horizontal; o navegador tenta entrar em tela cheia ao iniciar.
 
 ### Validação
