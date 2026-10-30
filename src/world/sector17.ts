@@ -318,7 +318,8 @@ export const ESCOLA = {
     { x0: -13.75, x1: -6.6, z0: -33.75, z1: -26.4 },
     { x0: -5.4, x1: 1.75, z0: -33.75, z1: -26.4 },
   ] as Rect[],
-  stair: { x0: 2, x1: 3.4, z0: -33.6, z1: -25.2 },
+  /** escada externa: pé no pátio (norte), sobe para o sul até o patamar no canto sudeste do telhado */
+  stair: { x0: 2, x1: 3.7, z0: -32.8, z1: -24.4 },
   quadra: { x0: -41, x1: -15, z0: -33.5, z1: -19 } as Rect,
   quadraGates: [
     { side: "S", x0: -30, x1: -27 },
@@ -943,7 +944,11 @@ function buildRoofItem(ctx: WorldContext, lot: LotSpec, item: RoofItem): void {
  * `dir` a direção de subida, `width` a largura; cada degrau é um bloco com colisor (o controlador sobe
  * degraus de até 0,32 m; o navmesh aceita 0,4 m).
  */
-function stairs(ctx: WorldContext, id: string, start: Vector3, dir: Facing, width: number, rise: number, mat: Material): void {
+/**
+ * Escada de degraus visuais com colisor em rampa. `rampRun` (m, horizontal) faz a rampa chegar ao topo antes do
+ * fim dos degraus — onde começa o patamar —, senão sobra um ressalto que a cápsula não sobe.
+ */
+function stairs(ctx: WorldContext, id: string, start: Vector3, dir: Facing, width: number, rise: number, mat: Material, rampRun?: number, outerSide: 1 | -1 = 1): void {
   const steps = Math.ceil(rise / 0.25);
   const r = rise / steps;
   const tread = 0.3;
@@ -957,13 +962,15 @@ function stairs(ctx: WorldContext, id: string, start: Vector3, dir: Facing, widt
   }
   // colisor em rampa invisível rente às quinas dos degraus (como nos jogos em geral): inclinação < maxSlope do personagem
   {
-    const run = steps * tread;
+    const run = Math.min(rampRun ?? steps * tread, steps * tread);
     const p = Math.atan2(rise, run);
+    // 0,3 m a mais só na ponta de baixo (enterrada no chão): no topo a rampa termina rente ao patamar
     const len = Math.hypot(run, rise) + 0.3;
     const thick = 0.2;
     // normal da superfície da rampa (aponta para cima e para trás)
     const normal = new Vector3(-d.x * Math.sin(p), Math.cos(p), -d.z * Math.sin(p));
-    const topCenter = start.add(d.scale(run / 2)).add(new Vector3(0, rise / 2, 0));
+    const along = new Vector3(d.x * Math.cos(p), Math.sin(p), d.z * Math.cos(p));
+    const topCenter = start.add(d.scale(run / 2)).add(new Vector3(0, rise / 2, 0)).subtract(along.scale(0.15));
     const center = topCenter.subtract(normal.scale(thick / 2));
     const rampRot = alongZ ? new Vector3(-p * (dir === "N" ? 1 : -1), 0, 0) : new Vector3(0, 0, p * (dir === "E" ? 1 : -1));
     ctx.staticBoxCollider(`${id}_rampa`, alongZ ? { w: width, h: thick, d: len } : { w: len, h: thick, d: width }, center, rampRot, false);
@@ -971,10 +978,12 @@ function stairs(ctx: WorldContext, id: string, start: Vector3, dir: Facing, widt
   // corrimão (sem colisor) no lado externo
   const len = Math.hypot(steps * tread, rise);
   const mid = start.add(d.scale((steps * tread) / 2));
-  const side = alongZ ? new Vector3(width / 2 - 0.05, 0, 0) : new Vector3(0, 0, width / 2 - 0.05);
+  // lado aberto da escada (o outro encosta na parede): corrimão visual + guarda com colisor para não cair
+  const side = alongZ ? new Vector3(outerSide * (width / 2 - 0.05), 0, 0) : new Vector3(0, 0, outerSide * (width / 2 - 0.05));
   const pitch = Math.atan2(rise, steps * tread);
   const rot = alongZ ? new Vector3(-pitch * (dir === "N" ? 1 : -1), 0, 0) : new Vector3(0, 0, pitch * (dir === "E" ? 1 : -1));
   ctx.box(`${id}_corrimao`, alongZ ? { w: 0.05, h: 0.05, d: len } : { w: len, h: 0.05, d: 0.05 }, mid.add(side).add(new Vector3(0, rise / 2 + 1.0, 0)), ctx.mats.metalRust, { rotation: rot, shadow: false });
+  ctx.staticBoxCollider(`${id}_guarda`, alongZ ? { w: 0.1, h: 1.0, d: len } : { w: len, h: 1.0, d: 0.1 }, mid.add(side).add(new Vector3(0, rise / 2 + 0.5, 0)), rot, false);
   for (let k = 0; k <= 2; k++) {
     const t = k / 2;
     const p = start.add(d.scale(t * steps * tread)).add(side);
@@ -1037,9 +1046,11 @@ function buildDeposito(ctx: WorldContext, lights: Light[]): void {
   for (const [z0, z1] of [[R.z0, 66.6], [68.4, R.z1]] as Array<[number, number]>) {
     ctx.box(`s17_deposito_guarda_oeste_${z0}`, { w: 0.2, h: 1.0, d: z1 - z0 }, new Vector3(R.x0 + 0.1, roofY + 0.5, (z0 + z1) / 2), mats.metalRust, { collider: true, cameraBlocker: false });
   }
-  stairs(ctx, "s17_deposito_escada", new Vector3(R.x0 - 0.7, 0.1, 59.2), "N", 1.3, roofY - 0.1, mats.metalPainted);
+  stairs(ctx, "s17_deposito_escada", new Vector3(R.x0 - 0.85, 0.1, 59.2), "N", 1.6, roofY - 0.1, mats.metalPainted, 68.4 - 0.9 - 0.8 - 59.2, -1);
   // patamar de chegada ligando a escada ao telhado
-  ctx.box("s17_deposito_patamar", { w: 1.5, h: 0.12, d: 1.6 }, new Vector3(R.x0 - 0.7, roofY - 0.06, 68.4 - 0.9), mats.metalPainted, { collider: true, cameraBlocker: false });
+  ctx.box("s17_deposito_patamar", { w: 1.8, h: 0.12, d: 1.6 }, new Vector3(R.x0 - 0.85, roofY - 0.06, 68.4 - 0.9), mats.metalPainted, { collider: true, cameraBlocker: false });
+  ctx.box("s17_deposito_patamar_guarda_norte", { w: 1.9, h: 1.0, d: 0.1 }, new Vector3(R.x0 - 0.85, roofY + 0.5, 68.4 - 0.9 + 0.75), mats.metalRust, { collider: true, cameraBlocker: false, shadow: false });
+  ctx.box("s17_deposito_patamar_guarda_oeste", { w: 0.1, h: 1.0, d: 1.6 }, new Vector3(R.x0 - 1.7, roofY + 0.5, 68.4 - 0.9), mats.metalRust, { collider: true, cameraBlocker: false, shadow: false });
   // telhado: reciclador de água, painéis solares, caixa d'água
   ctx.cylinder("s17_deposito_recic", { height: 2.0, diameter: 2.4, tessellation: 16 }, new Vector3(cx + 5, roofY + 1.0, cz + 3), mats.metalPainted, { collider: true });
   for (let k = 0; k < 4; k++) ctx.box(`s17_deposito_solar_${k}`, { w: 2.0, h: 0.05, d: 1.1 }, new Vector3(cx - 6 + k * 2.3, roofY + 0.6, cz - 3), mats.glass, { rotation: new Vector3(-0.35, 0, 0) });
@@ -1124,8 +1135,8 @@ function buildEscola(ctx: WorldContext, lights: Light[]): void {
   wallWithOpening(ctx, "s17_escola_p_oeste", [B.x0 + t / 2, B.z0], [B.x0 + t / 2, B.z1], H1, t, wall);
   wallWithOpening(ctx, "s17_escola_p_leste", [B.x1 - t / 2, B.z0], [B.x1 - t / 2, B.z1], H1, t, wall);
   // corredor e duas salas (portas para o corredor)
-  wallWithOpening(ctx, "s17_escola_corredor", [B.x0, E.corridor.z0], [-6.0, E.corridor.z0], H1, 0.15, mats.plaster[2]!, { at: -10.2, width: 1.1, height: 2.1 });
-  wallWithOpening(ctx, "s17_escola_corredor_b", [-6.0, E.corridor.z0], [B.x1, E.corridor.z0], H1, 0.15, mats.plaster[2]!, { at: -1.8, width: 1.1, height: 2.1 });
+  wallWithOpening(ctx, "s17_escola_corredor", [B.x0, E.corridor.z0], [-6.0, E.corridor.z0], H1, 0.15, mats.plaster[2]!, { at: -10.2, width: 1.3, height: 2.1 });
+  wallWithOpening(ctx, "s17_escola_corredor_b", [-6.0, E.corridor.z0], [B.x1, E.corridor.z0], H1, 0.15, mats.plaster[2]!, { at: -1.8, width: 1.3, height: 2.1 });
   wallWithOpening(ctx, "s17_escola_divisoria", [-6.0, B.z0], [-6.0, E.corridor.z0], H1, 0.15, mats.plaster[2]!);
   // laje do térreo/piso do 1º andar e o 1º andar fechado (volume) + laje do telhado
   ctx.box("s17_escola_laje1", { w: B.x1 - B.x0, h: 0.3, d: B.z1 - B.z0 }, new Vector3(cx, H1 + 0.15, cz), mats.concrete, { collider: true });
@@ -1153,9 +1164,15 @@ function buildEscola(ctx: WorldContext, lights: Light[]): void {
   for (const [w, d, px, pz] of [[B.x1 - B.x0 + 0.2, 0.2, cx, B.z0 + 0.1], [B.x1 - B.x0 + 0.2, 0.2, cx, B.z1 - 0.1], [0.2, B.z1 - B.z0, B.x0 + 0.1, cz]] as Array<[number, number, number, number]>) {
     ctx.box(`s17_escola_guarda_${px}_${pz}`, { w, h: 1.0, d }, new Vector3(px, roofY + 0.5, pz), mats.concrete, { collider: true, cameraBlocker: false });
   }
-  ctx.box("s17_escola_guarda_leste", { w: 0.2, h: 1.0, d: 7.4 }, new Vector3(B.x1 - 0.1, roofY + 0.5, B.z0 + 3.7), mats.concrete, { collider: true, cameraBlocker: false });
-  stairs(ctx, "s17_escola_escada", new Vector3(E.stair.x0 + 0.7, 0.1, E.stair.z0), "N", 1.3, roofY - 0.1, mats.concrete);
-  ctx.box("s17_escola_patamar", { w: 1.5, h: 0.12, d: 1.4 }, new Vector3(E.stair.x0 + 0.7, roofY - 0.06, B.z1 - 0.9), mats.concrete, { collider: true, cameraBlocker: false });
+  // guarda-corpo leste com abertura no canto sudeste (chegada da escada)
+  ctx.box("s17_escola_guarda_leste", { w: 0.2, h: 1.0, d: B.z1 - (B.z0 + 2.4) }, new Vector3(B.x1 - 0.1, roofY + 0.5, (B.z0 + 2.4 + B.z1) / 2), mats.concrete, { collider: true, cameraBlocker: false });
+  // escada externa no lado leste: o pé fica no pátio aberto (norte) e ela sobe para o sul até o patamar no canto
+  // sudeste. 1,6 m de largura: com 1,3 m a malha de navegação (borda de queda + raio do agente) não sobrava nada
+  const landingZ = B.z0 + 0.9;
+  stairs(ctx, "s17_escola_escada", new Vector3(E.stair.x0 + 0.85, 0.1, E.stair.z1), "S", 1.6, roofY - 0.1, mats.concrete, E.stair.z1 - (landingZ + 0.7));
+  ctx.box("s17_escola_patamar", { w: 1.8, h: 0.12, d: 1.4 }, new Vector3(E.stair.x0 + 0.85, roofY - 0.06, landingZ), mats.concrete, { collider: true, cameraBlocker: false });
+  ctx.box("s17_escola_patamar_guarda_sul", { w: 1.9, h: 1.0, d: 0.1 }, new Vector3(E.stair.x0 + 0.85, roofY + 0.5, landingZ - 0.65), mats.metalRust, { collider: true, cameraBlocker: false, shadow: false });
+  ctx.box("s17_escola_patamar_guarda_leste", { w: 0.1, h: 1.0, d: 1.4 }, new Vector3(E.stair.x0 + 1.7, roofY + 0.5, landingZ), mats.metalRust, { collider: true, cameraBlocker: false, shadow: false });
   // telhado: caixa d'água, painel solar, antena de rádio da escola e marcação de pouso improvisada (tinta)
   ctx.cylinder("s17_escola_caixa", { height: 1.1, diameter: 1.3, tessellation: 12 }, new Vector3(B.x0 + 2.5, roofY + 0.55, B.z0 + 2.2), mats.plasticBlue, { collider: true });
   ctx.box("s17_escola_solar", { w: 2.4, h: 0.05, d: 1.1 }, new Vector3(B.x0 + 6, roofY + 0.5, B.z0 + 2), mats.glass, { rotation: new Vector3(-0.35, 0, 0) });
@@ -1410,7 +1427,7 @@ function buildCanopy(ctx: WorldContext, group: Mesh[] | null = null): void {
     }
   });
   // escada de manutenção no pilar sudoeste (sobe para o norte, do lado de fora do pilar)
-  stairs(ctx, "s17_canopy_escada", new Vector3(R.x0 - 0.9, STREET.curbHeight, R.z0 + 1.8), "N", 1.2, top - STREET.curbHeight, mats.metalPainted);
+  stairs(ctx, "s17_canopy_escada", new Vector3(R.x0 - 0.9, STREET.curbHeight, R.z0 + 1.8), "N", 1.2, top - STREET.curbHeight, mats.metalPainted, undefined, -1);
   ctx.box("s17_canopy_patamar", { w: 1.6, h: 0.1, d: 1.4 }, new Vector3(R.x0 - 0.6, top - 0.05, R.z1 - 1.4), mats.metalPainted, { collider: true, cameraBlocker: false });
   // totens de recarga (camada tecnológica reaproveitados como postes de feira) e um ônibus elétrico abandonado
   // (no modo kit os totens viram TECH_totem_recarga nas mesmas posições — CANOPY_TOTEMS; o colisor fica)
@@ -1629,9 +1646,22 @@ function buildWasteland(ctx: WorldContext): void {
  * (`markDirty`) para o Babylon recompor a lista de luzes do shader — senão o material congelado fica
  * com luzes fantasmas. Sol e hemisférica nunca são tocados; faróis de veículo são do veículo.
  */
+/**
+ * Luzes locais do setor (postes, interiores) com um **conjunto fixo de luzes sempre ligadas** que se movem para
+ * as fontes mais próximas do observador.
+ *
+ * Antes cada troca ligava/desligava objetos de luz diferentes; a combinação de luzes (e de tipos ponto/spot)
+ * faz parte da variante de shader de cada material, então cada nova combinação recompilava centenas de
+ * shaders — o "branco por alguns quadros" e os engasgos ao andar à noite. Agora as fontes viram só dados
+ * (ficam desligadas) e o pool, todo de SpotLights, nunca muda de composição: mover luz, trocar cor e
+ * intensidade não recompila nada. Fontes pontuais (lâmpadas de interior) viram spots de ~180° voltados
+ * para baixo.
+ */
 export class SectorLights {
-  private lights: Light[] = [];
-  private lastSet = "";
+  private sources: Light[] = [];
+  private readonly pool: SpotLight[] = [];
+  /** fonte atribuída a cada vaga do pool (null = vaga apagada) */
+  private assigned: Array<Light | null> = [];
   private timer = 0;
   private collected = false;
 
@@ -1643,42 +1673,81 @@ export class SectorLights {
 
   private collect(): void {
     this.collected = true;
-    this.lights = this.scene.lights.filter((l) => (l.getClassName() === "PointLight" || l.getClassName() === "SpotLight") && !/_farol_/.test(l.name));
+    const isSource = (l: Light) =>
+      (l.getClassName() === "PointLight" || l.getClassName() === "SpotLight") &&
+      !/_farol_|^fx_|lanterna|^pool_luz_/.test(l.name);
+    this.sources = this.scene.lights.filter(isSource);
+    // as fontes viram dados: ficam desligadas para sempre (o pool é que ilumina)
+    for (const l of this.sources) l.setEnabled(false);
+    for (let i = 0; i < this.maxActive; i++) {
+      const spot = new SpotLight(`pool_luz_${i}`, new Vector3(0, -100, 0), new Vector3(0, -1, 0), Math.PI * 0.6, 1, this.scene);
+      spot.intensity = 0;
+      // abaixo do sol e da hemisférica na ordem de prioridade (materiais com poucas vagas de luz ficam com elas)
+      spot.renderPriority = -10 - i;
+      // (as malhas do kit se excluem de toda luz local nova pelo onNewLightAddedObservable de sector17Kit.ts)
+      this.pool.push(spot);
+    }
+    this.assigned = this.pool.map(() => null);
   }
 
   /** Chamar por frame com a posição do observador (pés de Matias ou a câmera no menu). */
   update(dt: number, viewer: Vector3): void {
-    this.timer -= dt;
-    if (this.timer > 0) return;
-    this.timer = 0.5;
     if (!this.collected) this.collect();
-    const ranked = this.lights
-      .map((l) => ({ l, d: Vector3.Distance(l.getAbsolutePosition(), viewer) }))
-      .sort((a, b) => a.d - b.d);
-    const on = new Set<Light>();
-    for (const { l, d } of ranked) {
-      if (on.size >= this.maxActive || d > this.range) break;
-      on.add(l);
+    this.timer -= dt;
+    if (this.timer <= 0) {
+      this.timer = 0.5;
+      const ranked = this.sources
+        .map((l) => ({ l, d: Vector3.Distance(l.getAbsolutePosition(), viewer) }))
+        .filter((r) => r.d <= this.range)
+        .sort((a, b) => a.d - b.d)
+        .slice(0, this.pool.length)
+        .map((r) => r.l);
+      // mantém na mesma vaga as fontes que continuam escolhidas (sem saltos de luz)
+      const next: Array<Light | null> = this.assigned.map((a) => (a && ranked.includes(a) ? a : null));
+      for (const l of ranked) {
+        if (next.includes(l)) continue;
+        const free = next.indexOf(null);
+        if (free >= 0) next[free] = l;
+      }
+      this.assigned = next;
     }
-    const key = [...on].map((l) => l.uniqueId).sort((a, b) => a - b).join(",");
-    if (key === this.lastSet) return;
-    this.lastSet = key;
-    for (const l of this.lights) {
-      const want = on.has(l);
-      if (l.isEnabled() !== want) l.setEnabled(want);
+    // copia os parâmetros a cada quadro (postes que piscam mudam a intensidade da fonte)
+    for (const [i, spot] of this.pool.entries()) {
+      const src = this.assigned[i];
+      if (!src) {
+        spot.intensity = 0;
+        continue;
+      }
+      spot.position.copyFrom(src.getAbsolutePosition());
+      spot.diffuse.copyFrom(src.diffuse);
+      spot.specular.copyFrom(src.specular);
+      spot.range = src.range;
+      spot.intensity = src.intensity;
+      if (src instanceof SpotLight) {
+        spot.direction.copyFrom(src.direction);
+        spot.angle = src.angle;
+        spot.exponent = src.exponent;
+      } else {
+        spot.direction.set(0, -1, 0);
+        spot.angle = Math.PI * 0.98;
+        spot.exponent = 0;
+      }
     }
-    // prioridade: as mais próximas primeiro na lista de luzes de cada malha
-    for (const [i, { l }] of ranked.entries()) l.renderPriority = 1000 - i;
-    for (const m of this.scene.materials) if (m instanceof PBRMaterial) m.markDirty();
   }
 
+  /** vagas do pool iluminando uma fonte agora */
   get activeCount(): number {
-    return this.lights.filter((l) => l.isEnabled()).length;
+    return this.assigned.filter((a) => a !== null).length;
   }
 
   get total(): number {
     if (!this.collected) this.collect();
-    return this.lights.length;
+    return this.sources.length;
+  }
+
+  /** fontes atribuídas (para testes) */
+  get activeSources(): string[] {
+    return this.assigned.filter((a): a is Light => a !== null).map((l) => l.name);
   }
 }
 

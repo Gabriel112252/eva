@@ -124,12 +124,15 @@ try {
   s = await snap();
   check(s.zone === "zona.escola_salas", `Matias na sala de aula (zona ${s.zone})`);
   // sobe a escada externa da escola andando
-  // (pé da escada fica dentro do pátio, entre o muro da rua em z=-34 e o 1º degrau em z=-33.6)
-  await page.evaluate(() => window.eva.teleportPlayer(2.7, 0.2, -33.8, 0));
+  // pé da escada no pátio (norte do bloco, x≈2,85), sobe para o sul até o patamar do canto sudeste; lá vira a
+  // oeste e entra no telhado pela abertura do guarda-corpo
+  await page.evaluate(() => window.eva.teleportPlayer(2.85, 0.2, -23.4, Math.PI));
   await step(3);
   await press("forward", true);
   await press("run", true);
   await step(150);
+  await page.evaluate(() => { window.eva.camera.yaw = -Math.PI / 2; });
+  await step(45);
   await press("run", false);
   await press("forward", false);
   s = await snap();

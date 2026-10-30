@@ -48,14 +48,18 @@ export interface StaticBox {
   rotation: Quaternion;
 }
 
-/** Parâmetros do Recast (unidades em células; cs = 0,35 m, ch = 0,2 m). */
+/**
+ * Parâmetros do Recast (unidades em células; cs = 0,2 m, ch = 0,15 m). Com células de 0,35 m a erosão do raio
+ * do agente fechava as portas de 1,3–1,4 m (oficina, escola) e as escadas de 1,3 m: os interiores viravam
+ * ilhas e os caminhos voltavam vazios.
+ */
 export const RECAST_PARAMS: INavMeshParameters = {
-  cs: 0.35,
-  ch: 0.2,
+  cs: 0.2,
+  ch: 0.15,
   walkableSlopeAngle: 50,
-  walkableHeight: 9, // 1,8 m
-  walkableClimb: 2, // 0,4 m (degraus de 0,25 m, meio-fio de 0,12 m)
-  walkableRadius: 1, // 0,35 m ≈ raio da cápsula de Matias (0,32)
+  walkableHeight: 12, // 1,8 m
+  walkableClimb: 3, // 0,45 m (meio-fio de 0,12 m, soleiras)
+  walkableRadius: 2, // 0,4 m ≈ raio da cápsula de Matias (0,32) + folga
   maxEdgeLen: 34,
   maxSimplificationError: 1.3,
   minRegionArea: 8,
@@ -156,12 +160,15 @@ class RecastNavmesh implements Navmesh {
     private readonly plugin: import("@babylonjs/core/Navigation/Plugins/recastJSPlugin").RecastJSPlugin,
     readonly stats: NavmeshStats,
   ) {
-    plugin.setDefaultQueryExtent(new Vector3(2, 4, 2));
+    // busca do polígono mais próximo: larga na horizontal e curta na vertical — com 4 m de altura o ponto de
+    // uma sala do térreo "grudava" na laje do andar de cima (3,5 m) e o caminho saía vazio
+    plugin.setDefaultQueryExtent(new Vector3(5, 1.2, 5));
   }
   findPath(from: Vector3, to: Vector3): Vector3[] {
     const a = this.plugin.getClosestPoint(from);
     const b = this.plugin.getClosestPoint(to);
-    if (Vector3.Distance(a, from) > 4 || Vector3.Distance(b, to) > 4) return [];
+    const far = (p: Vector3, q: Vector3) => Math.hypot(p.x - q.x, p.z - q.z) > 5 || Math.abs(p.y - q.y) > 1.5;
+    if (far(a, from) || far(b, to)) return [];
     const path = this.plugin.computePath(a, b);
     if (path.length < 2) return [];
     // caminho inacabado (Detour pára na borda do polígono mais próximo do destino)
