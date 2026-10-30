@@ -14,6 +14,7 @@ import { Color3 } from "@babylonjs/core/Maths/math.color";
 import type { Scene } from "@babylonjs/core/scene";
 import type { Observer } from "@babylonjs/core/Misc/observable";
 import { COLLISION } from "@/world/context";
+import { GROUND_FENCE_RADIUS } from "@/world/bounds";
 import type { Interactable } from "@/interaction/interactable";
 import { RaycastVehicle, type WheelInfo } from "./raycastVehicle";
 import { HoverController, type HoverControls } from "./hoverBike";
@@ -253,13 +254,13 @@ export class Vehicle implements Interactable {
       const c = this.controls;
       const hc: HoverControls | null = this.occupied ? { throttle: c.throttle, steer: c.steer, lift: c.lift, boost: c.boost } : null;
       this.hover.step(dt, hc);
-      // cerca invisível horizontal: perto do chão, ~170 m do centro do quarteirão (o mundo construído acaba
-      // ali); quanto mais alto, mais largo o raio permitido — no céu não há teto nem cerca.
+      // cerca invisível horizontal: perto do chão, GROUND_FENCE_RADIUS do centro do quarteirão (o mundo
+      // construído — o Setor 17 — acaba ali); quanto mais alto, mais largo o raio permitido — no céu não há teto nem cerca.
       const p = this.anchor.getAbsolutePosition();
       const dx = p.x - 0;
       const dz = p.z - 0;
       const r = Math.hypot(dx, dz);
-      const rMax = 170 + Math.max(0, p.y - 80) * 0.6;
+      const rMax = GROUND_FENCE_RADIUS + Math.max(0, p.y - 80) * 0.6;
       if (r > rMax) {
         const k = Math.min(r - rMax, 60) * 1.5 * this.def.mass;
         this.body.applyImpulse(new Vector3((-dx / r) * k * dt, 0, (-dz / r) * k * dt), p);

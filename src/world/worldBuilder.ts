@@ -10,6 +10,9 @@ import { buildWorkshop, type WorkshopHandles } from "./workshop";
 import { buildPlaza } from "./plaza";
 import { burntCar, cable, clothesline, crateStack, grassTuft, marketStall, rubblePile, streetLamp, tirePile, tree, barrel } from "./props";
 import { placeSign } from "./signage";
+import { buildSector17, type Sector17Handles } from "./sector17";
+import { SECTOR_BOUNDS, SECTOR_CENTER } from "./bounds";
+import type { Navmesh } from "./navmesh";
 
 export interface World {
   ctx: WorldContext;
@@ -18,9 +21,13 @@ export interface World {
   spawns: Map<string, SpawnPoint>;
   emitters: AmbientEmitterSpec[];
   workshop: WorkshopHandles;
+  /** Setor 17 em volta do quarteirão (luzes por distância) */
+  sector17: Sector17Handles;
+  /** malha de navegação (construída depois, de forma assíncrona, em Game) */
+  navmesh: Navmesh | null;
 }
 
-/** Monta o quarteirão habitado de São Paulo Velha (Setor 17). */
+/** Monta o quarteirão habitado de São Paulo Velha e, em volta dele, o Setor 17 inteiro (blockout). */
 export function buildWorld(scene: Scene, quality: QualityLevel, onProgress?: (label: string) => void): World {
   const mats = new MaterialLibrary(scene, quality);
   const ctx = new WorldContext(scene, mats, quality);
@@ -39,13 +46,16 @@ export function buildWorld(scene: Scene, quality: QualityLevel, onProgress?: (la
 
   onProgress?.("Espalhando sinais de ocupação…");
   buildStreetLife(ctx);
+
+  // o resto do setor (ruas, quarteirões, depósito, escola, marcos) cresce para fora do quarteirão
+  const sector17 = buildSector17(ctx, onProgress);
   buildSkyline(ctx);
 
   onProgress?.("Otimizando a cena…");
   ctx.finalize();
   mats.freezeAll();
 
-  return { ctx, mats, shadowCasters: ctx.shadowCasters, spawns: ctx.spawns, emitters: ctx.emitters, workshop };
+  return { ctx, mats, shadowCasters: ctx.shadowCasters, spawns: ctx.spawns, emitters: ctx.emitters, workshop, sector17, navmesh: null };
 }
 
 function buildingSpecs(mats: MaterialLibrary): BuildingSpec[] {
@@ -162,9 +172,9 @@ function buildStreetLife(ctx: WorldContext): void {
 }
 
 /**
- * Silhueta de São Paulo Velha ao redor do quarteirão jogável: blocos de prédios distantes (80–220 m),
- * sem detalhe, para a aeromoto e as ruas não terminarem num vazio. Sem colisão (a aeromoto é contida por
- * uma cerca invisível em Game) e sem sombras.
+ * Silhueta de São Paulo Velha além dos muros do Setor 17: blocos de prédios distantes (sem detalhe, sem
+ * colisão, sem sombra) em anéis a 25–140 m do limite do setor, para as ruas não terminarem num vazio.
+ * Nenhum bloco entra no retângulo do setor (+12 m de folga); a névoa (visibilidade ~250 m) apaga o anel externo.
  */
 function buildSkyline(ctx: WorldContext): void {
   const { mats } = ctx;
@@ -173,22 +183,31 @@ function buildSkyline(ctx: WorldContext): void {
     return v - Math.floor(v);
   };
   const palette = [mats.plasterPhoto.gray, mats.plasterPhoto.sand, mats.plasterPhoto.warm, mats.concrete];
+  const B = SECTOR_BOUNDS;
+  const margin = 12;
+  const halfX = (B.x1 - B.x0) / 2;
+  const halfZ = (B.z1 - B.z0) / 2;
   let i = 0;
   for (let ring = 0; ring < 3; ring++) {
-    const radius = 95 + ring * 55;
-    const count = 18 + ring * 8;
+    const dist = 25 + ring * 45; // distância do anel ao limite do setor
+    const count = 26 + ring * 10;
     for (let k = 0; k < count; k++) {
-      const a = (k / count) * Math.PI * 2 + rnd(i * 3 + 1) * 0.25;
-      const r = radius + (rnd(i * 3 + 2) - 0.5) * 30;
-      const x = Math.cos(a) * r;
-      const z = Math.sin(a) * r * 0.85;
-      // deixa livre o corredor da rua (oeste) e a praça
-      if (Math.abs(z) < 14 && x < 20 && x > -70) continue;
-      const w = 10 + rnd(i * 3 + 3) * 16;
-      const d = 10 + rnd(i * 7 + 1) * 16;
-      const h = 8 + rnd(i * 7 + 2) * (ring === 0 ? 18 : 34);
-      ctx.box(`skyline_${i}`, { w, h, d }, new Vector3(x, h / 2 - 0.2, z), palette[i % palette.length]!, { collider: false, shadow: false, cameraBlocker: false, rotationY: rnd(i * 7 + 3) * 0.4 });
+      const a = (k / count) * Math.PI * 2 + rnd(i * 3 + 1) * 0.2;
+      // ponto sobre um "retângulo arredondado" em volta do setor
+      const rx = halfX + dist + (rnd(i * 3 + 2) - 0.5) * 24;
+      const rz = halfZ + dist + (rnd(i * 5 + 2) - 0.5) * 24;
+      const x = SECTOR_CENTER.x + Math.cos(a) * rx;
+      const z = SECTOR_CENTER.z + Math.sin(a) * rz;
+      const w = 12 + rnd(i * 3 + 3) * 18;
+      const d = 12 + rnd(i * 7 + 1) * 18;
+      const h = 9 + rnd(i * 7 + 2) * (ring === 0 ? 16 : 36);
       i++;
+      // nunca dentro do setor nem em cima do muro
+      if (x + w / 2 > B.x0 - margin && x - w / 2 < B.x1 + margin && z + d / 2 > B.z0 - margin && z - d / 2 < B.z1 + margin) continue;
+      ctx.box(`skyline_${i}`, { w, h, d }, new Vector3(x, h / 2 - 0.2, z), palette[i % palette.length]!, { collider: false, shadow: false, cameraBlocker: false, rotationY: rnd(i * 7 + 3) * 0.3 });
     }
   }
+  // duas torres altas ao longe (nordeste e sudoeste) para a leitura de metrópole no horizonte
+  ctx.box("skyline_torre_ne", { w: 22, h: 70, d: 22 }, new Vector3(B.x1 + 150, 34.8, B.z1 + 120), mats.plasterPhoto.gray, { collider: false, shadow: false, cameraBlocker: false, rotationY: 0.3 });
+  ctx.box("skyline_torre_so", { w: 18, h: 58, d: 26 }, new Vector3(B.x0 - 140, 28.8, B.z0 - 110), mats.concrete, { collider: false, shadow: false, cameraBlocker: false, rotationY: -0.2 });
 }
