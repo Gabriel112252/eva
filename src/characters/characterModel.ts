@@ -7,6 +7,7 @@ import type { Scene } from "@babylonjs/core/scene";
 import type { Skeleton } from "@babylonjs/core/Bones/skeleton";
 import "@babylonjs/loaders/glTF/2.0";
 import { CharacterAnimator } from "./characterAnimator";
+import { applyCharacterShading } from "./characterShading";
 import { CHARACTERS, characterUrl, type CharacterVariant } from "@/data/characters";
 
 export interface CharacterModel {
@@ -44,6 +45,8 @@ export async function loadCharacter(scene: Scene, variant: CharacterVariant, suf
     // a caixa ficaria presa na origem e o personagem sumiria longe dela)
     m.setBoundingInfo(new BoundingInfo(new Vector3(-0.9, -0.2, -0.9), new Vector3(0.9, 2.1, 0.9)));
   }
+  // acabamento: luz de recorte e translucidez de pele (só material; ver characterShading.ts)
+  applyCharacterShading(meshes);
   // rig Mixamo ("mixamorig:Head") ou rig simples ("Head")
   const head = result.transformNodes.find((t) => t.name === "mixamorig:Head" || t.name === "Head") ?? null;
   const animator = new CharacterAnimator(result.animationGroups);
