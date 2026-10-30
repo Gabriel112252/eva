@@ -132,8 +132,9 @@ export class Game {
   // ---------------------------------------------------------------------
   async init(): Promise<void> {
     this.saves = new SaveSystem(await openStore());
-    const hasSavedSettings = await this.saves.hasSettings();
-    this.settings = await this.saves.loadSettings();
+    // salvamento nunca impede o jogo de abrir (iOS pode fechar o IndexedDB a qualquer momento)
+    const hasSavedSettings = await this.saves.hasSettings().catch(() => false);
+    this.settings = await this.saves.loadSettings().catch(() => ({ ...DEFAULT_SETTINGS }));
     this.touch = new TouchControls(this.input, this.canvas);
     // celular/tablet sem configuração salva: começa em qualidade baixa (GPU móvel, bateria)
     if (this.touch.enabled && !hasSavedSettings) this.settings = { ...this.settings, quality: "baixa" };
@@ -229,7 +230,7 @@ export class Game {
 
     progress(1, "Pronto.");
     this.engine.runRenderLoop(() => this.frame());
-    this.menus.setContinueAvailable(await this.saves.hasSave());
+    this.menus.setContinueAvailable(await this.saves.hasSave().catch(() => false));
     this.camera.setMenuOrbit();
     this.hud.setFade(false);
     this.state = "menu";
@@ -419,7 +420,7 @@ export class Game {
     this.hud.hideSubtitle();
     this.hud.setLetterbox(false);
     this.camera.setMenuOrbit();
-    this.menus.setContinueAvailable(await this.saves.hasSave());
+    this.menus.setContinueAvailable(await this.saves.hasSave().catch(() => false));
     this.menus.show("menu");
   }
 
