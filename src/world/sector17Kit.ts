@@ -1,7 +1,13 @@
 import { Matrix, Quaternion, Vector3 } from "@babylonjs/core/Maths/math.vector";
+import { Color3, Color4 } from "@babylonjs/core/Maths/math.color";
 import { LoadAssetContainerAsync } from "@babylonjs/core/Loading/sceneLoader";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { VertexData } from "@babylonjs/core/Meshes/mesh.vertexData";
+import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
+import { RawTexture } from "@babylonjs/core/Materials/Textures/rawTexture";
+import { Texture } from "@babylonjs/core/Materials/Textures/texture";
+import type { Scene } from "@babylonjs/core/scene";
+import type { Light } from "@babylonjs/core/Lights/light";
 import { VertexBuffer } from "@babylonjs/core/Buffers/buffer";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode";
 import { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
@@ -9,6 +15,7 @@ import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { Material } from "@babylonjs/core/Materials/material";
 import type { BaseTexture } from "@babylonjs/core/Materials/Textures/baseTexture";
 import "@babylonjs/core/Meshes/thinInstanceMesh";
+import "@babylonjs/core/Meshes/instancedMesh";
 import "@babylonjs/loaders/glTF/2.0";
 import type { WorldContext } from "./context";
 import { rectsOverlap, type Rect } from "./bounds";
@@ -80,6 +87,12 @@ export const KIT = {
   torreScale: 34 / 36,
   /** altura (no espaço da peça) que separa pilar e tabuleiro do viaduto */
   viaductSplit: 9.65,
+  /** LOD por instância (m): módulos de fachada, detalhes de rua, peças de laje */
+  lodFacade: 70,
+  lodDetail: 45,
+  lodRoof: 90,
+  /** cartão distante: 2 cm à frente do volume recuado */
+  cardInset: 0.98,
 } as const;
 
 export const KIT_PIECE = {
@@ -136,6 +149,51 @@ export interface KitSign {
   height: number;
 }
 
+/**
+ * Cartão de fachada distante (um por módulo e pavimento): quadrilátero com textura de janelas, 2 cm à frente
+ * do volume recuado (atrás das paredes do kit). Perto, fica escondido atrás dos módulos; longe — quando o LOD
+ * das instâncias do kit some — é ele que desenha a fachada (um único draw call para o setor inteiro).
+ */
+export interface KitCard {
+  lot: string;
+  /** cantos (mundo): inferior esquerdo, inferior direito, superior direito, superior esquerdo (vistos da rua) */
+  corners: Array<[number, number, number]>;
+  /** normal para a rua */
+  normal: [number, number, number];
+  /** metade da textura: 0 = térreo (porta/loja), 1 = pavimento (janelas) */
+  half: 0 | 1;
+  /** cor do reboco do módulo (linear) */
+  color: [number, number, number];
+}
+
+/** Cor do reboco de cada módulo do kit (baseColorFactor do material do GLB), para o cartão distante. */
+const PLASTER: Record<string, [number, number, number]> = {
+  terreo_loja_0: [0.84, 0.76, 0.58],
+  terreo_loja_1: [0.55, 0.64, 0.72],
+  terreo_casa_0: [0.86, 0.8, 0.7],
+  terreo_casa_1: [0.82, 0.62, 0.55],
+  apto_janelas_0: [0.84, 0.76, 0.58],
+  apto_janelas_1: [0.62, 0.68, 0.58],
+  apto_sacada_0: [0.86, 0.8, 0.7],
+  apto_sacada_1: [0.55, 0.64, 0.72],
+  apto_servico_0: [0.72, 0.72, 0.7],
+  apto_servico_1: [0.84, 0.76, 0.58],
+  galpao_0: [0.78, 0.78, 0.76],
+  galpao_1: [0.72, 0.72, 0.7],
+};
+
+/**
+ * Distância (m) além da qual as instâncias de uma peça somem (LOD por instância; o cartão distante assume a
+ * fachada). Marcos nunca somem — são vistos de longe por definição. `null` = sem LOD.
+ */
+export function kitLodDistance(pieceName: string, materialName = ""): number | null {
+  if (pieceName.startsWith("MARCO_")) return null;
+  if (/^(TECH_anexo|TECH_reciclador|REMENDO_caixa_dagua|TECH_canopy_solar)/.test(pieceName)) return KIT.lodRoof;
+  // nas fachadas, decalques e miudezas (escorridos, cartazes, placas, roupas, plantas, cobogó) somem antes da parede
+  if (/^(FACHADA_|TECH_pele)/.test(pieceName)) return /stain|poster|placa|clothes|leaves|cobogo|produce|lattice|trelica/.test(materialName) ? KIT.lodDetail : KIT.lodFacade;
+  return KIT.lodDetail;
+}
+
 export type GroundType = "terreo_loja" | "terreo_casa" | "galpao";
 export type UpperType = "apto_janelas" | "apto_sacada" | "apto_servico" | "galpao";
 
@@ -164,6 +222,7 @@ export interface Sector17KitPlan {
   instances: KitInstance[];
   bodies: KitBodyBox[];
   signs: KitSign[];
+  cards: KitCard[];
   lots: LotKitPlan[];
 }
 
@@ -389,6 +448,7 @@ export interface PlanEnv {
   out: KitInstance[];
   bodies: KitBodyBox[];
   signs: KitSign[];
+  cards: KitCard[];
 }
 
 /** Composição de um lote: módulos, esquinas, topos, volume cego, camada tecnológica e remendos. */
@@ -434,10 +494,25 @@ export function planLot(lot: LotSpec, env: PlanEnv): LotKitPlan {
     const topoVariant: 0 | 1 = tech !== "anexo" && !burnt && rnd(lot.seed, 1600 + k) < 0.3 ? 1 : 0;
     modules.push({ u, blocked, pieces, topo: blocked ? null : `FACHADA_topo_${topoVariant}` });
   }
+  const fn = f.at(0, 0, 1).subtract(f.at(0, 0, 0));
   for (const m of modules) {
     if (m.blocked) continue;
     m.pieces.forEach((p, r) => put(p, m.u, y0 + r * KIT.floor, 0, { sx: layout.scale }));
     if (m.topo) put(m.topo, m.u, y0 + rows * KIT.floor, 0, { sx: layout.scale });
+    // cartões distantes (um por pavimento) atrás das paredes do módulo
+    const u0 = m.u - layout.moduleWidth / 2;
+    const u1 = m.u + layout.moduleWidth / 2;
+    m.pieces.forEach((p, r) => {
+      const ya = r === 0 ? 0 : y0 + r * KIT.floor;
+      const yb = r === rows - 1 ? H - KIT.skin : y0 + (r + 1) * KIT.floor;
+      const c = (u: number, y: number): [number, number, number] => {
+        const q = f.at(u, y, -KIT.cardInset);
+        return [q.x, q.y, q.z];
+      };
+      const base = PLASTER[p.replace("FACHADA_", "")] ?? [0.8, 0.75, 0.65];
+      const color: [number, number, number] = tint ? [base[0] * tint[0], base[1] * tint[1], base[2] * tint[2]] : base;
+      env.cards.push({ lot: lot.id, corners: [c(u0, ya), c(u1, ya), c(u1, yb), c(u0, yb)], normal: [fn.x, fn.y, fn.z], half: r === 0 ? 0 : 1, color });
+    });
   }
 
   // --- esquinas (uma por pavimento; a ponta dividida com o vizinho fica com um dos dois) -------------
@@ -465,16 +540,14 @@ export function planLot(lot: LotSpec, env: PlanEnv): LotKitPlan {
   // --- volume cego (recuado; 1 cm para dentro das caixas do blockout) --------------------------------
   const s = KIT.skin;
   const top = H - s;
+  // laterais da fenda entre o volume recuado e as paredes dos módulos (largura mínima 0,3 m; nas fachadas com
+  // sobra, vão até o primeiro módulo, atrás da pilastra)
+  const side = Math.max(0.3, layout.start);
   body("nucleo", s, W - s, -(depth - s), -KIT.bodyInset, 0, top);
-  body("lado0", s, 0.3, -KIT.bodyInset, -KIT.wall, 0, top);
-  body("lado1", W - 0.3, W - s, -KIT.bodyInset, -KIT.wall, 0, top);
-  body("tampa", s, W - s, -KIT.bodyInset, -KIT.wall + 0.05, top - 0.1, top);
-  for (const [i, m] of modules.entries()) if (m.blocked) body(`tampado${i}`, m.u - layout.moduleWidth / 2 + (i === 0 ? s : 0), m.u + layout.moduleWidth / 2 - (i === modules.length - 1 ? s : 0), -KIT.bodyInset, -s, 0, top);
-  if (layout.start > 0) {
-    // sobra nas pontas: a parede entre a esquina e o primeiro módulo
-    body("sobra0", s, layout.start, -KIT.bodyInset, -KIT.wall, 0, top);
-    body("sobra1", W - layout.start, W - s, -KIT.bodyInset, -KIT.wall, 0, top);
-  }
+  body("lado0", s, side, -KIT.bodyInset, -KIT.wall, 0, top);
+  body("lado1", W - side, W - s, -KIT.bodyInset, -KIT.wall, 0, top);
+  body("tampa", side, W - side, -KIT.bodyInset, -KIT.wall + 0.05, top - 0.1, top);
+  for (const [i, m] of modules.entries()) if (m.blocked) body(`tampado${i}`, Math.max(side, m.u - layout.moduleWidth / 2), Math.min(W - side, m.u + layout.moduleWidth / 2), -KIT.bodyInset, -s, 0, top);
 
   // --- camada tecnológica -----------------------------------------------------------------------------
   const open = modules.map((m, k) => ({ m, k })).filter(({ m }) => !m.blocked);
@@ -631,11 +704,11 @@ function planLandmarks(out: KitInstance[], detail: KitDetail): void {
 
 /** Plano completo do setor (determinístico: mesma entrada → mesmo plano). */
 export function planSector17Kit(detail: KitDetail = "completo"): Sector17KitPlan {
-  const env: PlanEnv = { detail, y0: STREET.curbHeight, out: [], bodies: [], signs: [] };
+  const env: PlanEnv = { detail, y0: STREET.curbHeight, out: [], bodies: [], signs: [], cards: [] };
   const lots = LOTS.map((lot) => planLot(lot, env));
   if (detail === "completo") planStreetWires(env.out);
   planLandmarks(env.out, detail);
-  return { detail, instances: env.out, bodies: env.bodies, signs: env.signs, lots };
+  return { detail, instances: env.out, bodies: env.bodies, signs: env.signs, cards: env.cards, lots };
 }
 
 /** Peças do GLB necessárias para um plano (as divididas contam pela peça de origem). */
@@ -660,24 +733,111 @@ export function sector17KitUrl(): string {
   return `${import.meta.env.BASE_URL}assets/environments/kit_tech.glb`;
 }
 
-/** Volume cego dos lotes no modo kit (antes do `ctx.finalize`: entra na fusão por material, sem draw call a mais). */
+/**
+ * Volume cego dos lotes e cartões distantes no modo kit (antes do `ctx.finalize`: entram na fusão por
+ * material — o volume usa os materiais do blockout e os cartões são um único draw call).
+ */
 export function buildSector17KitBodies(ctx: WorldContext, plan: Sector17KitPlan): void {
   const byId = new Map(LOTS.map((l) => [l.id, l]));
   for (const b of plan.bodies) {
     const lot = byId.get(b.lot)!;
     ctx.box(b.id, b.size, new Vector3(...b.center), matOf(ctx.mats, lot.mat));
   }
+  if (plan.cards.length) ctx.register(buildFarCards(ctx, plan.cards), true, false);
+}
+
+/** Textura dos cartões distantes: metade esquerda = térreo (embasamento, porta de enrolar, porta, janela), direita = pavimento (3 janelas, uma acesa). */
+function farCardTexture(ctx: WorldContext): DynamicTexture {
+  const tex = new DynamicTexture("kit_fachada_longe", { width: 512, height: 128 }, ctx.scene, true);
+  const g = tex.getContext();
+  const box = (c: string, x: number, y: number, w: number, h: number) => {
+    g.fillStyle = c;
+    g.fillRect(x, y, w, h);
+  };
+  box("#ececec", 0, 0, 512, 128);
+  // térreo (0–256): laje no alto, embasamento de pedra, porta de aço de enrolar, porta de madeira e janela gradeada
+  box("#d8d8d6", 0, 0, 256, 6);
+  box("#5c5752", 0, 108, 256, 20);
+  box("#6f747a", 18, 34, 104, 88);
+  for (let y = 38; y < 120; y += 7) box("#5d6268", 18, y, 104, 2);
+  box("#6b4a33", 150, 44, 30, 78);
+  box("#1f2730", 196, 48, 44, 40);
+  box("#bdbcb8", 192, 88, 52, 5);
+  // pavimento (256–512): linha de laje, três janelas com peitoril (a do meio acesa)
+  box("#d8d8d6", 256, 0, 256, 8);
+  for (const [k, x] of [278, 362, 446].entries()) {
+    box(k === 1 ? "#a8875a" : "#1f2730", x, 34, 44, 56);
+    box("#cfcfcb", x - 4, 90, 52, 6);
+    box("#2b2f33", x + 20, 34, 3, 56);
+  }
+  tex.update();
+  tex.wrapU = DynamicTexture.CLAMP_ADDRESSMODE;
+  tex.wrapV = DynamicTexture.CLAMP_ADDRESSMODE;
+  return tex;
+}
+
+/** Malha única com todos os cartões distantes (cor do reboco por vértice). */
+function buildFarCards(ctx: WorldContext, cards: KitCard[]): Mesh {
+  const P: number[] = [];
+  const N: number[] = [];
+  const U: number[] = [];
+  const C: number[] = [];
+  const I: number[] = [];
+  for (const c of cards) {
+    const base = P.length / 3;
+    // cantos: [0] (u0, base) [1] (u1, base) [2] (u1, topo) [3] (u0, topo); u1 fica à esquerda de quem olha da rua
+    const u0 = c.half * 0.5;
+    const uv: Array<[number, number]> = [[u0 + 0.5, 0], [u0, 0], [u0, 1], [u0 + 0.5, 1]];
+    c.corners.forEach((q, i) => {
+      P.push(...q);
+      N.push(...c.normal);
+      U.push(...uv[i]!);
+      C.push(c.color[0], c.color[1], c.color[2], 1);
+    });
+    I.push(base + 1, base + 2, base + 3, base + 1, base + 3, base);
+  }
+  const vd = new VertexData();
+  vd.positions = P;
+  vd.normals = N;
+  vd.uvs = U;
+  vd.colors = C;
+  vd.indices = I;
+  const mesh = new Mesh("kit_fachadas_longe", ctx.scene);
+  vd.applyToMesh(mesh);
+  const mat = new PBRMaterial("kit_fachada_longe", ctx.scene);
+  mat.albedoTexture = farCardTexture(ctx);
+  mat.metallic = 0;
+  mat.roughness = 0.95;
+  mat.environmentIntensity = 0.6;
+  mat.backFaceCulling = false;
+  mat.maxSimultaneousLights = sectorMaxLights(ctx.quality);
+  mesh.material = mat;
+  return mesh;
+}
+
+/** Como as colocações viram desenho: thin instances (CPU zero) ou instâncias de malha (culling por instância). */
+export type KitInstancing = "thin" | "instanced";
+
+/**
+ * Modo de instanciamento: `?kitinst=thin|instanced` força um dos dois (comparação de desempenho); sem
+ * parâmetro, instâncias de malha — o culling por instância desenha só o que está no quadro.
+ */
+export function kitInstancing(search?: string): KitInstancing {
+  const q = search ?? (typeof window !== "undefined" ? window.location.search : "");
+  const v = new URLSearchParams(q).get("kitinst");
+  return v === "thin" ? "thin" : "instanced";
 }
 
 export interface Sector17KitResult {
-  /** malhas-fonte com thin instances */
-  meshes: Mesh[];
-  /** fontes que projetam sombra (marcos e marquises/sacadas) */
+  /** malhas-fonte e instâncias do kit */
+  meshes: AbstractMesh[];
+  /** fontes/instâncias que projetam sombra (marcos e marquises/sacadas) */
   shadowCasters: AbstractMesh[];
-  /** draw calls por passada se todas as fontes estiverem no quadro */
+  /** malhas-fonte = draw calls por passada se todas estiverem no quadro */
   sources: number;
   instances: number;
   triangles: number;
+  mode: KitInstancing;
 }
 
 const pending = new WeakMap<WorldContext, Promise<Sector17KitResult | null>>();
@@ -686,8 +846,8 @@ const pending = new WeakMap<WorldContext, Promise<Sector17KitResult | null>>();
  * Começa a carregar o kit (assíncrono) e guarda a promessa no contexto: `loadHeroAssets` a aguarda antes
  * de devolver os projetores de sombra, então o jogo só abre com o setor já trocado (ou em blockout, se falhar).
  */
-export function startSector17Kit(ctx: WorldContext, covered: Mesh[], plan: Sector17KitPlan, url = sector17KitUrl()): Promise<Sector17KitResult | null> {
-  const p = runKit(ctx, covered, plan, url);
+export function startSector17Kit(ctx: WorldContext, covered: Mesh[], plan: Sector17KitPlan, url = sector17KitUrl(), mode = kitInstancing()): Promise<Sector17KitResult | null> {
+  const p = runKit(ctx, covered, plan, url, mode);
   pending.set(ctx, p);
   return p;
 }
@@ -697,12 +857,12 @@ export function sector17KitPending(ctx: WorldContext): Promise<Sector17KitResult
   return pending.get(ctx) ?? null;
 }
 
-async function runKit(ctx: WorldContext, covered: Mesh[], plan: Sector17KitPlan, url: string): Promise<Sector17KitResult | null> {
+async function runKit(ctx: WorldContext, covered: Mesh[], plan: Sector17KitPlan, url: string, mode: KitInstancing): Promise<Sector17KitResult | null> {
   try {
-    const result = await instantiateKit(ctx, plan, url);
+    const result = await instantiateKit(ctx, plan, url, mode);
     dropCovered(ctx, covered);
-    placeKitSigns(ctx, plan);
-    console.info(`[setor17-kit] ${result.sources} malhas-fonte, ${result.instances} instâncias, ${Math.round(result.triangles / 1000)} mil triângulos`);
+    await placeKitSigns(ctx, plan);
+    console.info(`[setor17-kit] ${result.sources} malhas-fonte, ${result.instances} colocações (${mode}), ${Math.round(result.triangles / 1000)} mil triângulos`);
     return result;
   } catch (err) {
     console.error("[setor17-kit] falha ao carregar o kit; o setor continua em blockout", err);
@@ -711,16 +871,157 @@ async function runKit(ctx: WorldContext, covered: Mesh[], plan: Sector17KitPlan,
   }
 }
 
-/** Soma de verificação da geometria + matriz de baking: malhas idênticas entre as variantes _0/_1 viram uma fonte. */
-function dedupKey(m: Mesh, bake: Matrix): string {
-  const pos = m.getVerticesData(VertexBuffer.PositionKind) ?? [];
+/** Soma de verificação de geometria + material: malhas idênticas entre as variantes _0/_1 viram uma fonte. */
+function dedupKey(m: Mesh): string {
+  const sum = (a: ArrayLike<number> | null, mod = 1e9) => {
+    if (!a) return "-";
+    let h = 0;
+    for (let i = 0; i < a.length; i++) h = (h + (a[i] ?? 0) * ((i % 13) + 1)) % mod;
+    return h.toFixed(3);
+  };
   const idx = m.getIndices() ?? [];
-  let h = 0;
-  for (let i = 0; i < pos.length; i++) h = (h + (pos[i] ?? 0) * ((i % 13) + 1)) % 1e9;
   let hi = 0;
   for (let i = 0; i < idx.length; i++) hi = (hi * 31 + (idx[i] ?? 0)) % 1000000007;
-  const mt = Array.from(bake.asArray(), (v) => v.toFixed(4)).join(",");
-  return `${m.material?.name ?? "-"}|${pos.length}|${idx.length}|${h.toFixed(3)}|${hi}|${mt}`;
+  const pos = m.getVerticesData(VertexBuffer.PositionKind);
+  const mat = m.metadata?.kitPalette ? "paleta" : String(m.material?.uniqueId ?? -1);
+  return [mat, pos?.length ?? 0, idx.length, hi, sum(pos), sum(m.getVerticesData(VertexBuffer.UVKind)), sum(m.getVerticesData(VertexBuffer.ColorKind))].join("|");
+}
+
+/**
+ * Famílias de materiais do kit que usam as MESMAS texturas e só mudam a cor-base (conferido no GLB): numa
+ * peça, viram uma malha só com a cor de cada material por vértice — menos malhas-fonte, menos draw calls.
+ */
+const FAMILIES: Array<[RegExp, string]> = [
+  [/^plaster_/, "reboco"],
+  [/^concrete(_dark|_ribbed)?$/, "concreto"],
+  [/^painted_/, "pintura"],
+  [/^wood(_fine)?$/, "madeira"],
+  [/^rust(_dark)?$/, "ferrugem"],
+  [/^lattice_/, "trelica"],
+];
+
+/** Material opaco sem nenhuma textura (metais, vidros, plásticos, lâmpadas): vai para a paleta. */
+function isFlat(m: PBRMaterial): boolean {
+  const opaque = (m.transparencyMode === null || m.transparencyMode === PBRMaterial.PBRMATERIAL_OPAQUE) && m.alpha >= 1;
+  return opaque && !m.albedoTexture && !m.bumpTexture && !m.metallicTexture && !m.emissiveTexture && !m.opacityTexture && !m.ambientTexture && !m.reflectivityTexture;
+}
+
+/** Grupo de fusão de um material: "paleta", "familia:<nome>" (mesmas texturas) ou "mat:<id>". */
+function groupKey(m: PBRMaterial, families: Map<string, PBRMaterial>): string {
+  if (isFlat(m)) return "paleta";
+  for (const [re, fam] of FAMILIES) {
+    if (!re.test(m.name)) continue;
+    const base = families.get(fam);
+    if (!base) {
+      const clone = m.clone(`kit_${fam}`);
+      clone.albedoColor = new Color3(1, 1, 1);
+      clone.metadata = { kitFamily: fam, albedoTexture: m.albedoTexture?.name ?? "" };
+      families.set(fam, clone);
+      return `familia:${fam}`;
+    }
+    // só funde se as texturas forem de fato as mesmas (o gerador do kit pode mudar)
+    if ((base.metadata as { albedoTexture: string }).albedoTexture === (m.albedoTexture?.name ?? "")) return `familia:${fam}`;
+  }
+  return `mat:${m.uniqueId}`;
+}
+
+/** Paleta dos materiais sem textura: cor, rugosidade/metal e emissivo num texel cada (1 material para todos). */
+class KitPalette {
+  static readonly WIDTH = 64;
+  static readonly EMISSIVE_MAX = 4;
+  private readonly index = new Map<PBRMaterial, number>();
+  private readonly mats: PBRMaterial[] = [];
+  get size(): number {
+    return this.mats.length;
+  }
+  uv(m: PBRMaterial): [number, number] {
+    let i = this.index.get(m);
+    if (i === undefined) {
+      i = this.mats.length;
+      if (i >= KitPalette.WIDTH) throw new Error("paleta do kit cheia");
+      this.mats.push(m);
+      this.index.set(m, i);
+    }
+    return [(i + 0.5) / KitPalette.WIDTH, 0.5];
+  }
+  build(scene: Scene): PBRMaterial {
+    const W = KitPalette.WIDTH;
+    const alb = new Uint8Array(W * 4);
+    const orm = new Uint8Array(W * 4);
+    const emi = new Uint8Array(W * 4);
+    const byte = (v: number) => Math.max(0, Math.min(255, Math.round(v * 255)));
+    this.mats.forEach((m, i) => {
+      const a = m.albedoColor.toGammaSpace();
+      alb.set([byte(a.r), byte(a.g), byte(a.b), 255], i * 4);
+      orm.set([255, byte(m.roughness ?? 1), byte(m.metallic ?? 0), 255], i * 4);
+      const k = (m.emissiveIntensity ?? 1) / KitPalette.EMISSIVE_MAX;
+      const e = new Color3(m.emissiveColor.r * k, m.emissiveColor.g * k, m.emissiveColor.b * k).toGammaSpace();
+      emi.set([byte(e.r), byte(e.g), byte(e.b), 255], i * 4);
+    });
+    const tex = (name: string, data: Uint8Array, gamma: boolean) => {
+      const t = RawTexture.CreateRGBATexture(data, W, 1, scene, false, false, Texture.NEAREST_SAMPLINGMODE);
+      t.name = name;
+      t.gammaSpace = gamma;
+      t.wrapU = Texture.CLAMP_ADDRESSMODE;
+      t.wrapV = Texture.CLAMP_ADDRESSMODE;
+      return t;
+    };
+    const mat = new PBRMaterial("kit_paleta", scene);
+    mat.albedoTexture = tex("kit_paleta_cor", alb, true);
+    mat.metallicTexture = tex("kit_paleta_orm", orm, false);
+    mat.useRoughnessFromMetallicTextureAlpha = false;
+    mat.useRoughnessFromMetallicTextureGreen = true;
+    mat.useMetallnessFromMetallicTextureBlue = true;
+    mat.metallic = 1;
+    mat.roughness = 1;
+    mat.emissiveTexture = tex("kit_paleta_emissivo", emi, true);
+    mat.emissiveColor = new Color3(1, 1, 1);
+    mat.emissiveIntensity = KitPalette.EMISSIVE_MAX;
+    mat.backFaceCulling = false;
+    mat.twoSidedLighting = true;
+    return mat;
+  }
+}
+
+/** Funde as malhas de um grupo (já no espaço da peça) numa malha só, com UV de paleta ou cor por vértice. */
+function mergeGroup(name: string, parts: Mesh[], key: string, families: Map<string, PBRMaterial>, palette: KitPalette): Mesh {
+  const pal = key === "paleta";
+  const fam = key.startsWith("familia:") ? families.get(key.slice(8))! : null;
+  if (parts.length === 1 && !pal && !fam) return parts[0]!;
+  const P: number[] = [];
+  const N: number[] = [];
+  const U: number[] = [];
+  const C: number[] = [];
+  const I: number[] = [];
+  for (const m of parts) {
+    const mat = m.material as PBRMaterial;
+    const pos = m.getVerticesData(VertexBuffer.PositionKind)!;
+    const nor = m.getVerticesData(VertexBuffer.NormalKind);
+    const uv = m.getVerticesData(VertexBuffer.UVKind);
+    const idx = m.getIndices()!;
+    const base = P.length / 3;
+    const puv = pal ? palette.uv(mat) : null;
+    const col = mat.albedoColor;
+    for (let v = 0; v < pos.length / 3; v++) {
+      P.push(pos[v * 3]!, pos[v * 3 + 1]!, pos[v * 3 + 2]!);
+      N.push(nor?.[v * 3] ?? 0, nor?.[v * 3 + 1] ?? 1, nor?.[v * 3 + 2] ?? 0);
+      if (puv) U.push(puv[0], puv[1]);
+      else U.push(uv?.[v * 2] ?? 0, uv?.[v * 2 + 1] ?? 0);
+      if (fam) C.push(col.r, col.g, col.b, 1);
+    }
+    for (let k = 0; k < idx.length; k++) I.push(base + idx[k]!);
+  }
+  const vd = new VertexData();
+  vd.positions = P;
+  vd.normals = N;
+  vd.uvs = U;
+  if (fam) vd.colors = C;
+  vd.indices = I;
+  const out = new Mesh(name, parts[0]!.getScene());
+  vd.applyToMesh(out);
+  out.material = fam ?? parts[0]!.material;
+  if (pal) out.metadata = { kitPalette: true };
+  return out;
 }
 
 /** Divide uma malha (já no espaço da peça) pelos centroides dos triângulos acima/abaixo de `y`. */
@@ -729,6 +1030,7 @@ function splitByHeight(m: Mesh, y: number, names: [string, string]): [Mesh | nul
   const nor = m.getVerticesData(VertexBuffer.NormalKind);
   const uv = m.getVerticesData(VertexBuffer.UVKind);
   const uv2 = m.getVerticesData(VertexBuffer.UV2Kind);
+  const col = m.getVerticesData(VertexBuffer.ColorKind);
   const idx = m.getIndices()!;
   const parts: [number[], number[]] = [[], []];
   for (let t = 0; t < idx.length; t += 3) {
@@ -746,6 +1048,7 @@ function splitByHeight(m: Mesh, y: number, names: [string, string]): [Mesh | nul
     const N: number[] = [];
     const U: number[] = [];
     const U2: number[] = [];
+    const C: number[] = [];
     const I: number[] = [];
     for (const v of tris) {
       let j = remap.get(v);
@@ -756,6 +1059,7 @@ function splitByHeight(m: Mesh, y: number, names: [string, string]): [Mesh | nul
         if (nor) N.push(nor[v * 3]!, nor[v * 3 + 1]!, nor[v * 3 + 2]!);
         if (uv) U.push(uv[v * 2]!, uv[v * 2 + 1]!);
         if (uv2) U2.push(uv2[v * 2]!, uv2[v * 2 + 1]!);
+        if (col) C.push(col[v * 4]!, col[v * 4 + 1]!, col[v * 4 + 2]!, col[v * 4 + 3]!);
       }
       I.push(j);
     }
@@ -764,9 +1068,11 @@ function splitByHeight(m: Mesh, y: number, names: [string, string]): [Mesh | nul
     if (nor) vd.normals = N;
     if (uv) vd.uvs = U;
     if (uv2) vd.uvs2 = U2;
+    if (col) vd.colors = C;
     const part = new Mesh(names[i]!, m.getScene());
     vd.applyToMesh(part);
     part.material = m.material;
+    part.metadata = m.metadata;
     return part;
   }) as [Mesh | null, Mesh | null];
 }
@@ -774,12 +1080,64 @@ function splitByHeight(m: Mesh, y: number, names: [string, string]): [Mesh | nul
 /** Malhas de marcos (e marquises/sacadas) que projetam sombra; planos finos e alpha não projetam. */
 function castsShadow(pieceName: string, m: Mesh): boolean {
   const mat = m.material?.name ?? "";
-  if (/stain|glass|leaves|crops|clothes|tarp|lamp|grow|fabric|placa|produce|poster|rubber|led/.test(mat)) return false;
+  if (/stain|glass|leaves|crops|clothes|tarp|placa|poster|led|cobogo|trelica|lattice/.test(mat)) return false;
   if (pieceName.startsWith("MARCO_")) return true;
-  return /FACHADA_(terreo_loja|apto_sacada)/.test(pieceName) && mat === "concrete";
+  return /FACHADA_(terreo_loja|apto_sacada)/.test(pieceName) && /concret/.test(mat);
 }
 
-async function instantiateKit(ctx: WorldContext, plan: Sector17KitPlan, url: string): Promise<Sector17KitResult> {
+/** Matriz de uma colocação: escala no espaço da peça, roll (fiação inclinada), yaw e posição. */
+function placementMatrix(i: KitInstance, out = new Matrix()): Matrix {
+  return Matrix.ComposeToRef(new Vector3(i.sx, i.sy, i.sz), Quaternion.RotationYawPitchRoll(i.yaw, 0, i.roll), new Vector3(i.x, i.y, i.z), out);
+}
+
+/** Thin instances: 1 draw call por fonte, custo de CPU nulo por quadro, sem culling por instância. */
+function thinInstances(m: Mesh, list: KitInstance[]): AbstractMesh[] {
+  const buf = new Float32Array(list.length * 16);
+  const tmp = new Matrix();
+  list.forEach((i, k) => placementMatrix(i, tmp).copyToArray(buf, k * 16));
+  m.thinInstanceSetBuffer("matrix", buf, 16, true);
+  if (list.some((i) => i.tint)) {
+    const col = new Float32Array(list.length * 4);
+    list.forEach((i, k) => col.set(i.tint ? [i.tint[0], i.tint[1], i.tint[2], 1] : [1, 1, 1, 1], k * 4));
+    m.thinInstanceSetBuffer("color", col, 4, true);
+  }
+  m.thinInstanceRefreshBoundingInfo(false);
+  m.doNotSyncBoundingInfo = true;
+  m.freezeWorldMatrix();
+  return [m];
+}
+
+/**
+ * Instâncias de malha (o que `instantiateHierarchy` cria): 1 draw call por fonte com instâncias visíveis e
+ * culling por instância (só o que está no quadro é desenhado). A fonte ocupa a 1ª colocação.
+ */
+function meshInstances(m: Mesh, list: KitInstance[]): AbstractMesh[] {
+  const tinted = list.some((i) => i.tint);
+  const color = (i: KitInstance) => (i.tint ? new Color4(i.tint[0], i.tint[1], i.tint[2], 1) : new Color4(1, 1, 1, 1));
+  if (tinted) {
+    m.registerInstancedBuffer("color", 4);
+    m.instancedBuffers.color = color(list[0]!);
+  }
+  const place = (node: AbstractMesh, i: KitInstance) => {
+    node.position.set(i.x, i.y, i.z);
+    node.rotationQuaternion = Quaternion.RotationYawPitchRoll(i.yaw, 0, i.roll);
+    node.scaling.set(i.sx, i.sy, i.sz);
+    node.isPickable = false;
+    node.freezeWorldMatrix();
+  };
+  place(m, list[0]!);
+  const out: AbstractMesh[] = [m];
+  for (let k = 1; k < list.length; k++) {
+    const inst = m.createInstance(`${m.name}#${k}`);
+    inst.parent = m.parent;
+    if (tinted) inst.instancedBuffers.color = color(list[k]!);
+    place(inst, list[k]!);
+    out.push(inst);
+  }
+  return out;
+}
+
+async function instantiateKit(ctx: WorldContext, plan: Sector17KitPlan, url: string, mode: KitInstancing): Promise<Sector17KitResult> {
   const scene = ctx.scene;
   const container = await LoadAssetContainerAsync(url, scene, { pluginExtension: ".glb" });
   container.addAllToScene();
@@ -787,32 +1145,37 @@ async function instantiateKit(ctx: WorldContext, plan: Sector17KitPlan, url: str
   if (!root) throw new Error("kit_tech.glb sem __root__");
   const rootW = root.computeWorldMatrix(true).clone();
   const needed = piecesUsed(plan);
+  const palette = new KitPalette();
+  const families = new Map<string, PBRMaterial>();
   const sources = new Map<string, Mesh>(); // chave de deduplicação → fonte
   const pieces = new Map<string, Mesh[]>(); // nome da peça (ou parte) → fontes
+  const baked: Mesh[] = [];
   for (const node of root.getChildren()) {
     if (!(node instanceof TransformNode) || !needed.has(node.name)) continue;
     const invPiece = node.computeWorldMatrix(true).clone().invert();
-    const list: Mesh[] = [];
+    // 1) cada malha do nó vai para o espaço da peça no Babylon (matriz relativa à peça × conversão glTF→Babylon)
+    const groups = new Map<string, Mesh[]>();
     for (const m of node.getChildMeshes(false)) {
-      if (!(m instanceof Mesh) || m.getTotalVertices() === 0 || /(^|_)COL_/.test(m.name) || m.name.startsWith("COL_")) continue;
-      // espaço da peça no Babylon: matriz do nó relativa à peça × conversão glTF→Babylon do __root__
+      if (!(m instanceof Mesh) || m.getTotalVertices() === 0 || /(^|_)COL_/.test(m.name) || m.name.startsWith("COL_") || !(m.material instanceof PBRMaterial)) continue;
       const bake = m.computeWorldMatrix(true).multiply(invPiece).multiply(rootW);
-      const key = dedupKey(m, bake);
-      const same = sources.get(key);
-      if (same) {
-        list.push(same);
-        continue;
-      }
       m.parent = null;
       m.position.setAll(0);
       m.rotationQuaternion = null;
       m.rotation.setAll(0);
       m.scaling.setAll(1);
       m.bakeTransformIntoVertices(bake);
-      sources.set(key, m);
-      list.push(m);
+      baked.push(m);
+      const key = groupKey(m.material, families);
+      const g = groups.get(key) ?? [];
+      g.push(m);
+      groups.set(key, g);
     }
+    // 2) uma malha por grupo de material: paleta (sem textura), família (cor por vértice) ou o próprio material
+    let list: Mesh[] = [];
+    for (const [key, parts] of groups) list.push(mergeGroup(`${node.name}_${key}`, parts, key, families, palette));
+    // 3) partes por altura (viaduto: pilar + tabuleiro)
     const split = SPLITS[node.name];
+    const named: Array<[string, Mesh[]]> = [];
     if (split) {
       const lo: Mesh[] = [];
       const hi: Mesh[] = [];
@@ -820,19 +1183,33 @@ async function instantiateKit(ctx: WorldContext, plan: Sector17KitPlan, url: str
         const [a, b] = splitByHeight(m, split.y, [`${m.name}#a`, `${m.name}#b`]);
         if (a) lo.push(a);
         if (b) hi.push(b);
-        for (const [k, v] of sources) if (v === m) sources.delete(k);
         m.dispose(false, false);
       }
-      pieces.set(split.parts[0], lo);
-      pieces.set(split.parts[1], hi);
-    } else pieces.set(node.name, list);
+      named.push([split.parts[0], lo], [split.parts[1], hi]);
+    } else named.push([node.name, list]);
+    // 4) malhas idênticas entre peças (variantes _0/_1) viram uma fonte só
+    for (const [name, ms] of named) {
+      list = [];
+      for (const m of ms) {
+        const key = dedupKey(m);
+        const same = sources.get(key);
+        if (same) {
+          m.dispose(false, false);
+          list.push(same);
+        } else {
+          sources.set(key, m);
+          list.push(m);
+        }
+      }
+      pieces.set(name, list);
+    }
   }
-  // matrizes por fonte (uma fonte pode servir a várias peças: variantes _0/_1)
-  const mats = new Map<Mesh, number[]>();
-  const tints = new Map<Mesh, Array<[number, number, number] | undefined>>();
-  const tmp = new Matrix();
-  const s = new Vector3();
-  const t = new Vector3();
+  const kept = new Set(sources.values());
+  for (const m of baked) if (!kept.has(m) && !m.isDisposed()) m.dispose(false, false);
+  const paletteMat = palette.size ? palette.build(ctx.scene) : null;
+  if (paletteMat) for (const m of sources.values()) if (m.metadata?.kitPalette) m.material = paletteMat;
+  // colocações por fonte (uma fonte pode servir a várias peças: variantes _0/_1)
+  const byMesh = new Map<Mesh, KitInstance[]>();
   const missing = new Set<string>();
   for (const inst of plan.instances) {
     const list = pieces.get(inst.piece);
@@ -840,45 +1217,36 @@ async function instantiateKit(ctx: WorldContext, plan: Sector17KitPlan, url: str
       missing.add(inst.piece);
       continue;
     }
-    s.set(inst.sx, inst.sy, inst.sz);
-    t.set(inst.x, inst.y, inst.z);
-    Matrix.ComposeToRef(s, Quaternion.RotationYawPitchRoll(inst.yaw, 0, inst.roll), t, tmp);
     for (const m of list) {
-      const arr = mats.get(m) ?? [];
-      for (let i = 0; i < 16; i++) arr.push(tmp.m[i]!);
-      mats.set(m, arr);
-      const tl = tints.get(m) ?? [];
-      tl.push(inst.tint);
-      tints.set(m, tl);
+      const l = byMesh.get(m) ?? [];
+      l.push(inst);
+      byMesh.set(m, l);
     }
   }
   if (missing.size) console.warn(`[setor17-kit] peças ausentes no GLB: ${[...missing].join(", ")}`);
-  const used = new Set<Mesh>(mats.keys());
+  const used = new Set<Mesh>(byMesh.keys());
   const casters: AbstractMesh[] = [];
+  const all: AbstractMesh[] = [];
   const pieceOf = new Map<Mesh, string>();
   for (const [name, list] of pieces) for (const m of list) if (!pieceOf.has(m)) pieceOf.set(m, name);
   const maxLights = sectorMaxLights(ctx.quality);
   let instances = 0;
   let triangles = 0;
-  for (const [m, arr] of mats) {
-    const n = arr.length / 16;
+  for (const [m, list] of byMesh) {
     m.name = `kit_${m.name}`;
     m.parent = ctx.staticRoot;
-    m.thinInstanceSetBuffer("matrix", new Float32Array(arr), 16, true);
-    const tl = tints.get(m)!;
-    if (tl.some((c) => c)) {
-      const col = new Float32Array(n * 4);
-      tl.forEach((c, i) => col.set(c ? [c[0], c[1], c[2], 1] : [1, 1, 1, 1], i * 4));
-      m.thinInstanceSetBuffer("color", col, 4, true);
-    }
-    m.thinInstanceRefreshBoundingInfo(false);
     m.isPickable = false;
     m.receiveShadows = true;
-    m.doNotSyncBoundingInfo = true;
-    m.freezeWorldMatrix();
-    if (castsShadow(pieceOf.get(m) ?? "", m)) casters.push(m);
-    instances += n;
-    triangles += (m.getTotalIndices() / 3) * n;
+    const pieceName = pieceOf.get(m) ?? "";
+    const cast = castsShadow(pieceName, m);
+    const placed = mode === "thin" ? thinInstances(m, list) : meshInstances(m, list);
+    // LOD por instância: longe, a instância some e o cartão distante (ou nada, nos detalhes) assume
+    const lod = mode === "instanced" ? kitLodDistance(pieceName, m.material?.name ?? "") : null;
+    if (lod) m.addLODLevel(lod, null);
+    all.push(...placed);
+    if (cast) casters.push(...placed);
+    instances += list.length;
+    triangles += (m.getTotalIndices() / 3) * list.length;
   }
   // materiais do GLB usados: mesmo ajuste dos módulos da praça e o limite de luzes do setor
   const usedMats = new Set<Material>();
@@ -901,8 +1269,25 @@ async function instantiateKit(ctx: WorldContext, plan: Sector17KitPlan, url: str
   for (const mat of usedMats) for (const tx of mat.getActiveTextures()) keepTex.add(tx);
   for (const mat of container.materials) if (!usedMats.has(mat)) mat.dispose(false, false);
   for (const tx of container.textures) if (!keepTex.has(tx)) tx.dispose();
-  const meshes = [...used];
-  return { meshes, shadowCasters: casters, sources: meshes.length, instances, triangles };
+  // luzes: o kit só recebe sol + hemisférica. As luzes locais (postes, interiores, faróis) mudam com a posição
+  // do jogador (SectorLights) e cada combinação vira uma variante de shader por material — com ~40 materiais
+  // de kit isso recompila dezenas de shaders a cada troca (segundos sem GPU). Fachadas não perdem leitura: o
+  // poste ilumina a calçada e a rua (blockout), e as janelas acesas do kit são emissivas.
+  excludeLocalLights(ctx.scene, [...used]);
+  // compila os shaders do kit (e a sombra dos que projetam) ainda na carga: sem isso, o primeiro quadro que
+  // enxerga o setor trava compilando cada variante
+  // (com e sem instâncias: quando só a fonte está no quadro o Babylon desenha sem instanciamento)
+  for (const useInstances of [true, false]) await Promise.all([...used].map((m) => m.material?.forceCompilationAsync(m, { useInstances }).catch(() => undefined)));
+  return { meshes: all, shadowCasters: casters, sources: used.size, instances, triangles, mode };
+}
+
+/** Exclui as malhas do kit das luzes locais (pontuais e spots), inclusive das criadas depois (faróis). */
+function excludeLocalLights(scene: Scene, meshes: AbstractMesh[]): void {
+  const local = (l: Light) => l.getClassName() === "PointLight" || l.getClassName() === "SpotLight";
+  for (const l of scene.lights) if (local(l)) l.excludedMeshes.push(...meshes);
+  scene.onNewLightAddedObservable.add((l) => {
+    if (local(l)) l.excludedMeshes.push(...meshes);
+  });
 }
 
 /** Kit carregou: o blockout coberto sai da cena (e da lista de sombras); placas do blockout levam material e textura. */
@@ -948,14 +1333,18 @@ function mergeCovered(ctx: WorldContext, covered: Mesh[]): void {
   }
 }
 
-/** Placas dos lotes na testeira da marquise da loja e pichações nas portas de galpão do kit. */
-function placeKitSigns(ctx: WorldContext, plan: Sector17KitPlan): void {
+/** Placas dos lotes na testeira da marquise da loja e pichações nas portas de galpão do kit (só sol + hemisférica, como o kit). */
+async function placeKitSigns(ctx: WorldContext, plan: Sector17KitPlan): Promise<void> {
   const maxLights = sectorMaxLights(ctx.quality);
+  const meshes: Mesh[] = [];
   for (const s of plan.signs) {
     const mesh =
       s.kind === "placa"
         ? placeSign(ctx, s.id, { bg: s.bg ?? "#2f3a33", fg: s.fg ?? "#e8dcc0", lines: s.lines, weathered: 0.3, seed: s.seed }, { position: new Vector3(...s.position), yaw: s.yaw, width: s.width, height: s.height })
         : placeSign(ctx, s.id, { bg: "rgba(0,0,0,0)", fg: "#d8d2c2", lines: s.lines, font: `italic 900 120px "Impact", "Arial Black", sans-serif`, weathered: 0.5, seed: s.seed, pxWidth: 1024 }, { position: new Vector3(...s.position), yaw: s.yaw, width: s.width, height: s.height });
     if (mesh.material instanceof PBRMaterial) mesh.material.maxSimultaneousLights = maxLights;
+    meshes.push(mesh);
   }
+  excludeLocalLights(ctx.scene, meshes);
+  await Promise.all(meshes.map((m) => m.material?.forceCompilationAsync(m).catch(() => undefined)));
 }

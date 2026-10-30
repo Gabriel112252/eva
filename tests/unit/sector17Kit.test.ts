@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Matrix, Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { Facade, LANDMARKS, LOTS, VIADUCT, lotHeight, type Facing } from "@/world/sector17";
-import { KIT, KIT_PIECE, facadeLayout, facingYaw, frontBlockedFraction, lotColor, lotRows, planLot, planSector17Kit, piecesUsed, sector17KitEnabled, sharedNeighbor, toFacade } from "@/world/sector17Kit";
+import { KIT, KIT_PIECE, facadeLayout, facingYaw, frontBlockedFraction, kitInstancing, kitLodDistance, lotColor, lotRows, planLot, planSector17Kit, piecesUsed, sector17KitEnabled, sharedNeighbor, toFacade } from "@/world/sector17Kit";
 
 /** Nomes dos nós-raiz de kit_tech.glb (lidos do bloco JSON do GLB). */
 function kitRootNames(): Set<string> {
@@ -116,7 +116,7 @@ describe("Setor 17 — kit: sorteio e composição", () => {
     for (let s = 0; s < 40; s++) {
       const other = { ...lot, seed: lot.seed + s * 7919 };
       colors.add(lotColor(other));
-      const p = planLot(other, { detail: "completo", y0: 0.12, out: [], bodies: [], signs: [] });
+      const p = planLot(other, { detail: "completo", y0: 0.12, out: [], bodies: [], signs: [], cards: [] });
       kinds.add(p.modules.map((m) => m.pieces.join(",")).join("|") + p.tech);
     }
     expect(colors.size).toBe(2);
@@ -214,6 +214,37 @@ describe("Setor 17 — kit: marcos e catálogo", () => {
   it("toda peça planejada existe em kit_tech.glb", () => {
     const names = kitRootNames();
     for (const d of ["completo", "leve"] as const) for (const p of piecesUsed(planSector17Kit(d))) expect(names.has(p), p).toBe(true);
+  });
+
+  it("LOD por instância: marcos sempre; fachadas, detalhes e lajes somem a distâncias diferentes", () => {
+    expect(kitLodDistance(KIT_PIECE.torre)).toBeNull();
+    expect(kitLodDistance(KIT_PIECE.viaductDeck)).toBeNull();
+    expect(kitLodDistance("FACHADA_apto_janelas_1")).toBe(KIT.lodFacade);
+    expect(kitLodDistance("TECH_pele_fotovoltaica_inteira")).toBe(KIT.lodFacade);
+    expect(kitLodDistance("REMENDO_ar_condicionado")).toBe(KIT.lodDetail);
+    expect(kitLodDistance("TECH_anexo_modular")).toBe(KIT.lodRoof);
+    expect(kitLodDistance("FACHADA_apto_janelas_0", "stain")).toBe(KIT.lodDetail); // decalques somem antes da parede
+    expect(kitLodDistance("FACHADA_apto_janelas_0", "kit_reboco")).toBe(KIT.lodFacade);
+    expect(KIT.lodDetail).toBeLessThan(KIT.lodFacade);
+    expect(kitInstancing("?kitinst=thin")).toBe("thin");
+    expect(kitInstancing("")).toBe("instanced");
+  });
+
+  it("cartões distantes: um por módulo e pavimento, atrás da linha da fachada e dentro do lote", () => {
+    const plan = planSector17Kit();
+    const expected = plan.lots.reduce((n, l) => n + l.modules.filter((m) => !m.blocked).length * l.rows, 0);
+    expect(plan.cards).toHaveLength(expected);
+    for (const c of plan.cards) {
+      const lot = LOTS.find((l) => l.id === c.lot)!;
+      for (const [x, y, z] of c.corners) {
+        expect(toFacade(lot, x, z).w, c.lot).toBeCloseTo(-KIT.cardInset, 6);
+        expect(y, c.lot).toBeGreaterThanOrEqual(0);
+        expect(y, c.lot).toBeLessThan(lotHeight(lot));
+      }
+      const out = new Facade(lot.rect, lot.facing).at(0, 0, 1).subtract(new Facade(lot.rect, lot.facing).at(0, 0, 0));
+      expect(c.normal[0]).toBeCloseTo(out.x, 6);
+      expect(c.normal[2]).toBeCloseTo(out.z, 6);
+    }
   });
 
   it("modo leve (qualidade baixa) usa menos peças; ?kit=0 desliga", () => {
