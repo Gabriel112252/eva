@@ -22,6 +22,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import make_environment as env  # noqa: E402
 from make_environment import box, cylinder, torus, wavy_plane, pbr, textured_plain, generated_texture, drawn_texture, finish, export, _noise  # noqa: E402
+from make_kit_tech import polytube, prism, fit_uv, plane, tex_pv, tex_pbr, tex_stripes_warning  # noqa: E402  (passe de silhueta)
 from mathutils import Vector  # noqa: E402
 
 REPO = env.REPO
@@ -113,6 +114,12 @@ def materials():
         "white_ceramic": pbr("ceramic", color=(0.8, 0.82, 0.78), roughness=0.35),
         "warning_black": pbr("rubber_v", color=(0.05, 0.05, 0.05), roughness=0.9),
         "pale_gold": pbr("gold_v", color=(0.85, 0.66, 0.28), roughness=0.3, metallic=1.0),
+        # passe de silhueta: baterias externas, faixa de advertência, painel fotovoltaico (texturas do kit tech), LED frio
+        "battery": pbr("battery_v", color=(0.16, 0.2, 0.24), roughness=0.5, metallic=0.3),
+        "warning": tex_pbr("warning_v", tex_stripes_warning(), tile=0.5, roughness=0.6),
+        "pv": tex_pbr("pv_v", *tex_pv(), tile=1.0),
+        "cold_lamp": pbr("lamp_cold_v", color=(0.9, 0.95, 1.0), roughness=0.4, emissive=(0.75, 0.9, 1.0), emissive_strength=2.5),
+        "seat_fabric": pbr("seat_v", color=(0.2, 0.17, 0.14), roughness=0.9),
     }
 
 
@@ -161,6 +168,25 @@ def refine(name: str) -> None:
             box(f"para_lama_d_{s}", (0.22, 0.95, 0.3), (s * 1.08, -1.54, 1.1), V["warning_black"], bevel=0.02)
             box(f"para_lama_t_{s}", (0.22, 0.95, 0.3), (s * 1.08, 1.45, 1.1), V["warning_black"], bevel=0.02)
             box(f"estribo_{s}", (0.25, 1.87, 0.05), (s * 1.12, 0.215, 0.62), V["dark_steel"], bevel=0.006)
+        # passe de silhueta: estepe na porta traseira, snorkel, guincho com gancho, grades dos faróis,
+        # faróis de teto, limpadores, para-lamas de borracha e ganchos de reboque
+        torus("estepe_pneu", 0.33, 0.1, (0.45, 2.6, 1.5), V["rubber_tire"], rot=(math.pi / 2, 0, 0), seg_major=20, seg_minor=8)
+        cylinder("estepe_aro", 0.22, 0.12, (0.45, 2.6, 1.5), V["dark_steel"], segments=16, rot=(math.pi / 2, 0, 0))
+        box("estepe_suporte", (0.12, 0.12, 0.7), (0.45, 2.38, 1.25), V["dark_steel"], bevel=0.01)
+        polytube("snorkel", [(-0.98, -0.95, 1.25), (-1.02, -0.9, 1.6), (-1.02, -0.8, 2.05), (-0.95, -0.55, 2.2), (-0.8, -0.45, 2.22)], 0.05, V["dark_steel"], sides=8)
+        box("snorkel_boca", (0.16, 0.2, 0.12), (-0.78, -0.38, 2.22), V["warning_black"], bevel=0.015)
+        box("guincho", (0.5, 0.18, 0.2), (0, -2.52, 0.7), V["dark_steel"], bevel=0.02)
+        cylinder("guincho_tambor", 0.07, 0.4, (0, -2.52, 0.7), V["brushed_silver"], segments=12, rot=(0, math.pi / 2, 0))
+        torus("guincho_gancho", 0.05, 0.012, (0, -2.66, 0.62), V["brushed_silver"], rot=(0, math.pi / 2, 0), seg_major=10, seg_minor=4)
+        for s in (-1, 1):
+            for z in (0.95, 1.0, 1.05):
+                box(f"farol_grade_{s}_{z}", (0.36, 0.015, 0.012), (s * 0.735, -2.385, z), V["dark_steel"])
+            box(f"gancho_reboque_{s}", (0.08, 0.14, 0.08), (s * 0.8, -2.55, 0.62), V["dark_steel"], bevel=0.01)
+            box(f"farol_teto_{s}", (0.18, 0.16, 0.14), (s * 0.45, -0.3, 2.21), V["dark_steel"], bevel=0.012)
+            box(f"farol_teto_luz_{s}", (0.14, 0.02, 0.1), (s * 0.45, -0.39, 2.21), V["cold_lamp"])
+            box(f"limpador_{s}", (0.03, 0.02, 0.45), (s * 0.3, -0.7, 1.78), V["warning_black"], rot=(math.radians(-55), 0, s * 0.5))
+            box(f"para_barro_{s}", (0.28, 0.02, 0.32), (s * 1.0, 2.0, 0.36), V["warning_black"])
+        box("farol_teto_barra", (1.2, 0.06, 0.06), (0, -0.3, 2.12), V["dark_steel"])
     elif name == "modulo_v7":
         box("placa_frontal", (0.4, 0.02, 0.13), (0, -2.6, 0.68), V["white_ceramic"], bevel=0.004)
         box("placa_traseira", (0.4, 0.02, 0.13), (0, 2.6, 0.95), V["white_ceramic"], bevel=0.004)
@@ -169,10 +195,63 @@ def refine(name: str) -> None:
             cylinder(f"espelho_haste_{s}", 0.015, 0.2, (s * 1.0, -1.9, 1.75), V["dark_steel"], segments=8, rot=(0, math.pi / 2, 0))
         wavy_plane("lona_bagageiro", 1.5, 1.7, (0, 0.79, 2.56), V["tarp_sand"], nx=10, ny=10, amp=0.03, freq=2.0)
         cylinder("escapamento", 0.03, 0.6, (0.7, 2.4, 0.33), V["rust_copper"], segments=10, rot=(math.pi / 2, 0, 0))
+        # passe de silhueta: para-choques, baterias externas na porta traseira (van elétrica adaptada),
+        # painel fotovoltaico no rack, limpadores, tomada de recarga e degrau da porta de correr
+        box("para_choque_d", (2.0, 0.18, 0.28), (0, -2.72, 0.6), V["dark_steel"], bevel=0.03)
+        box("para_choque_t", (2.0, 0.16, 0.26), (0, 2.7, 0.6), V["dark_steel"], bevel=0.03)
+        for s in (-1, 1):
+            box(f"bateria_ext_{s}", (0.7, 0.28, 0.42), (s * 0.45, 2.78, 1.0 + (0.5 if s > 0 else 0)), V["battery"], bevel=0.015)
+            box(f"bateria_alca_{s}", (0.3, 0.03, 0.05), (s * 0.45, 2.93, 1.2 + (0.5 if s > 0 else 0)), V["brushed_silver"])
+            # (orçamento do teste unitário: ≤ 24 draw calls por veículo — sem materiais novos além de bateria e painel)
+            box(f"bateria_led_{s}", (0.2, 0.01, 0.03), (s * 0.45, 2.925, 0.82 + (0.5 if s > 0 else 0)), V["tail_red"])
+            box(f"bateria_cinta_{s}", (0.72, 0.3, 0.03), (s * 0.45, 2.78, 0.78 + (0.5 if s > 0 else 0)), V["dark_steel"])
+            box(f"limpador_{s}", (0.03, 0.02, 0.5), (s * 0.35, -2.63, 1.72), V["dark_steel"], rot=(math.radians(-60), 0, s * 0.4))
+        box("bateria_rack", (1.7, 0.06, 0.06), (0, 2.66, 0.76), V["dark_steel"])
+        polytube("bateria_cabo", [(0.3, 2.9, 1.0), (0.2, 2.75, 0.75), (0.2, 2.5, 0.55), (0.0, 2.2, 0.5)], 0.016, V["dark_steel"], sides=5)
+        fit_uv(box("painel_solar_teto", (1.4, 1.9, 0.04), (0, -1.0, 2.47), V["pv"]), (0, 0, 1, 1))
+        box("tomada_recarga", (0.03, 0.2, 0.2), (-1.0, -0.5, 1.25), V["dark_steel"], bevel=0.01)
+        box("degrau_correr", (0.28, 1.1, 0.05), (1.14, 0.85, 0.52), V["dark_steel"], bevel=0.008)
     elif name == "atlas_t3":
         wavy_plane("lona_cobertura", 1.22, 1.22, (0, 0.76, 1.66), V["tarp_sand"], nx=10, ny=10, amp=0.03, freq=2.0)
         for k, (x, y, mat) in enumerate(((-0.22, 0.5, V["aged_wood"]), (0.2, 0.92, M["produce_brown"]), (0.22, 0.45, V["aged_wood"]))):
             box(f"carga_{k}", (0.42, 0.38, 0.30), (x, y, 0.97), mat, rot=(0, 0, k * 0.3), bevel=0.01)
+        # passe de silhueta: para-lamas em arco, caixa de bateria sob a plataforma, manoplas, espelho,
+        # lanterna traseira e assento com encosto
+        def fender(name, cy, cz, r0, r1, a0, a1, depth, x):
+            pts = [(cy + r1 * math.cos(math.radians(a)), cz + r1 * math.sin(math.radians(a))) for a in range(a0, a1 + 1, 15)]
+            pts += [(cy + r0 * math.cos(math.radians(a)), cz + r0 * math.sin(math.radians(a))) for a in range(a1, a0 - 1, -15)]
+            prism(name, pts, depth, V["worn_blue"], axis="x", loc=(x, 0, 0))
+
+        for s in (-1, 1):
+            fender(f"para_lama_t_{s}", 0.82, 0.37, 0.4, 0.45, 15, 165, 0.24, s * 0.56)
+        fender("para_lama_d", -1.0, 0.39, 0.43, 0.47, 20, 160, 0.16, 0.0)
+        box("bateria", (0.46, 0.5, 0.24), (0, 0.45, 0.32), V["battery"], bevel=0.012)
+        fit_uv(box("bateria_faixa", (0.42, 0.01, 0.05), (0, 0.19, 0.3), V["warning"]), (0, 0, 2, 0.3))
+        polytube("bateria_cabo", [(0.2, 0.2, 0.4), (0.1, -0.3, 0.55), (0.0, -0.8, 0.9), (0.0, -0.9, 1.08)], 0.012, V["warning_black"], sides=5)
+        for s in (-1, 1):
+            cylinder(f"manopla_{s}", 0.025, 0.14, (s * 0.35, -0.835, 1.25), V["warning_black"], segments=8, rot=(0, math.pi / 2, 0))
+            polytube(f"manete_{s}", [(s * 0.28, -0.86, 1.23), (s * 0.3, -0.98, 1.2)], 0.008, V["brushed_silver"], sides=4)
+        polytube("espelho_haste", [(-0.38, -0.84, 1.28), (-0.5, -0.8, 1.45)], 0.008, V["brushed_silver"], sides=4)
+        box("espelho", (0.12, 0.02, 0.08), (-0.52, -0.8, 1.47), V["dark_steel"], bevel=0.006)
+        box("lanterna_traseira", (0.1, 0.03, 0.08), (-0.45, 1.36, 0.95), V["tail_red"], bevel=0.006)
+        box("encosto", (0.4, 0.06, 0.28), (0, 0.1, 1.2), V["seat_fabric"], bevel=0.02, rot=(math.radians(-10), 0, 0))
+        box("encosto_haste", (0.04, 0.04, 0.3), (0, 0.08, 1.0), V["dark_steel"])
+    elif name == "rastro_av4":
+        # passe de silhueta: faixa de LED nos anéis dos rotores, pedaleiras, para-brisa curto, lanterna e espelhos
+        for s in (-1, 1):
+            torus(f"led_anel_{s}", 0.66, 0.012, (s * 0.97, 0.12, 0.69), V["cold_lamp"], seg_major=24, seg_minor=4)
+            box(f"pedaleira_{s}", (0.22, 0.1, 0.03), (s * 0.5, 0.15, 0.36), V["dark_steel"], bevel=0.006)
+            polytube(f"espelho_haste_{s}", [(s * 0.4, -0.7, 1.24), (s * 0.5, -0.78, 1.38)], 0.008, V["brushed_silver"], sides=4)
+            box(f"espelho_{s}", (0.11, 0.02, 0.07), (s * 0.52, -0.8, 1.4), V["dark_steel"], bevel=0.005)
+        box("para_brisa", (0.5, 0.02, 0.32), (0, -1.0, 1.35), V["matte_glass"], rot=(math.radians(-28), 0, 0))
+        box("lanterna", (0.26, 0.03, 0.06), (0, 1.32, 0.95), V["tail_red"], bevel=0.006)
+    # peças novas rotacionadas (limpadores, para-brisa, espelhos): aplica a rotação na malha para que, ao juntar
+    # por material, o grupo não herde um referencial torto (a caixa envolvente mundial inflaria e o teste de
+    # escala falharia). Só em malhas de usuário único; as importadas já vêm sem rotação.
+    for o in env._parts:
+        if o.type == "MESH" and o.data.users == 1 and any(abs(a) > 1e-6 for a in o.rotation_euler):
+            with bpy.context.temp_override(object=o, active_object=o, selected_objects=[o], selected_editable_objects=[o]):
+                bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
     # rodas: cada roda (pneu + cubo + eixo + raios) vira UMA malha com origem no centro, nomeada WHEEL_<id>,
     # para o jogo girar/esterçar a peça (src/vehicles). O resto junta por material como no ambiente.
     import re

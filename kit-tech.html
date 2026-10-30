@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>EVA — Kit Tech 2072 (visualizador)</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#1a1d1c;color:#eae6dc;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
+#renderCanvas{display:block;width:100%;height:100%;touch-action:none}
+aside{position:absolute;top:12px;left:12px;bottom:12px;z-index:2;width:min(300px,80vw);display:flex;flex-direction:column;gap:8px;padding:12px;background:#0a1419e6;border:1px solid #b5a06a77;border-radius:10px;box-shadow:0 8px 30px #0006}
+aside h1{margin:0;font-size:15px;letter-spacing:.07em}
+aside p{font-size:11.5px;line-height:1.45;color:#cad0cd;margin:0}
+#cats{display:flex;flex-wrap:wrap;gap:4px}
+#cats button{font-size:11px;padding:4px 7px;border-radius:5px;border:1px solid #9d925e;background:#233238;color:#f8f8f4;cursor:pointer}
+#cats button.on{background:#b5a06a;color:#111}
+#list{flex:1;overflow:auto;margin:0;padding:0;list-style:none;border-top:1px solid #ffffff22}
+#list li{padding:5px 6px;font-size:12px;cursor:pointer;border-bottom:1px solid #ffffff10;display:flex;justify-content:space-between;gap:6px}
+#list li:hover{background:#ffffff12}#list li.on{background:#b5a06a33;color:#f2d08f}
+#list li span{color:#9aa39f;font-size:11px;white-space:nowrap}
+#status{font-size:12px;white-space:pre-wrap;color:#f2d08f;min-height:3em}
+#demo{font-size:12px;color:#f2d08f;text-decoration:underline;cursor:pointer}
+footer{position:absolute;bottom:12px;right:12px;color:#efefe9a0;font-size:12px;padding:5px 9px;background:#121b1dc9;border-radius:5px}
+</style></head><body>
+<aside>
+<h1>EVA | Kit Tech 2072</h1>
+<p>Kit modular das três camadas (base antiga → camada tecnológica 2043–56 → remendos 2057–72), marcos e props. Arraste para orbitar, scroll aproxima. <a id="demo" href="?demo=1">Quarteirão de demonstração</a></p>
+<div id="cats"></div>
+<ul id="list"></ul>
+<div id="status">Carregando kit_tech.glb…</div>
+</aside>
+<canvas id="renderCanvas"></canvas><footer>Prévia de produção · peças para o agente de Mapas instanciar</footer>
+<script type="module" src="/src/dev/previewKit.ts"></script>
+</body></html>
