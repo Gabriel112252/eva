@@ -7,6 +7,7 @@ import type { Scene } from "@babylonjs/core/scene";
 import { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
 import type { WorldContext } from "./context";
 import { STREET } from "./street";
+import { sector17KitPending } from "./sector17Kit";
 
 /**
  * Módulos de cenário modelados em Blender (tools/blender/make_environment.py) com texturas PBR CC0:
@@ -92,6 +93,24 @@ export interface HeroAssetsResult {
 }
 
 export async function loadHeroAssets(scene: Scene, ctx: WorldContext, placements = heroPlacements(), url = heroAssetsUrl()): Promise<HeroAssetsResult> {
+  // o kit do Setor 17 (sector17Kit.ts) começa a carregar em buildWorld; o jogo só abre depois dele
+  const kit = sector17KitPending(ctx);
+  let hero: HeroAssetsResult;
+  try {
+    hero = await placeHeroAssets(scene, ctx, placements, url);
+  } catch (err) {
+    if (kit) await kit;
+    throw err;
+  }
+  const k = kit ? await kit : null;
+  if (k) {
+    hero.meshes.push(...k.meshes);
+    hero.shadowCasters.push(...k.shadowCasters);
+  }
+  return hero;
+}
+
+async function placeHeroAssets(scene: Scene, ctx: WorldContext, placements: HeroPlacement[], url: string): Promise<HeroAssetsResult> {
   const result = await ImportMeshAsync(url, scene, { pluginExtension: ".glb" });
   // o loader cria um "__root__" que converte o glTF (destro) para a cena do Babylon (canhota);
   // cada asset recebe uma cópia dessa conversão e é pendurado num nó de posicionamento no mundo

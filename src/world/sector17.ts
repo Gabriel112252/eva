@@ -1,5 +1,6 @@
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { Material } from "@babylonjs/core/Materials/material";
+import type { Mesh } from "@babylonjs/core/Meshes/mesh";
 import type { Light } from "@babylonjs/core/Lights/light";
 import { SpotLight } from "@babylonjs/core/Lights/spotLight";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
@@ -16,10 +17,10 @@ import { STREET } from "./street";
 /**
  * SETOR 17 — blockout do setor inteiro de São Paulo Velha em volta do quarteirão da Apuração.
  *
- * Tudo aqui é dirigido por dados (`SECTOR17`): ruas, lotes, marcos e pontos de interesse, para a
- * geometria provisória (caixas com relevo mínimo e os materiais existentes) ser trocada peça a peça
- * pelo kit `public/assets/environments/kit_tech.glb` quando ele chegar — cada lote declara o nó do
- * kit que o substitui (`kit`). Planta, nomes e coordenadas em docs/MAPA_SETOR17.md.
+ * Tudo aqui é dirigido por dados (`SECTOR17`): ruas, lotes, marcos e pontos de interesse. A física e o
+ * layout são sempre estes; a aparência dos lotes e marcos vem do kit `kit_tech.glb` (`sector17Kit.ts`),
+ * que cobre o visual separado aqui em `kitCovered` (`?kit=0` deixa o blockout puro). Planta, nomes,
+ * coordenadas e regras da troca em docs/MAPA_SETOR17.md.
  *
  * Convenções: eixo X = leste, Z = norte, metros; `facing` é o lado do lote que dá para a rua.
  * O quarteirão original (rua x∈[-48,14], praça x∈[14,46], oficina) não é tocado: o setor cresce para fora.
@@ -223,6 +224,9 @@ export const LANDMARKS: Array<{ id: string; block: BlockId; rect: Rect; height: 
   { id: "cisterna", block: "Q4", rect: { x0: -75, x1: -63, z0: -16, z1: 16 }, height: 18, kit: "MARCO_CAIXA_DAGUA", name: "Cisterna e estação de bombeamento" },
   { id: "antena_central", block: "Q0", rect: { x0: 40, x1: 42, z0: 24, z1: 26 }, height: 22, kit: "MARCO_ANTENA_CENTRAL", name: "Antena da Central de Suprimentos (no telhado da Central)", stacked: true },
 ];
+
+/** Totens de recarga sob o canopy do terminal (x de cada um; a 2,2 m da borda norte da laje). */
+export const CANOPY_TOTEMS: number[] = [0, 1, 2, 3].map((k) => LANDMARKS.find((l) => l.id === "canopy")!.rect.x0 + 3 + k * 5.5);
 
 /** Segmentos do viaduto do maglev (24 m cada) na Avenida do Maglev: pilar em z0, tabuleiro até z1. */
 export const VIADUCT = {
@@ -442,12 +446,35 @@ export function clearanceAt(x: number, z: number): number {
 // CONSTRUÇÃO (blockout com os materiais existentes; tudo fundido por material em ctx.finalize)
 // ---------------------------------------------------------------------------------------------------
 
-function rnd(seed: number, i: number): number {
+/** Sorteio determinístico em [0, 1) a partir da semente do lote (mesma função usada pelo kit). */
+export function rnd(seed: number, i: number): number {
   const x = Math.sin(seed * 12.9898 + i * 78.233) * 43758.5453;
   return x - Math.floor(x);
 }
 
-function matOf(mats: MaterialLibrary, key: MatKey): Material {
+/**
+ * Modo kit: as malhas criadas dentro de `fn` vão para `group` sem entrar na fusão por material do
+ * `ctx.finalize` — são o blockout que o kit (`sector17Kit.ts`) cobre. Se o kit carregar, o grupo é
+ * descartado; se falhar, o grupo é fundido e o setor continua em blockout. Colisores não mudam.
+ */
+function covered(ctx: WorldContext, group: Mesh[] | null, fn: () => void): void {
+  if (!group) {
+    fn();
+    return;
+  }
+  const register = ctx.register;
+  ctx.register = (mesh: Mesh, _batch: boolean, shadow: boolean) => {
+    register.call(ctx, mesh, false, shadow);
+    group.push(mesh);
+  };
+  try {
+    fn();
+  } finally {
+    ctx.register = register;
+  }
+}
+
+export function matOf(mats: MaterialLibrary, key: MatKey): Material {
   switch (key) {
     case "plaster0":
       return mats.plaster[0]!;
@@ -475,15 +502,16 @@ function matOf(mats: MaterialLibrary, key: MatKey): Material {
 }
 
 /** yaw de placa (placeSign: 0 = frente para -Z) para a frente olhar na direção `facing`. */
-function signYaw(facing: Facing): number {
+export function signYaw(facing: Facing): number {
   return facing === "N" ? Math.PI : facing === "S" ? 0 : facing === "E" ? -Math.PI / 2 : Math.PI / 2;
 }
 
 /**
  * Sistema de coordenadas de uma fachada: `u` ao longo da frente (a partir do canto esquerdo visto da
  * rua), `w` para fora (positivo = rua), `y` altura. Converte caixas locais em caixas do mundo.
+ * O eixo `u` coincide com o +X local de um módulo do kit girado pela `facing` (frente +Z → rua).
  */
-class Facade {
+export class Facade {
   readonly width: number;
   readonly depth: number;
   readonly out: Facing;
@@ -527,6 +555,38 @@ function box(ctx: WorldContext, id: string, f: Facade, u: number, y: number, w: 
 // ---------------------------------------------------------------------------------------------------
 // Ruas
 // ---------------------------------------------------------------------------------------------------
+
+export interface LampSpot {
+  id: string;
+  /** base do poste (no meio-fio, altura da calçada) */
+  pos: Vector3;
+  /** rua do poste */
+  street: string;
+  /** lado da rua (+1/−1 no eixo perpendicular) */
+  side: number;
+  /** 0 nas ruas E-O; ±1 nas N-S (braço para a pista) */
+  facingX: number;
+  state: "on" | "off" | "flicker";
+}
+
+/** Postes a cada ~22 m, alternando o lado; energia parcial: a maioria apagada (dados puros, também usados pelo kit). */
+export function lampSpots(): LampSpot[] {
+  const curb = STREET.curbHeight;
+  const out: LampSpot[] = [];
+  let n = 0;
+  for (const s of STREETS) {
+    const inner = s.asphaltHalf + 0.9;
+    for (let p = s.from + 8; p < s.to - 4; p += 22) {
+      const side = n % 2 === 0 ? 1 : -1;
+      const state: "on" | "off" | "flicker" = n % 4 === 1 ? "on" : n % 7 === 3 ? "flicker" : "off";
+      const pos = s.axis === "x" ? new Vector3(p, curb, s.at + side * inner) : new Vector3(s.at + side * inner, curb, p);
+      // o braço aponta para a pista: em ruas E-O o poste é construído ao longo de X; giramos só o braço via facingX
+      out.push({ id: `s17_poste_${s.id}_${n}`, pos, street: s.id, side, facingX: s.axis === "x" ? 0 : -side, state });
+      n++;
+    }
+  }
+  return out;
+}
 
 function buildStreets(ctx: WorldContext): void {
   const { mats } = ctx;
@@ -592,21 +652,7 @@ function buildStreets(ctx: WorldContext): void {
     }
   }
 
-  // Postes a cada ~22 m, alternando o lado; energia parcial: a maioria apagada
-  const lampSpots: Array<{ id: string; pos: Vector3; facingX: number; state: "on" | "off" | "flicker" }> = [];
-  let n = 0;
-  for (const s of STREETS) {
-    const inner = s.asphaltHalf + 0.9;
-    for (let p = s.from + 8; p < s.to - 4; p += 22) {
-      const side = n % 2 === 0 ? 1 : -1;
-      const state: "on" | "off" | "flicker" = n % 4 === 1 ? "on" : n % 7 === 3 ? "flicker" : "off";
-      const pos = s.axis === "x" ? new Vector3(p, curb, s.at + side * inner) : new Vector3(s.at + side * inner, curb, p);
-      // o braço aponta para a pista: em ruas E-O o poste é construído ao longo de X; giramos só o braço via facingX
-      lampSpots.push({ id: `s17_poste_${s.id}_${n}`, pos, facingX: s.axis === "x" ? 0 : -side, state });
-      n++;
-    }
-  }
-  for (const l of lampSpots) {
+  for (const l of lampSpots()) {
     if (l.facingX === 0) {
       // rua E-O: poste simples (braço para dentro da rua ao longo de Z não é suportado por streetLamp); usa o poste sem braço
       ctx.cylinder(`${l.id}_poste`, { height: 6.5, diameterTop: 0.12, diameterBottom: 0.2, tessellation: 8 }, new Vector3(l.pos.x, 3.25, l.pos.z), mats.metalPainted, { collider: true });
@@ -717,11 +763,25 @@ function buildWalls(ctx: WorldContext): void {
 // Lotes padrão (fachada com relevo mínimo)
 // ---------------------------------------------------------------------------------------------------
 
-function buildLot(ctx: WorldContext, lot: LotSpec): void {
+/** Itens de telhado que o kit substitui (caixa d'água, reciclador, dossel solar); os demais continuam do blockout. */
+export const KIT_ROOF_ITEMS: ReadonlySet<RoofItem> = new Set<RoofItem>(["caixa_dagua", "solar", "reciclador"]);
+
+/** Altura do corpo do lote (topo da laje = telhado físico). */
+export function lotHeight(lot: LotSpec): number {
+  return lot.floors * (lot.floorHeight ?? F) + 0.6;
+}
+
+function buildLot(ctx: WorldContext, lot: LotSpec, group: Mesh[] | null = null): void {
+  covered(ctx, group, () => buildLotFacade(ctx, lot));
+  buildLotRoof(ctx, lot, group);
+}
+
+/** Corpo (com colisor), fachada em relevo mínimo, placa e pichação do lote. */
+function buildLotFacade(ctx: WorldContext, lot: LotSpec): void {
   const { mats } = ctx;
   const f = new Facade(lot.rect, lot.facing);
   const fh = lot.floorHeight ?? F;
-  const height = lot.floors * fh + 0.6;
+  const height = lotHeight(lot);
   const mat = matOf(mats, lot.mat);
   const burnt = lot.mat === "burnt";
   // corpo (colisor) e laje
@@ -821,49 +881,56 @@ function buildLot(ctx: WorldContext, lot: LotSpec): void {
       height: 0.8,
     });
   }
-  // telhado: caixa d'água, painéis, antena, varal, reciclador de água (camada tecnológica), mastro de rádio
-  const roofY = height + 0.02;
+}
+
+/** Telhado: caixa d'água, painéis, antena, varal, reciclador de água (camada tecnológica), mastro de rádio. */
+function buildLotRoof(ctx: WorldContext, lot: LotSpec, group: Mesh[] | null): void {
+  for (const item of lot.roof ?? []) covered(ctx, group && KIT_ROOF_ITEMS.has(item) ? group : null, () => buildRoofItem(ctx, lot, item));
+}
+
+function buildRoofItem(ctx: WorldContext, lot: LotSpec, item: RoofItem): void {
+  const { mats } = ctx;
+  const f = new Facade(lot.rect, lot.facing);
+  const roofY = lotHeight(lot) + 0.02;
   const cx = (lot.rect.x0 + lot.rect.x1) / 2;
   const cz = (lot.rect.z0 + lot.rect.z1) / 2;
-  for (const item of lot.roof ?? []) {
-    switch (item) {
-      case "caixa_dagua":
-        ctx.cylinder(`s17_${lot.id}_caixa_dagua`, { height: 1.1, diameterTop: 1.2, diameterBottom: 1.0, tessellation: 12 }, new Vector3(cx - f.width * 0.2, roofY + 0.65, cz), mats.plasticBlue);
-        ctx.box(`s17_${lot.id}_caixa_base`, { w: 1.4, h: 0.2, d: 1.4 }, new Vector3(cx - f.width * 0.2, roofY + 0.1, cz), mats.concrete);
-        break;
-      case "solar":
-        for (let k = 0; k < 2; k++) {
-          ctx.box(`s17_${lot.id}_solar_${k}`, { w: 2.0, h: 0.05, d: 1.1 }, new Vector3(cx + 0.8 + k * 2.2 - f.width * 0.25, roofY + 0.6, cz - 1), mats.glass, { rotation: new Vector3(-0.35, 0, 0) });
-          ctx.box(`s17_${lot.id}_solar_sup_${k}`, { w: 1.8, h: 0.6, d: 0.05 }, new Vector3(cx + 0.8 + k * 2.2 - f.width * 0.25, roofY + 0.3, cz - 1.4), mats.metalDark, { shadow: false });
-        }
-        break;
-      case "antena":
-        ctx.cylinder(`s17_${lot.id}_antena`, { height: 3.5, diameter: 0.06, tessellation: 6 }, new Vector3(cx + f.width * 0.3, roofY + 1.75, cz + 1), mats.metalDark, { shadow: false });
-        ctx.box(`s17_${lot.id}_antena_h`, { w: 1.6, h: 0.04, d: 0.04 }, new Vector3(cx + f.width * 0.3, roofY + 3.3, cz + 1), mats.metalDark, { shadow: false });
-        break;
-      case "varal": {
-        const y = roofY + 1.6;
-        ctx.cylinder(`s17_${lot.id}_varal`, { height: f.width * 0.6, diameter: 0.02, tessellation: 4 }, new Vector3(cx, y, cz), mats.rope, { rotation: new Vector3(0, 0, Math.PI / 2), shadow: false });
-        const cloth = [mats.tarpBlue, mats.tarpOlive, mats.paperWhite, mats.tarpOrange];
-        for (let k = 0; k < 4; k++) {
-          ctx.plane(`s17_${lot.id}_roupa_${k}`, { w: 0.5, h: 0.7 }, new Vector3(cx - f.width * 0.25 + k * (f.width * 0.6) / 4 + 0.3, y - 0.38, cz), cloth[k % cloth.length]!, { rotation: new Vector3(0, 0, (rnd(lot.seed, k) - 0.5) * 0.3), sideOrientation: 2, shadow: true });
-        }
-        for (const dx of [-f.width * 0.3, f.width * 0.3]) ctx.cylinder(`s17_${lot.id}_poste_varal_${dx}`, { height: 1.8, diameter: 0.06, tessellation: 6 }, new Vector3(cx + dx, roofY + 0.9, cz), mats.metalRust, { shadow: false });
-        break;
+  switch (item) {
+    case "caixa_dagua":
+      ctx.cylinder(`s17_${lot.id}_caixa_dagua`, { height: 1.1, diameterTop: 1.2, diameterBottom: 1.0, tessellation: 12 }, new Vector3(cx - f.width * 0.2, roofY + 0.65, cz), mats.plasticBlue);
+      ctx.box(`s17_${lot.id}_caixa_base`, { w: 1.4, h: 0.2, d: 1.4 }, new Vector3(cx - f.width * 0.2, roofY + 0.1, cz), mats.concrete);
+      break;
+    case "solar":
+      for (let k = 0; k < 2; k++) {
+        ctx.box(`s17_${lot.id}_solar_${k}`, { w: 2.0, h: 0.05, d: 1.1 }, new Vector3(cx + 0.8 + k * 2.2 - f.width * 0.25, roofY + 0.6, cz - 1), mats.glass, { rotation: new Vector3(-0.35, 0, 0) });
+        ctx.box(`s17_${lot.id}_solar_sup_${k}`, { w: 1.8, h: 0.6, d: 0.05 }, new Vector3(cx + 0.8 + k * 2.2 - f.width * 0.25, roofY + 0.3, cz - 1.4), mats.metalDark, { shadow: false });
       }
-      case "reciclador":
-        // reciclador de água de telhado (Década dos Milagres): tanque cilíndrico + painel + tubos
-        ctx.cylinder(`s17_${lot.id}_recic_tanque`, { height: 1.6, diameter: 1.6, tessellation: 14 }, new Vector3(cx + f.width * 0.2, roofY + 0.8, cz), mats.metalPainted);
-        ctx.box(`s17_${lot.id}_recic_painel`, { w: 0.9, h: 1.2, d: 0.25 }, new Vector3(cx + f.width * 0.2 + 1.1, roofY + 0.6, cz), mats.metalDark);
-        ctx.box(`s17_${lot.id}_recic_led`, { w: 0.08, h: 0.08, d: 0.03 }, new Vector3(cx + f.width * 0.2 + 1.1, roofY + 1.0, cz - 0.14), mats.emissiveGreen, { batch: false, shadow: false });
-        ctx.cylinder(`s17_${lot.id}_recic_tubo`, { height: 2.2, diameter: 0.1, tessellation: 6 }, new Vector3(cx + f.width * 0.2 - 0.9, roofY + 0.5, cz + 0.4), mats.metalRust, { rotation: new Vector3(0, 0, Math.PI / 2), shadow: false });
-        break;
-      case "mastro":
-        ctx.cylinder(`s17_${lot.id}_mastro`, { height: 12, diameterTop: 0.1, diameterBottom: 0.3, tessellation: 8 }, new Vector3(cx, roofY + 6, cz), mats.metalPainted, { collider: true });
-        for (let k = 0; k < 3; k++) ctx.box(`s17_${lot.id}_mastro_trave_${k}`, { w: 2.4 - k * 0.6, h: 0.05, d: 0.05 }, new Vector3(cx, roofY + 8 + k * 1.6, cz), mats.metalDark, { shadow: false });
-        ctx.box(`s17_${lot.id}_mastro_led`, { w: 0.15, h: 0.15, d: 0.15 }, new Vector3(cx, roofY + 12.1, cz), mats.emissiveRed, { batch: false, shadow: false });
-        break;
+      break;
+    case "antena":
+      ctx.cylinder(`s17_${lot.id}_antena`, { height: 3.5, diameter: 0.06, tessellation: 6 }, new Vector3(cx + f.width * 0.3, roofY + 1.75, cz + 1), mats.metalDark, { shadow: false });
+      ctx.box(`s17_${lot.id}_antena_h`, { w: 1.6, h: 0.04, d: 0.04 }, new Vector3(cx + f.width * 0.3, roofY + 3.3, cz + 1), mats.metalDark, { shadow: false });
+      break;
+    case "varal": {
+      const y = roofY + 1.6;
+      ctx.cylinder(`s17_${lot.id}_varal`, { height: f.width * 0.6, diameter: 0.02, tessellation: 4 }, new Vector3(cx, y, cz), mats.rope, { rotation: new Vector3(0, 0, Math.PI / 2), shadow: false });
+      const cloth = [mats.tarpBlue, mats.tarpOlive, mats.paperWhite, mats.tarpOrange];
+      for (let k = 0; k < 4; k++) {
+        ctx.plane(`s17_${lot.id}_roupa_${k}`, { w: 0.5, h: 0.7 }, new Vector3(cx - f.width * 0.25 + k * (f.width * 0.6) / 4 + 0.3, y - 0.38, cz), cloth[k % cloth.length]!, { rotation: new Vector3(0, 0, (rnd(lot.seed, k) - 0.5) * 0.3), sideOrientation: 2, shadow: true });
+      }
+      for (const dx of [-f.width * 0.3, f.width * 0.3]) ctx.cylinder(`s17_${lot.id}_poste_varal_${dx}`, { height: 1.8, diameter: 0.06, tessellation: 6 }, new Vector3(cx + dx, roofY + 0.9, cz), mats.metalRust, { shadow: false });
+      break;
     }
+    case "reciclador":
+      // reciclador de água de telhado (Década dos Milagres): tanque cilíndrico + painel + tubos
+      ctx.cylinder(`s17_${lot.id}_recic_tanque`, { height: 1.6, diameter: 1.6, tessellation: 14 }, new Vector3(cx + f.width * 0.2, roofY + 0.8, cz), mats.metalPainted);
+      ctx.box(`s17_${lot.id}_recic_painel`, { w: 0.9, h: 1.2, d: 0.25 }, new Vector3(cx + f.width * 0.2 + 1.1, roofY + 0.6, cz), mats.metalDark);
+      ctx.box(`s17_${lot.id}_recic_led`, { w: 0.08, h: 0.08, d: 0.03 }, new Vector3(cx + f.width * 0.2 + 1.1, roofY + 1.0, cz - 0.14), mats.emissiveGreen, { batch: false, shadow: false });
+      ctx.cylinder(`s17_${lot.id}_recic_tubo`, { height: 2.2, diameter: 0.1, tessellation: 6 }, new Vector3(cx + f.width * 0.2 - 0.9, roofY + 0.5, cz + 0.4), mats.metalRust, { rotation: new Vector3(0, 0, Math.PI / 2), shadow: false });
+      break;
+    case "mastro":
+      ctx.cylinder(`s17_${lot.id}_mastro`, { height: 12, diameterTop: 0.1, diameterBottom: 0.3, tessellation: 8 }, new Vector3(cx, roofY + 6, cz), mats.metalPainted, { collider: true });
+      for (let k = 0; k < 3; k++) ctx.box(`s17_${lot.id}_mastro_trave_${k}`, { w: 2.4 - k * 0.6, h: 0.05, d: 0.05 }, new Vector3(cx, roofY + 8 + k * 1.6, cz), mats.metalDark, { shadow: false });
+      ctx.box(`s17_${lot.id}_mastro_led`, { w: 0.15, h: 0.15, d: 0.15 }, new Vector3(cx, roofY + 12.1, cz), mats.emissiveRed, { batch: false, shadow: false });
+      break;
   }
 }
 
@@ -1219,7 +1286,13 @@ function buildPostoFundos(ctx: WorldContext, lights: Light[]): void {
 }
 
 /** Torre Verde: base de 12×12 m, 34 m de vidro com faixas de laje, fazenda vertical ocupando duas faces, forecourt com frades. */
-function buildTorre(ctx: WorldContext): void {
+function buildTorre(ctx: WorldContext, group: Mesh[] | null = null): void {
+  // volume de vidro, lajes, vegetação e embasamento: o kit (MARCO_torre_fazenda empilhado) cobre o visual
+  covered(ctx, group, () => buildTorreVolume(ctx));
+  buildTorreStreet(ctx);
+}
+
+function buildTorreVolume(ctx: WorldContext): void {
   const { mats } = ctx;
   const L = LANDMARKS.find((l) => l.id === "torre")!;
   const R = L.rect;
@@ -1247,14 +1320,25 @@ function buildTorre(ctx: WorldContext): void {
     ctx.box(`s17_torre_bandeja_${k}`, { w: w * 0.7, h: 0.15, d: 0.9 }, new Vector3(cx, y - fh / 2 + 0.5, R.z0 - 0.5), mats.metalPainted, { shadow: false });
     if (k % 2 === 0) ctx.plane(`s17_torre_verde_l_${k}`, { w: d * 0.5, h: fh - 0.6 }, new Vector3(R.x1 + 0.2, y, cz + (rnd(80, k) - 0.5) * 4), mats.vines, { rotation: new Vector3(0, Math.PI / 2, 0) });
   }
+  // base: embasamento de concreto e portão (o térreo é fechado: ocupação)
+  ctx.box("s17_torre_embasamento", { w: w + 0.6, h: 1.2, d: d + 0.6 }, new Vector3(cx, 0.6, cz), mats.concretePhoto, { collider: true });
+  ctx.box("s17_torre_portao", { w: 3.0, h: 2.6, d: 0.1 }, new Vector3(cx, 1.3 + 1.2, R.z0 - 0.05), mats.metalDark, { shadow: false });
+}
+
+/** Coroamento (casa de máquinas, antena), marquise, forecourt, frades e placa da torre (não mudam com o kit). */
+function buildTorreStreet(ctx: WorldContext): void {
+  const { mats } = ctx;
+  const L = LANDMARKS.find((l) => l.id === "torre")!;
+  const R = L.rect;
+  const cx = (R.x0 + R.x1) / 2;
+  const cz = (R.z0 + R.z1) / 2;
+  const H = L.height;
   // coroamento: antena e caixa de máquinas
   ctx.box("s17_torre_maquinas", { w: 4, h: 2.4, d: 4 }, new Vector3(cx - 2, H + 1.2, cz + 2), mats.concrete, { collider: true });
   ctx.cylinder("s17_torre_antena", { height: 6, diameter: 0.15, tessellation: 8 }, new Vector3(cx + 3, H + 3, cz - 3), mats.metalDark, { shadow: false });
   ctx.box("s17_torre_led", { w: 0.25, h: 0.25, d: 0.25 }, new Vector3(cx + 3, H + 6.1, cz - 3), mats.emissiveRed, { batch: false, shadow: false });
-  // base: embasamento de concreto, entrada com marquise e frades no forecourt (o térreo é fechado: ocupação)
-  ctx.box("s17_torre_embasamento", { w: w + 0.6, h: 1.2, d: d + 0.6 }, new Vector3(cx, 0.6, cz), mats.concretePhoto, { collider: true });
+  // entrada com marquise e frades no forecourt
   ctx.box("s17_torre_marquise", { w: 6, h: 0.3, d: 2.5 }, new Vector3(cx, 3.6, R.z0 - 1.25), mats.concrete, { collider: true, cameraBlocker: false });
-  ctx.box("s17_torre_portao", { w: 3.0, h: 2.6, d: 0.1 }, new Vector3(cx, 1.3 + 1.2, R.z0 - 0.05), mats.metalDark, { shadow: false });
   ctx.box("s17_torre_forecourt", { w: 12, h: STREET.curbHeight, d: 4 }, new Vector3(cx, STREET.curbHeight / 2, R.z0 - 2), mats.pavingStones, { collider: true, shadow: false, cameraBlocker: false });
   bollards(ctx, "s17_torre_frades", new Vector3(R.x0 + 0.8, STREET.curbHeight, 50.6), new Vector3(R.x1 - 0.8, STREET.curbHeight, 50.6), 5);
   ctx.box("s17_torre_placa_fundo", { w: 5.1, h: 0.8, d: 0.06 }, new Vector3(cx, 4.1, R.z0 - 0.03), mats.metalDark, { shadow: false });
@@ -1301,7 +1385,7 @@ function buildCisterna(ctx: WorldContext): void {
 }
 
 /** Canopy solar do antigo terminal de recarga: laje de 24×12 m a 6 m sobre 6 pilares, painéis, totens, ônibus abandonado; cobertura pousável. */
-function buildCanopy(ctx: WorldContext): void {
+function buildCanopy(ctx: WorldContext, group: Mesh[] | null = null): void {
   const { mats } = ctx;
   const L = LANDMARKS.find((l) => l.id === "canopy")!;
   const R = L.rect;
@@ -1317,22 +1401,26 @@ function buildCanopy(ctx: WorldContext): void {
     ctx.box(`s17_canopy_guarda_${px}_${pz}`, { w, h: 1.0, d }, new Vector3(px, top + 0.5, pz), mats.metalRust, { collider: true, cameraBlocker: false });
   }
   ctx.box("s17_canopy_guarda_oeste", { w: 0.12, h: 1.0, d: R.z1 - R.z0 - 2.2 }, new Vector3(R.x0 + 0.06, top + 0.5, cz + 1.1), mats.metalRust, { collider: true, cameraBlocker: false });
-  // painéis solares em fileiras (alguns faltando: recuperados)
-  for (let i = 0; i < 10; i++) for (let j = 0; j < 4; j++) {
-    if (rnd(91, i * 4 + j) < 0.2) continue;
-    ctx.box(`s17_canopy_painel_${i}_${j}`, { w: 2.0, h: 0.06, d: 1.3 }, new Vector3(R.x0 + 1.6 + i * 2.2, top + 0.45, R.z0 + 2.2 + j * 2.4), mats.glass, { rotation: new Vector3(-0.25, 0, 0), shadow: false });
-    ctx.box(`s17_canopy_painel_sup_${i}_${j}`, { w: 1.8, h: 0.4, d: 0.05 }, new Vector3(R.x0 + 1.6 + i * 2.2, top + 0.2, R.z0 + 2.2 + j * 2.4 - 0.5), mats.metalDark, { shadow: false });
-  }
+  // painéis solares em fileiras (alguns faltando: recuperados) — no modo kit viram TECH_canopy_solar
+  covered(ctx, group, () => {
+    for (let i = 0; i < 10; i++) for (let j = 0; j < 4; j++) {
+      if (rnd(91, i * 4 + j) < 0.2) continue;
+      ctx.box(`s17_canopy_painel_${i}_${j}`, { w: 2.0, h: 0.06, d: 1.3 }, new Vector3(R.x0 + 1.6 + i * 2.2, top + 0.45, R.z0 + 2.2 + j * 2.4), mats.glass, { rotation: new Vector3(-0.25, 0, 0), shadow: false });
+      ctx.box(`s17_canopy_painel_sup_${i}_${j}`, { w: 1.8, h: 0.4, d: 0.05 }, new Vector3(R.x0 + 1.6 + i * 2.2, top + 0.2, R.z0 + 2.2 + j * 2.4 - 0.5), mats.metalDark, { shadow: false });
+    }
+  });
   // escada de manutenção no pilar sudoeste (sobe para o norte, do lado de fora do pilar)
   stairs(ctx, "s17_canopy_escada", new Vector3(R.x0 - 0.9, STREET.curbHeight, R.z0 + 1.8), "N", 1.2, top - STREET.curbHeight, mats.metalPainted);
   ctx.box("s17_canopy_patamar", { w: 1.6, h: 0.1, d: 1.4 }, new Vector3(R.x0 - 0.6, top - 0.05, R.z1 - 1.4), mats.metalPainted, { collider: true, cameraBlocker: false });
   // totens de recarga (camada tecnológica reaproveitados como postes de feira) e um ônibus elétrico abandonado
-  for (let k = 0; k < 4; k++) {
-    const x = R.x0 + 3 + k * 5.5;
-    ctx.box(`s17_canopy_totem_${k}`, { w: 0.5, h: 2.2, d: 0.4 }, new Vector3(x, 1.1 + STREET.curbHeight, R.z1 - 2.2), mats.metalPainted, { collider: true });
-    ctx.box(`s17_canopy_totem_tela_${k}`, { w: 0.3, h: 0.4, d: 0.02 }, new Vector3(x, 1.7 + STREET.curbHeight, R.z1 - 2.41), k === 1 ? mats.emissiveGreen : mats.glass, { batch: k === 1 ? false : true, shadow: false });
-    ctx.cylinder(`s17_canopy_totem_cabo_${k}`, { height: 1.2, diameter: 0.05, tessellation: 6 }, new Vector3(x + 0.3, 0.7 + STREET.curbHeight, R.z1 - 2.0), mats.rubber, { rotation: new Vector3(0.6, 0, 0.4), shadow: false });
-  }
+  // (no modo kit os totens viram TECH_totem_recarga nas mesmas posições — CANOPY_TOTEMS; o colisor fica)
+  covered(ctx, group, () => {
+    for (const [k, x] of CANOPY_TOTEMS.entries()) {
+      ctx.box(`s17_canopy_totem_${k}`, { w: 0.5, h: 2.2, d: 0.4 }, new Vector3(x, 1.1 + STREET.curbHeight, R.z1 - 2.2), mats.metalPainted, { collider: true });
+      ctx.box(`s17_canopy_totem_tela_${k}`, { w: 0.3, h: 0.4, d: 0.02 }, new Vector3(x, 1.7 + STREET.curbHeight, R.z1 - 2.41), k === 1 ? mats.emissiveGreen : mats.glass, { batch: k === 1 ? false : true, shadow: false });
+      ctx.cylinder(`s17_canopy_totem_cabo_${k}`, { height: 1.2, diameter: 0.05, tessellation: 6 }, new Vector3(x + 0.3, 0.7 + STREET.curbHeight, R.z1 - 2.0), mats.rubber, { rotation: new Vector3(0.6, 0, 0.4), shadow: false });
+    }
+  });
   ctx.box("s17_canopy_onibus_corpo", { w: 2.5, h: 2.6, d: 11 }, new Vector3(R.x1 - 3.5, 1.5 + STREET.curbHeight, cz), mats.metalPainted, { collider: true, rotationY: 0.05 });
   ctx.box("s17_canopy_onibus_vidros", { w: 2.55, h: 0.9, d: 10.6 }, new Vector3(R.x1 - 3.5, 2.3 + STREET.curbHeight, cz), mats.glass, { rotationY: 0.05, shadow: false });
   ctx.box("s17_canopy_onibus_bateria", { w: 2.4, h: 0.5, d: 3.0 }, new Vector3(R.x1 - 3.5, 3.05 + STREET.curbHeight, cz - 2), mats.metalRust, { rotationY: 0.05 });
@@ -1353,10 +1441,15 @@ function buildCanopy(ctx: WorldContext): void {
 }
 
 /** Viaduto do maglev morto na Avenida do Maglev: pilares, tabuleiro em segmentos de 24 m (trecho sul caído), guias, feira à sombra. */
-function buildViaduct(ctx: WorldContext): void {
+function buildViaduct(ctx: WorldContext, group: Mesh[] | null = null): void {
+  // pilares e tabuleiros: o kit (MARCO_viaduto_maglev dividido em pilar + tabuleiro) cobre o visual; colisores ficam
+  covered(ctx, group, () => buildViaductStructure(ctx));
+  buildViaductLife(ctx);
+}
+
+function buildViaductStructure(ctx: WorldContext): void {
   const { mats } = ctx;
   const V = VIADUCT;
-  const hp = V.pillarSize / 2;
   const deckY = V.deckBottom + V.deckThickness / 2;
   for (const z of V.pillars) {
     ctx.box(`s17_viaduto_pilar_${z}`, { w: V.pillarSize, h: V.deckBottom, d: V.pillarSize }, new Vector3(V.x, V.deckBottom / 2, z), mats.concretePhoto, { collider: true });
@@ -1373,6 +1466,12 @@ function buildViaduct(ctx: WorldContext): void {
     // vegetação nas juntas e manchas de infiltração (lado de baixo)
     if (rnd(95, z0) > 0.4) ctx.plane(`s17_viaduto_mancha_${z0}`, { w: 5, h: 1.6 }, new Vector3(V.x - V.deckWidth / 2 - 0.02, deckY, cz + 4), mats.vines, { rotation: new Vector3(0, Math.PI / 2, 0) });
   }
+}
+
+/** Ponta caída, feira sob o tabuleiro e placas da avenida (não mudam com o kit). */
+function buildViaductLife(ctx: WorldContext): void {
+  const { mats } = ctx;
+  const V = VIADUCT;
   // ponta sul caída: laje partida inclinada e entulho no canteiro (viaduto morto)
   ctx.box("s17_viaduto_queda", { w: V.deckWidth, h: V.deckThickness, d: 9 }, new Vector3(V.x, 6.5, -52.5), mats.concretePhoto, { rotation: new Vector3(-0.9, 0, 0), collider: true });
   rubblePile(ctx, "s17_viaduto_entulho", new Vector3(V.x, 0.15, -58), 9, 96, 2.5);
@@ -1591,16 +1690,26 @@ export interface Sector17Handles {
   lights: SectorLights;
   /** luzes de interior criadas pelo setor (para testes) */
   interiorLights: Light[];
+  /**
+   * Modo kit: malhas do blockout que o kit cobre (fachadas dos lotes, viaduto, volume da torre, painéis e
+   * totens do canopy), fora da fusão do `finalize`. `sector17Kit.ts` descarta o grupo quando o kit carrega
+   * ou o funde (blockout de reserva) se o carregamento falhar. Vazio com `?kit=0`.
+   */
+  kitCovered: Mesh[];
 }
 
-/** Constrói o Setor 17 inteiro em blockout em volta do quarteirão da Apuração (antes de ctx.finalize). */
-export function buildSector17(ctx: WorldContext, onProgress?: (label: string) => void): Sector17Handles {
+/**
+ * Constrói o Setor 17 inteiro em blockout em volta do quarteirão da Apuração (antes de ctx.finalize).
+ * `kit: true` separa o visual que o kit substitui (`kitCovered`); colisores e layout não mudam.
+ */
+export function buildSector17(ctx: WorldContext, onProgress?: (label: string) => void, opts: { kit?: boolean } = {}): Sector17Handles {
   const interior: Light[] = [];
+  const group: Mesh[] | null = opts.kit ? [] : null;
   onProgress?.("Abrindo as ruas do Setor 17…");
   buildStreets(ctx);
   buildWalls(ctx);
   onProgress?.("Levantando os quarteirões…");
-  for (const lot of LOTS) buildLot(ctx, lot);
+  for (const lot of LOTS) buildLot(ctx, lot, group);
   buildVila(ctx);
   buildLargo(ctx);
   onProgress?.("Depósito, escola e quadra…");
@@ -1608,23 +1717,27 @@ export function buildSector17(ctx: WorldContext, onProgress?: (label: string) =>
   buildEscola(ctx, interior);
   buildPostoFundos(ctx, interior);
   onProgress?.("Marcos do setor: viaduto, torre, cisterna, canopy…");
-  buildViaduct(ctx);
-  buildTorre(ctx);
+  buildViaduct(ctx, group);
+  buildTorre(ctx, group);
   buildCisterna(ctx);
-  buildCanopy(ctx);
+  buildCanopy(ctx, group);
   buildAntenaCentral(ctx);
   buildCheckpoints(ctx);
   buildWasteland(ctx);
   // mais luzes locais por material na qualidade média/alta (sol + hemisférica + 4 locais); baixa fica no padrão
   const maxLocal = ctx.quality === "baixa" ? 2 : 4;
   for (const m of ctx.scene.materials) if (m instanceof PBRMaterial) m.maxSimultaneousLights = maxLocal + 2;
-  return { lights: new SectorLights(ctx.scene, maxLocal), interiorLights: interior };
+  return { lights: new SectorLights(ctx.scene, maxLocal), interiorLights: interior, kitCovered: group ?? [] };
+}
+
+/** Luzes locais por material (sol + hemisférica + as locais mais próximas): o kit usa o mesmo limite. */
+export function sectorMaxLights(quality: "baixa" | "media" | "alta"): number {
+  return (quality === "baixa" ? 2 : 4) + 2;
 }
 
 /**
- * Tabela blockout → kit: posições (origem no chão, frente para +Z do módulo) para instanciar os nós de
- * `kit_tech.glb` por nome com `loadHeroAssets(scene, ctx, sector17KitPlacements(), kitUrl)` quando o kit
- * existir. O yaw segue a convenção dos módulos da praça (fachada olhando para a rua).
+ * Tabela blockout → kit por tipologia (um ponto por lote/marco/segmento, frente +Z olhando para a rua). A
+ * composição real — módulos, pavimentos, camadas — é de `planSector17Kit()` em `sector17Kit.ts`.
  */
 export function sector17KitPlacements(): Array<{ asset: string; position: Vector3; yaw: number; id: string }> {
   const yawOf = (f: Facing) => (f === "N" ? 0 : f === "S" ? Math.PI : f === "E" ? Math.PI / 2 : -Math.PI / 2);

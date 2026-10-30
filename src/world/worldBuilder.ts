@@ -11,6 +11,7 @@ import { buildPlaza } from "./plaza";
 import { burntCar, cable, clothesline, crateStack, grassTuft, marketStall, rubblePile, streetLamp, tirePile, tree, barrel } from "./props";
 import { placeSign } from "./signage";
 import { buildSector17, type Sector17Handles } from "./sector17";
+import { buildSector17KitBodies, planSector17Kit, sector17KitEnabled, startSector17Kit } from "./sector17Kit";
 import { SECTOR_BOUNDS, SECTOR_CENTER } from "./bounds";
 import type { Navmesh } from "./navmesh";
 
@@ -47,13 +48,18 @@ export function buildWorld(scene: Scene, quality: QualityLevel, onProgress?: (la
   onProgress?.("Espalhando sinais de ocupação…");
   buildStreetLife(ctx);
 
-  // o resto do setor (ruas, quarteirões, depósito, escola, marcos) cresce para fora do quarteirão
-  const sector17 = buildSector17(ctx, onProgress);
+  // o resto do setor (ruas, quarteirões, depósito, escola, marcos) cresce para fora do quarteirão;
+  // com o kit (padrão; `?kit=0` desliga) as fachadas e marcos viram peças de kit_tech.glb sobre a mesma física
+  const kit = sector17KitEnabled() ? planSector17Kit(quality === "baixa" ? "leve" : "completo") : null;
+  const sector17 = buildSector17(ctx, onProgress, { kit: !!kit });
+  if (kit) buildSector17KitBodies(ctx, kit);
   buildSkyline(ctx);
 
   onProgress?.("Otimizando a cena…");
   ctx.finalize();
   mats.freezeAll();
+  // carga assíncrona do kit: `loadHeroAssets` espera por ela antes de o jogo abrir
+  if (kit) startSector17Kit(ctx, sector17.kitCovered, kit);
 
   return { ctx, mats, shadowCasters: ctx.shadowCasters, spawns: ctx.spawns, emitters: ctx.emitters, workshop, sector17, navmesh: null };
 }

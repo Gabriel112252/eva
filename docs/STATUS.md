@@ -1,6 +1,6 @@
 # STATUS — O Último Veto / EVA
 
-Atualizado em 25/10/2026 (personagens realistas, controles de toque, animações CC0 retargeteadas).
+Atualizado em 30/10/2026 (Setor 17 montado com o kit 2072; antes: personagens realistas, controles de toque, animações CC0 retargeteadas).
 
 ## Marco atual: **Vertical slice jogável — "A Apuração" + "O Carregamento"** ✅
 
@@ -64,7 +64,7 @@ O jogo roda no navegador (Chrome/Edge/Firefox recentes no desktop; Chrome/Safari
 
 - Sem gamepad (teclado + mouse no desktop; toque no celular/tablet). No celular, o toque foi verificado em Chromium emulado — não em aparelhos reais; iOS Safari não permite tela cheia em páginas (o jogo segue na aba normal).
 - Vista aérea: a cidade real (600 m) aparece como um quadrado de chão marrom sobre a ortofoto gerada; o anel entre 6 km e 300 km usa uma só imagem (borrada abaixo de ~10 km de altitude). Pendente: calota intermediária e costura do chão real com a ortofoto.
-- Sem LOD/streaming: a cena inteira é carregada de uma vez (~140 meshes, 22–35 K triângulos por personagem); roda bem em GPU integrada moderna; em celular começa em qualidade baixa, sem medição em aparelhos fracos.
+- Sem streaming: a cena inteira é carregada de uma vez (~140 meshes, 22–35 K triângulos por personagem); só o kit do Setor 17 tem LOD (por instância, com cartões de fachada distantes). Roda bem em GPU integrada moderna; em celular começa em qualidade baixa (kit "leve": sem remendos miúdos), sem medição em aparelhos fracos.
 - WebGL 2 apenas (WebGPU não habilitado ainda).
 - Renderização por software (sem GPU) fica em ~2–5 FPS — só para testes automatizados; no Chromium headless o pointer lock ativo deixa os frames 5–10× mais lentos, por isso o teste visual roda com `?pointerlock=0` (`--lock` para o caminho com cursor travado).
 - A voz sintetizada depende das vozes instaladas no sistema do jogador (Chrome tem vozes pt-BR online; Firefox depende do SO; no celular costuma haver uma voz pt-BR).
@@ -97,6 +97,14 @@ Jogáveis de ponta a ponta e encadeadas ao fim do Capítulo 0: na tela de conclu
 - **Prisão no teste**: a perseguição real (Custódio alcança Matias) não fecha em 3 s de jogo no SwiftShader; o teste então dispara o mesmo evento do gerenciador de inimigos (`enemies.onCaught`) — a detecção, essa sim, é a do sistema de furtividade.
 - **Capturas no SwiftShader**: logo depois de um teleporte o cenário sai em branco por ~10 quadros (só personagens, veículos e placas aparecem). Causa provável: o `SectorLights` (`src/world/sector17.ts`) liga as luzes locais mais próximas do observador, os materiais mudam de variante e recompilam — `scene.isReady()` já volta `true` antes disso. O teste espera 14 quadros antes de cada captura. Em GPU real deve ser só um engasgo na primeira troca (não medido aqui) — fica para o agente de mundo.
 - Ainda do roteiro (§9): ratificar a exceção canônica da Rastro (Matias "não pilota aeromoto") e a data (dia/mês) do documento de 2056 — o exame mostra só o ano.
+
+## Setor 17 com o kit 2072 (branch `agente/kit-setor17`) ✅
+
+O blockout do Setor 17 ganhou a aparência do kit `kit_tech.glb` (regra das três camadas) sem mexer na física: `src/world/sector17Kit.ts` compõe cada lote com módulos de 6 m (térreo conforme `ground`, pavimentos, esquinas, topos, cor 0/1 por semente), camada tecnológica (pele fotovoltaica ou anexo em 42 % dos lotes, recicladores, caixas d'água, dosséis solares, letreiros LED) e remendos (fiação de poste a fachada, varais, ar-condicionado, toldos, tubulação, lonas nos anexos); viaduto com pilares nas juntas e tabuleiros de 24 m; Torre Verde com 3 blocos da base de vidro; canopy com dosséis e totens. Detalhes, regras e faltas do kit em `docs/MAPA_SETOR17.md` → "Troca blockout → kit"; capturas antes/depois em `docs/screenshots/setor17_kit/`. `?kit=0` volta ao blockout.
+
+- **Desempenho**: instâncias de malha com LOD por instância (fachadas 70 m, miudezas 45 m, lajes 90 m) e cartões de fachada distantes; materiais do kit fundidos na carga (paleta + cor por vértice): 455 malhas do GLB → 158 fontes, 3.091 colocações, 386 mil triângulos se tudo estivesse no quadro. Draw calls sem sombras nos 10 pontos da rota do `setor17-test` (Chromium sem GPU): máximo 389 com `?kit=0` → 402 com o kit (rua da Escola; limite 450); com as 3 cascatas de sombra, 1.343 → 1.392. O kit só recebe sol + hemisférica (sem luz de poste nas fachadas — evita recompilar variantes de shader a cada troca de postes acesos).
+- **Testes**: `npm run check` (14 arquivos, 127 testes, incl. `tests/unit/sector17Kit.test.ts` com 20) ✔; `gameplay-test --only missao` ✔; `setor17-test`: draw calls, luzes, van e Rastro ✔, mas 7 verificações falham **igual em `main` (67e53a8) e com `?kit=0`** — caminhos Recast oficina → depósito / oficina → escola / pátio → telhados com 0 pontos (o Recast, ativo de verdade desde 3cc5617, não liga esses pontos; só sala → quadra sai), as duas chegadas de Matias que dependem deles, e a subida correndo da escada da escola, que para em y = 6,32 no patamar (z ≈ −26) sem entrar no telhado. Nada disso depende do kit (o kit não tem colisor; a trajetória na escada é idêntica com e sem kit).
+- **Pendências**: fachada queimada, trecho caído do viaduto, reservatório da cisterna, antena da Central e as peças de depósito/escola não existem no kit (seguem blockout); `TECH_poste_sensor`/`PROP_*` fora do setor por orçamento de draw calls; transição de LOD a 70 m visível de perto da névoa; fachadas laterais e fundos seguem caixas; tabuleiro do kit (5,6 m) mais estreito que o colisor do viaduto (8 m) e pilar do kit mais grosso que o colisor (1,6 m); sem luz de poste nas fachadas do kit à noite.
 
 ## Próxima etapa
 
