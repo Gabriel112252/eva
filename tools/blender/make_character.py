@@ -2120,7 +2120,7 @@ def ring_band(name: str, surf: BodySurface, p0: Vector, p1: Vector, n: int, t_ro
     """Faixa fechada em volta de um eixo (gola, cinto, braçadeira): um anel por altura `t_rows` (0..1 de p0 a p1),
     raio = superfície + `offset` (valor ou lista por anel). `uniform`: mesmo raio em todas as alturas (o maior),
     para um cinto reto que passa por cima de uma borda (barra do colete) sem degrau."""
-    a, u, w = axis_basis(p1 - p0, ref)
+    _a, u, w = axis_basis(p1 - p0, ref)
     radii = []
     for t in t_rows:
         o = p0 + (p1 - p0) * t
@@ -2472,11 +2472,11 @@ def build_jacket_extras(name: str, spec: dict, surf: BodySurface, joints, m: dic
 def build_scarf(name: str, spec: dict, surf: BodySurface, joints, m: dict, cloth: dict) -> list:
     """Lenço enrolado na base do pescoço, com a ponta caindo sobre o peito."""
     J = lambda b: joints[f"mixamorig:{b}"]  # noqa: E731
-    neck, head, spine2 = J("Neck"), J("Head"), J("Spine2")
+    neck, head = J("Neck"), J("Head")
     mat = simple_material(f"{name}_mat_scarf", spec["scarf"], 0.92)
     ndir = (head - neck).normalized()
     o = neck - ndir * 0.008
-    a, u, w = axis_basis(ndir, FRONT)
+    _a, u, w = axis_basis(ndir, FRONT)
     path = []
     for i in range(26):
         th = TAU * i / 26
@@ -2561,7 +2561,7 @@ def build_armor(name: str, spec: dict, surf: BodySurface, joints, verts, vgroups
     a = spec["armor"]
     out = []
     J = lambda k: joints[f"mixamorig:{k}"]  # noqa: E731
-    hips, spine, spine1, spine2, neck, head = J("Hips"), J("Spine"), J("Spine1"), J("Spine2"), J("Neck"), J("Head")
+    hips, spine1, spine2, neck, head = J("Hips"), J("Spine1"), J("Spine2"), J("Neck"), J("Head")
     cy = (m["torso_front"] + m["torso_back"]) / 2
     plate = simple_material(f"{name}_mat_plate", a["plate"], 0.42, 0.05)
     helmet_mat = plate
