@@ -6,7 +6,7 @@ import type { Scene } from "@babylonjs/core/scene";
 import type { InputManager } from "@/core/input";
 import { COLLISION } from "@/world/context";
 
-export type CameraMode = "follow" | "dialogue" | "menu";
+export type CameraMode = "follow" | "dialogue" | "inspect" | "menu";
 
 const PITCH_MIN = -0.55;
 const PITCH_MAX = 1.05;
@@ -64,6 +64,25 @@ export class ThirdPersonCamera {
     this.dialogueAt.copyFrom(at);
   }
 
+  /**
+   * Close-up de exame: câmera a `distance` m do objeto, do lado de quem olha (`viewer`, ex.: cabeça de
+   * Matias), um pouco acima e deslocada para o lado, olhando para o objeto. FOV estreito.
+   */
+  setInspectShot(target: Vector3, viewer: Vector3, distance = 1.1, side = 0.35): void {
+    this.mode = "inspect";
+    const toViewer = viewer.subtract(target);
+    toViewer.y = 0;
+    if (toViewer.lengthSquared() < 1e-4) toViewer.set(Math.sin(this.yaw) * -1, 0, Math.cos(this.yaw) * -1);
+    toViewer.normalize();
+    const right = new Vector3(toViewer.z, 0, -toViewer.x);
+    const from = target.add(toViewer.scale(distance)).add(right.scale(side)).add(new Vector3(0, distance * 0.45, 0));
+    this.dialogueFrom.copyFrom(from);
+    this.dialogueAt.copyFrom(target);
+    this.inspectFov = 0.62;
+  }
+
+  private inspectFov = 0.62;
+
   setFollow(): void {
     this.mode = "follow";
   }
@@ -101,8 +120,9 @@ export class ThirdPersonCamera {
       case "follow":
         this.updateFollow(dt, input, pivot, eyeHeight, lookYaw);
         break;
-      case "dialogue": {
-        const s = this.initialized ? 5 : 1000;
+      case "dialogue":
+      case "inspect": {
+        const s = this.initialized ? (this.mode === "inspect" ? 7 : 5) : 1000;
         this.smoothedPos.set(damp(this.smoothedPos.x, this.dialogueFrom.x, s, dt), damp(this.smoothedPos.y, this.dialogueFrom.y, s, dt), damp(this.smoothedPos.z, this.dialogueFrom.z, s, dt));
         this.smoothedTarget.set(damp(this.smoothedTarget.x, this.dialogueAt.x, s, dt), damp(this.smoothedTarget.y, this.dialogueAt.y, s, dt), damp(this.smoothedTarget.z, this.dialogueAt.z, s, dt));
         this.camera.position.copyFrom(this.smoothedPos);
@@ -123,7 +143,8 @@ export class ThirdPersonCamera {
         break;
       }
     }
-    this.camera.fov = damp(this.camera.fov, this.fovTarget, 10, dt);
+    // no exame o FOV estreita independentemente do perfil (que o Game só ajusta no modo seguir)
+    this.camera.fov = damp(this.camera.fov, this.mode === "inspect" ? this.inspectFov : this.fovTarget, 10, dt);
   }
 
   private updateFollow(dt: number, input: InputManager, pivot: Vector3, eyeHeight: number, alignYaw?: number): void {

@@ -165,8 +165,36 @@
             <div id="vehicle-hint" class="vehicle-hint"></div>
           </div>
           <div id="inventory" class="inventory">
-            <div class="inventory-title">Mochila <span class="muted small">(I · fechar)</span></div>
+            <div class="inventory-tabs" role="tablist">
+              <button id="inventory-tab-items" class="inventory-tab active" type="button" role="tab"><kbd>1</kbd>Mochila</button>
+              <button id="inventory-tab-clues" class="inventory-tab" type="button" role="tab"><kbd>2</kbd>Pistas <span id="inventory-clue-count" class="inventory-count"></span></button>
+              <span class="muted small inventory-close">I · fechar</span>
+            </div>
             <ul id="inventory-list" class="inventory-list"></ul>
+            <ul id="clue-list" class="clue-list" hidden></ul>
+          </div>
+          <!-- Capítulo 1: timer de missão, indicador de furtividade, reparo e exame -->
+          <div id="mission-timer" class="mission-timer"><span id="mission-timer-label" class="mission-timer-label"></span><span id="mission-timer-clock" class="mission-timer-clock">00:00</span></div>
+          <div id="awareness" class="awareness" aria-label="Nível de detecção">
+            <svg viewBox="0 0 64 40" aria-hidden="true">
+              <defs><clipPath id="awareness-clip"><rect id="awareness-fill" x="0" y="40" width="64" height="40" /></clipPath></defs>
+              <path class="awareness-outline" d="M2 20 Q32 -8 62 20 Q32 48 2 20 Z" />
+              <g clip-path="url(#awareness-clip)"><path class="awareness-eye" d="M2 20 Q32 -8 62 20 Q32 48 2 20 Z" /><circle class="awareness-pupil" cx="32" cy="20" r="8" /></g>
+            </svg>
+            <span id="awareness-label" class="awareness-label"></span>
+          </div>
+          <div id="repair" class="repair">
+            <div class="repair-title"><span id="repair-name"></span><span id="repair-step" class="repair-step"></span></div>
+            <div class="repair-track"><div id="repair-zone" class="repair-zone"></div><div id="repair-bar" class="repair-bar"></div></div>
+            <div id="repair-hint" class="repair-hint">Segure <kbd>E</kbd> e solte dentro da faixa</div>
+          </div>
+          <div id="examine" class="examine">
+            <div class="examine-card">
+              <p class="overlay-kicker">Examinar</p>
+              <h3 id="examine-title"></h3>
+              <p id="examine-text"></p>
+              <p id="examine-footer" class="muted small"><kbd>E</kbd> fechar</p>
+            </div>
           </div>
           <div id="death" class="overlay death">
             <div class="overlay-card">

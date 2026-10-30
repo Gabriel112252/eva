@@ -25,6 +25,10 @@ export interface SaveData {
   world: Record<string, FlagValue>;
   /** mochila (item → quantidade) */
   inventory?: Record<string, number>;
+  /** diário de pistas: ids na ordem de descoberta (Capítulo 1) */
+  clues?: string[];
+  /** contagens regressivas em andamento (id → segundos restantes e rótulo) */
+  timers?: Record<string, { remaining: number; label?: string }>;
   playTimeSeconds: number;
 }
 
@@ -70,6 +74,9 @@ export function migrateSave(raw: unknown): SaveData | null {
     quests: current.quests && typeof current.quests === "object" ? current.quests : {},
     dialogueHistory: Array.isArray(current.dialogueHistory) ? current.dialogueHistory.filter((s): s is string => typeof s === "string") : [],
     world: current.world && typeof current.world === "object" ? current.world : {},
+    ...(current.inventory && typeof current.inventory === "object" ? { inventory: current.inventory } : {}),
+    ...(Array.isArray(current.clues) ? { clues: current.clues.filter((s): s is string => typeof s === "string") } : {}),
+    ...(current.timers && typeof current.timers === "object" ? { timers: current.timers } : {}),
     playTimeSeconds: Number(current.playTimeSeconds ?? 0),
   };
 }

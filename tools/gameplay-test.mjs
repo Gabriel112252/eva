@@ -1,8 +1,9 @@
 /**
  * Teste de gameplay no build (quadros determinísticos a 30 fps): veículos (entrar, dirigir, sair, voo da
- * aeromoto), combate (mirar, atirar, dano em inimigo, recarga) e missão (gatilhos do confronto).
+ * aeromoto), combate (mirar, atirar, dano em inimigo, recarga), missão (gatilhos do confronto) e os
+ * sistemas do Capítulo 1 (furtividade, examinar, pistas, timer, reparo, zonas, carga).
  *
- * Uso: npm run build && node tools/gameplay-test.mjs [--shots docs/screenshots/gameplay]
+ * Uso: npm run build && node tools/gameplay-test.mjs [--only veiculos|missao|sistemas] [--shots docs/screenshots/gameplay]
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -10,7 +11,8 @@ import { loadPlaywright, serveDist, CHROMIUM_ARGS, argValue } from "./lib/harnes
 
 const { chromium } = loadPlaywright();
 const SHOTS = argValue("--shots", "");
-const ONLY = argValue("--only", ""); // "veiculos" | "missao" | "" (tudo)
+const ONLY = argValue("--only", ""); // "veiculos" | "missao" | "sistemas" | "" (tudo)
+const RUN = (part) => ONLY === "" || ONLY === part;
 if (SHOTS) mkdirSync(resolve(SHOTS), { recursive: true });
 const { base, close } = await serveDist();
 const browser = await chromium.launch({ headless: true, args: CHROMIUM_ARGS });
@@ -44,7 +46,7 @@ try {
   let s;
 
   // ---------------- Javali: entrar, acelerar, virar, sair ----------------
-  if (ONLY !== "missao") {
+  if (RUN("veiculos")) {
   console.log("Veículos");
   const jav = await page.evaluate(() => {
     const v = window.eva.vehicles.find((x) => x.def.id === "javali_vb4");
@@ -153,7 +155,7 @@ try {
   s = await snap();
   check(s.driving === null, "Matias desceu da aeromoto");
   }
-  if (ONLY !== "veiculos") {
+  if (RUN("missao")) {
 
   // ---------------- Combate e missão "O Carregamento" ----------------
   console.log("Combate e missão");
@@ -309,6 +311,181 @@ try {
   }
   check(end.phase === "concluida" && end.visible === true, `missão concluída (fase ${end.phase}, decisão ${end.decision}, tela final ${end.visible})`);
   await shot("missao_fim");
+  }
+
+  if (RUN("sistemas")) {
+  // ---------------- Sistemas do Capítulo 1 ----------------
+  console.log("Sistemas do Capítulo 1");
+  const t0 = Date.now();
+  // área aberta ao sul da praça (z ≈ -14): Custódio parado olhando para leste (+x), Matias a leste
+  await page.evaluate(() => window.eva.enemies.clear());
+  // (sem devolver o Enemy ao Node: o Playwright tentaria serializar o grafo inteiro da cena)
+  await page.evaluate(async () => { await window.eva.spawnCustodio(16, -14, Math.PI / 2, [], { awareness: { loseTime: 1.2, searchTime: 1.0, graceTime: 1.0 } }); });
+  for (let i = 0; i < 30; i++) {
+    await step(2);
+    const sn = await snap();
+    if (sn.enemies && sn.enemies.total >= 1) break;
+  }
+  s = await snap();
+  check(s.enemies && s.enemies.total === 1 && s.awareness.perEnemy[0]?.role === "custodio", `Custódio de patrulha em campo (${JSON.stringify(s.awareness?.perEnemy)})`);
+  // agachado, longe (26 m > 22 m de visão; passos agachados ouvidos a 4 m): continua calmo
+  await page.evaluate(() => window.eva.teleportPlayer(42, 0.22, -14, -Math.PI / 2));
+  await press("crouchToggle", true);
+  await press("crouchToggle", false);
+  await step(5);
+  await press("forward", true);
+  await step(40);
+  await press("forward", false);
+  s = await snap();
+  check(s.crouched === true && s.awareness.state === "calmo" && s.awareness.perEnemy[0].state === "calmo", `agachado longe: Custódio continua calmo (${s.awareness.perEnemy[0].state}, Matias em x=${s.feet.x.toFixed(1)})`);
+  await shot("sistemas_furtivo_calmo");
+  // levanta e corre na direção dele, à vista: suspeito → detectado (perseguição) e gatilho {kind:"detectado"}
+  await press("crouchToggle", true);
+  await press("crouchToggle", false);
+  await step(3);
+  await press("run", true);
+  await press("forward", true);
+  const seen = new Set();
+  let detected = false;
+  for (let i = 0; i < 40 && !detected; i++) {
+    await step(3);
+    const sn = await snap();
+    seen.add(sn.awareness.perEnemy[0]?.state);
+    detected = sn.triggers.some((t) => t.kind === "detectado");
+  }
+  await press("forward", false);
+  await press("run", false);
+  s = await snap();
+  check(seen.has("suspeito"), `passou por suspeito (estados vistos: ${[...seen].join(" → ")})`);
+  check(detected && s.awareness.perEnemy[0].detections === 1 && s.awareness.perEnemy[0].hostile === false, `detectado disparado na 1ª detecção; Custódio não hostil (detecções ${s.awareness.perEnemy[0].detections}, hostil ${s.awareness.perEnemy[0].hostile})`);
+  check(s.awareness.state === "perseguicao" && s.awareness.level === 1, `HUD: olho cheio em perseguição (${s.awareness.state}, ${s.awareness.level})`);
+  const eyeVisible = await page.evaluate(() => document.getElementById("awareness")?.classList.contains("visible"));
+  check(eyeVisible === true, "indicador de detecção visível na HUD");
+  await shot("sistemas_furtivo_detectado");
+  // some da vista (atrás do portão, ao norte): perde → alerta (procura) → calmo
+  await page.evaluate(() => window.eva.teleportPlayer(-20, 0.22, -2, Math.PI));
+  let sawAlert = false;
+  let calmAgain = false;
+  for (let i = 0; i < 60 && !calmAgain; i++) {
+    await step(4);
+    const sn = await snap();
+    const st = sn.awareness.perEnemy[0]?.state;
+    if (st === "alerta") sawAlert = true;
+    if (sawAlert && st === "calmo") calmAgain = true;
+  }
+  check(sawAlert, "perdeu Matias de vista → alerta (procura o último ponto)");
+  check(calmAgain, "sem estímulo → voltou a calmo");
+  // toque de recolher: lanterna acesa e visão curta
+  await page.evaluate(() => window.eva.setCurfew(true));
+  await page.evaluate(() => window.eva.teleportPlayer(30, 0.22, -14, -Math.PI / 2));
+  await step(3);
+  s = await snap();
+  check(s.curfew === true && s.awareness.perEnemy[0].flashlight === true, `toque de recolher: lanterna acesa (${s.awareness.perEnemy[0].flashlight})`);
+  await shot("sistemas_lanterna");
+  await page.evaluate(() => { window.eva.setCurfew(false); window.eva.enemies.clear(); });
+
+  // examinar: objeto de teste ao lado de Matias → prompt, close-up, pista, gatilhos
+  await page.evaluate(() => {
+    window.eva.teleportPlayer(30, 0.22, -14, 0);
+    window.eva.addExaminable({ id: "caixa_teste", position: { x: 30, y: 0.6, z: -12.6 }, title: "Caixa vazia", text: "Lacre cortado e refeito com fita.", clue: "pista.caixas_vazias", flag: "teste.examinou" });
+  });
+  await step(6);
+  s = await snap();
+  check(/Examinar: Caixa vazia/.test(s.prompt ?? ""), `prompt de examinar: "${s.prompt}"`);
+  await press("interact", true);
+  await press("interact", false);
+  await step(8);
+  s = await snap();
+  const examineVisible = await page.evaluate(() => document.getElementById("examine")?.classList.contains("visible"));
+  check(s.state === "dialogue" && s.examining === "caixa_teste" && examineVisible === true, `close-up aberto (estado ${s.state}, examinando ${s.examining})`);
+  check(s.clues.includes("pista.caixas_vazias") && s.flags["pista.caixas_vazias"] === true && s.flags["teste.examinou"] === true, `pista anotada e flag posta (${JSON.stringify(s.clues)})`);
+  check(s.triggers.some((t) => t.kind === "examinar" && t.objeto === "caixa_teste") && s.triggers.some((t) => t.kind === "pista" && t.id === "pista.caixas_vazias"), "gatilhos examinar e pista disparados");
+  await shot("sistemas_examinar");
+  await press("interact", true);
+  await press("interact", false);
+  await step(6);
+  s = await snap();
+  check(s.state === "playing" && s.examining === null, `close-up fechado com E (estado ${s.state})`);
+  // mochila: aba Pistas lista a pista
+  await press("inventory", true);
+  await press("inventory", false);
+  await press("choice2", true);
+  await press("choice2", false);
+  await step(2);
+  const clueItems = await page.evaluate(() => Array.from(document.querySelectorAll("#clue-list li .clue-title")).map((e) => e.textContent));
+  check(clueItems.includes("Três caixas vazias"), `aba Pistas da mochila: ${JSON.stringify(clueItems)}`);
+  await shot("sistemas_pistas");
+  await press("inventory", true);
+  await press("inventory", false);
+
+  // timer de 3 s: HUD mostra mm:ss e o gatilho dispara ao zerar
+  await page.evaluate(() => window.eva.timers.start("teste", 3, "Teste de entrega"));
+  await step(2);
+  const clock = await page.evaluate(() => document.getElementById("mission-timer-clock")?.textContent);
+  check(/^00:0[23]$/.test(clock ?? ""), `timer na HUD: ${clock}`);
+  await step(92);
+  s = await snap();
+  check(!("teste" in s.timers) && s.triggers.some((t) => t.kind === "timer" && t.id === "teste"), `timer zerou e disparou o gatilho (restantes: ${JSON.stringify(s.timers)})`);
+
+  // zona por dados: Matias já está dentro → dispara na próxima verificação
+  await page.evaluate(() => window.eva.addZone({ id: "zona_teste", center: { x: 30, y: 0, z: -14 }, radius: 3 }));
+  await step(2);
+  s = await snap();
+  check(s.triggers.some((t) => t.kind === "zona" && t.id === "zona_teste") && s.zonesInside.includes("zona_teste"), "zona cilíndrica disparou ao entrar");
+
+  // reparo: segurar E e soltar na faixa, 3 vezes (lendo a barra pelo snapshot)
+  await page.evaluate(() => window.eva.addRepairable({ id: "gerador_teste", position: { x: 31.6, y: 0.5, z: -14 }, title: "Gerador", fillTime: 1.0 }));
+  await page.evaluate(() => window.eva.teleportPlayer(30, 0.22, -14, Math.PI / 2));
+  await step(6);
+  s = await snap();
+  check(/Reparar: Gerador/.test(s.prompt ?? ""), `prompt de reparo: "${s.prompt}"`);
+  await press("interact", true);
+  await press("interact", false);
+  await step(3);
+  s = await snap();
+  const repairVisible = await page.evaluate(() => document.getElementById("repair")?.classList.contains("visible"));
+  check(s.repair && s.repair.step === 0 && repairVisible === true, `minigame aberto (${JSON.stringify(s.repair)})`);
+  let misses = 0;
+  for (let round = 0; round < 3; round++) {
+    await press("interact", true);
+    let released = false;
+    for (let i = 0; i < 40 && !released; i++) {
+      await step(1);
+      const sn = await snap();
+      const r = sn.repair;
+      if (!r) break;
+      if (r.fill >= r.zone[0] + 0.03) {
+        await press("interact", false);
+        released = true;
+      }
+    }
+    await step(2);
+    const sn = await snap();
+    if (sn.repair && sn.repair.result === "miss") {
+      misses++;
+      await step(30); // penalidade
+      round--;
+      if (misses > 4) break;
+    }
+  }
+  await step(4);
+  s = await snap();
+  check(s.flags["reparado.gerador_teste"] === true && s.triggers.some((t) => t.kind === "reparo" && t.maquina === "gerador_teste"), `reparo concluído (erros ${misses}) e gatilho disparado`);
+  await step(30);
+  s = await snap();
+  const promptVisible = await page.evaluate(() => document.getElementById("prompt")?.classList.contains("visible"));
+  check(s.repair === null && s.state === "playing" && !(promptVisible && /Reparar/.test(s.prompt ?? "")), `minigame fechou e a máquina consertada saiu do prompt (visível ${promptVisible}: "${s.prompt}")`);
+
+  // carga visível no Atlas
+  const okCargo = await page.evaluate(() => window.eva.setCargo("atlas_t3"));
+  const atlas = await page.evaluate(() => { const v = window.eva.vehicles.find((x) => x.def.id === "atlas_t3"); const p = v.position; return [p.x, p.z, v.heading]; });
+  await page.evaluate(([x, z, h]) => window.eva.teleportPlayer(x - Math.sin(h) * 3.2 + 1.2, 0.22, z - Math.cos(h) * 3.2, h), atlas);
+  await step(6);
+  s = await snap();
+  check(okCargo && s.cargo === "atlas_t3", `carga presa ao Atlas (${s.cargo})`);
+  await shot("sistemas_carga_atlas");
+  await page.evaluate(() => window.eva.setCargo(null));
+  console.log(`  (sistemas: ${((Date.now() - t0) / 1000).toFixed(0)} s)`);
   }
 
   await page.evaluate(() => window.eva.captureStop());
