@@ -130,7 +130,7 @@ describe("Setor 17 — kit: sorteio e composição", () => {
     expect(tech).toBeLessThanOrEqual(0.5);
     expect(new Set(plan.lots.map((l) => l.color)).size).toBe(2);
     const pieces = piecesUsed(plan);
-    for (const p of ["TECH_pele_fotovoltaica_inteira", "TECH_anexo_modular", "TECH_reciclador_agua", "REMENDO_caixa_dagua", "REMENDO_fiacao_12m", "REMENDO_varal", "REMENDO_ar_condicionado", "TECH_letreiro_led_farmacia"]) expect(pieces.has(p), p).toBe(true);
+    for (const p of ["TECH_pele_fotovoltaica_inteira", "TECH_anexo_modular", "TECH_reciclador_agua", "REMENDO_caixa_dagua", "REMENDO_fiacao_12m", "REMENDO_varal", "REMENDO_ar_condicionado", "REMENDO_lona", "REMENDO_toldo", "TECH_letreiro_led_farmacia"]) expect(pieces.has(p), p).toBe(true);
   });
 
   it("térreo conforme `ground`: loja nas lojas, galpão nos muros; placa do lote sobre a loja; pichação em galpão", () => {
@@ -179,7 +179,7 @@ describe("Setor 17 — kit: sorteio e composição", () => {
 
   it("peças de laje ficam sobre o telhado do próprio lote", () => {
     const plan = planSector17Kit();
-    for (const i of plan.instances.filter((x) => /anexo|reciclador|caixa_dagua|canopy_solar/.test(x.piece) && LOTS.some((l) => l.id === x.owner))) {
+    for (const i of plan.instances.filter((x) => /anexo|reciclador|caixa_dagua|canopy_solar|lona/.test(x.piece) && LOTS.some((l) => l.id === x.owner))) {
       const lot = LOTS.find((l) => l.id === i.owner)!;
       expect(i.y, i.owner).toBeCloseTo(lotHeight(lot), 6);
       expect(i.x, i.owner).toBeGreaterThan(lot.rect.x0);

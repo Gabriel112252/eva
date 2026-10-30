@@ -49,17 +49,20 @@ import {
  *  1. `planSector17Kit()` (puro, testado em tests/unit/sector17Kit.test.ts) decide, por lote e com a
  *     semente do lote, quantos módulos de 6 m cabem na fachada, o tipo de cada pavimento, esquinas,
  *     topos, a camada tecnológica (pele fotovoltaica / anexo, recicladores, letreiros LED) e os remendos
- *     (fiação, varais, ar-condicionado, toldos, tubos, lonas), além dos marcos (viaduto, torre, canopy).
+ *     (fiação, varais, ar-condicionado, toldos, tubos), além dos marcos (viaduto, torre, canopy, cisterna).
  *  2. `buildSector17KitBodies()` cria, antes do `ctx.finalize`, o volume cego de cada lote recuado 1 m
  *     atrás da linha da fachada (os módulos do kit ocupam z ∈ [−0,5, 0] e o nicho da área de serviço vai
- *     a 0,9 m) — 1 cm para dentro das caixas do blockout, então fica escondido se o kit falhar.
- *  3. `startSector17Kit()` carrega o GLB uma vez (`LoadAssetContainerAsync`) e desenha cada malha-fonte
- *     com thin instances (1 draw call por malha-fonte, nenhuma geometria clonada por lote, materiais do
- *     GLB compartilhados, matriz congelada). Malhas idênticas entre as variantes _0/_1 viram uma só
- *     fonte. O viaduto é dividido em pilar + tabuleiro (os pilares do blockout ficam nas juntas).
- *     Peças do kit não têm colisor: os colisores do blockout continuam valendo (invisíveis onde o kit
- *     cobre). Se o carregamento falhar, o blockout coberto é fundido e o setor segue em blockout.
- *  `?kit=0` na URL desliga tudo (blockout puro, para comparar).
+ *     a 0,9 m) — 1 cm para dentro das caixas do blockout, então fica escondido se o kit falhar — e os
+ *     cartões de fachada distante (um único draw call).
+ *  3. `startSector17Kit()` carrega o GLB uma vez (`LoadAssetContainerAsync`), leva cada malha ao espaço da
+ *     peça, funde por peça os materiais sem textura (paleta) e as famílias que dividem texturas (cor por
+ *     vértice), deduplica as malhas idênticas entre as variantes _0/_1 e desenha cada malha-fonte com
+ *     instâncias de malha (`createInstance`): 1 draw call por fonte visível, culling e LOD por instância,
+ *     nenhuma geometria clonada por lote, materiais compartilhados, matrizes congeladas. O viaduto é
+ *     dividido em pilar + tabuleiro (os pilares do blockout ficam nas juntas). Peças do kit não têm
+ *     colisor: os colisores do blockout continuam valendo (invisíveis onde o kit cobre). Se o
+ *     carregamento falhar, o blockout coberto é fundido e o setor segue em blockout.
+ *  `?kit=0` na URL desliga tudo (blockout puro, para comparar); `?kitinst=thin` usa thin instances.
  */
 
 // ---------------------------------------------------------------------------------------------------
@@ -132,6 +135,8 @@ export interface KitBodyBox {
   lot: string;
   center: [number, number, number];
   size: { w: number; h: number; d: number };
+  /** "laje": cobertura de concreto (senão, o reboco do lote) */
+  mat?: "laje";
 }
 
 /** Placa ou pichação recolocada sobre os módulos do kit. */
@@ -188,7 +193,7 @@ const PLASTER: Record<string, [number, number, number]> = {
  */
 export function kitLodDistance(pieceName: string, materialName = ""): number | null {
   if (pieceName.startsWith("MARCO_")) return null;
-  if (/^(TECH_anexo|TECH_reciclador|REMENDO_caixa_dagua|TECH_canopy_solar)/.test(pieceName)) return KIT.lodRoof;
+  if (/^(TECH_anexo|TECH_reciclador|REMENDO_caixa_dagua|REMENDO_lona|TECH_canopy_solar)/.test(pieceName)) return KIT.lodRoof;
   // nas fachadas, decalques e miudezas (escorridos, cartazes, placas, roupas, plantas, cobogó) somem antes da parede
   if (/^(FACHADA_|TECH_pele)/.test(pieceName)) return /stain|poster|placa|clothes|leaves|cobogo|produce|lattice|trelica/.test(materialName) ? KIT.lodDetail : KIT.lodFacade;
   return KIT.lodDetail;
@@ -470,9 +475,9 @@ export function planLot(lot: LotSpec, env: PlanEnv): LotKitPlan {
     const q = f.at(u, y, w);
     env.out.push({ piece: p, x: q.x, y: q.y, z: q.z, yaw: yaw + (o.yawOff ?? 0), sx: o.sx ?? 1, sy: o.sy ?? 1, sz: o.sz ?? 1, roll: o.roll ?? 0, tint: o.tint ?? tint, owner: lot.id });
   };
-  const body = (id: string, u0: number, u1: number, w0: number, w1: number, ya: number, yb: number) => {
+  const body = (id: string, u0: number, u1: number, w0: number, w1: number, ya: number, yb: number, mat?: "laje") => {
     const c = f.at((u0 + u1) / 2, (ya + yb) / 2, (w0 + w1) / 2);
-    env.bodies.push({ id: `s17kit_${lot.id}_${id}`, lot: lot.id, center: [c.x, c.y, c.z], size: f.size(u1 - u0, yb - ya, w1 - w0) });
+    env.bodies.push({ id: `s17kit_${lot.id}_${id}`, lot: lot.id, center: [c.x, c.y, c.z], size: f.size(u1 - u0, yb - ya, w1 - w0), mat });
   };
 
   // --- módulos da fachada -------------------------------------------------------------------------
@@ -543,11 +548,18 @@ export function planLot(lot: LotSpec, env: PlanEnv): LotKitPlan {
   // laterais da fenda entre o volume recuado e as paredes dos módulos (largura mínima 0,3 m; nas fachadas com
   // sobra, vão até o primeiro módulo, atrás da pilastra)
   const side = Math.max(0.3, layout.start);
-  body("nucleo", s, W - s, -(depth - s), -KIT.bodyInset, 0, top);
-  body("lado0", s, side, -KIT.bodyInset, -KIT.wall, 0, top);
-  body("lado1", W - side, W - s, -KIT.bodyInset, -KIT.wall, 0, top);
-  body("tampa", side, W - side, -KIT.bodyInset, -KIT.wall + 0.05, top - 0.1, top);
-  for (const [i, m] of modules.entries()) if (m.blocked) body(`tampado${i}`, Math.max(side, m.u - layout.moduleWidth / 2), Math.min(W - side, m.u + layout.moduleWidth / 2), -KIT.bodyInset, -s, 0, top);
+  const slab = top - 0.1; // laje de cobertura (concreto) por cima do volume, até atrás do coroamento
+  body("nucleo", s, W - s, -(depth - s), -KIT.bodyInset, 0, slab);
+  body("lado0", s, side, -KIT.bodyInset, -KIT.wall, 0, slab);
+  body("lado1", W - side, W - s, -KIT.bodyInset, -KIT.wall, 0, slab);
+  body("laje", s, W - s, -(depth - s), -KIT.wall + 0.05, slab, top, "laje");
+  for (const [i, m] of modules.entries()) {
+    if (!m.blocked) continue;
+    const u0 = Math.max(side, m.u - layout.moduleWidth / 2);
+    const u1 = Math.min(W - side, m.u + layout.moduleWidth / 2);
+    body(`tampado${i}`, u0, u1, -KIT.bodyInset, -s, 0, slab);
+    body(`tampado_laje${i}`, u0, u1, -KIT.wall + 0.05, -s, slab, top, "laje");
+  }
 
   // --- camada tecnológica -----------------------------------------------------------------------------
   const open = modules.map((m, k) => ({ m, k })).filter(({ m }) => !m.blocked);
@@ -578,8 +590,17 @@ export function planLot(lot: LotSpec, env: PlanEnv): LotKitPlan {
   };
   if (tech === "anexo") {
     const spot = roofSpot("TECH_anexo_modular", W, depth, taken, W * (0.35 + rnd(lot.seed, 1020) * 0.3), [-1.5, -2.5]);
-    if (spot) put("TECH_anexo_modular", spot.u, H, spot.w);
-    else tech = null;
+    if (spot) {
+      put("TECH_anexo_modular", spot.u, H, spot.w);
+      // lona de ocupação amarrada nos fundos do anexo, esticada para o fundo da laje (dois mourões)
+      const w0 = spot.w - 2.67;
+      const box = { u0: spot.u - 2.05, u1: spot.u + 2.05, w0: w0 - 3.4, w1: w0 };
+      const fits = box.w0 > -depth + 0.4 && box.u0 > 0.4 && box.u1 < W - 0.4 && !taken.slice(0, -1).some((t) => boxHit(t, box));
+      if (!lite && fits && rnd(lot.seed, 1025) < 0.75) {
+        put("REMENDO_lona", spot.u, H, w0, { yawOff: Math.PI });
+        taken.push(box);
+      }
+    } else tech = null;
   }
   const roof = lot.roof ?? [];
   if (roof.includes("solar")) roofPut("TECH_canopy_solar", W / 2, mid);
@@ -741,7 +762,7 @@ export function buildSector17KitBodies(ctx: WorldContext, plan: Sector17KitPlan)
   const byId = new Map(LOTS.map((l) => [l.id, l]));
   for (const b of plan.bodies) {
     const lot = byId.get(b.lot)!;
-    ctx.box(b.id, b.size, new Vector3(...b.center), matOf(ctx.mats, lot.mat));
+    ctx.box(b.id, b.size, new Vector3(...b.center), b.mat === "laje" ? ctx.mats.concrete : matOf(ctx.mats, lot.mat));
   }
   if (plan.cards.length) ctx.register(buildFarCards(ctx, plan.cards), true, false);
 }
