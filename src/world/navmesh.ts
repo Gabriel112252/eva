@@ -103,7 +103,9 @@ async function loadRecast(): Promise<unknown> {
   const mod = (await import("recast-detour")) as unknown as { default?: RecastModuleFactory } | RecastModuleFactory;
   const factory = (typeof mod === "function" ? mod : (mod as { default?: RecastModuleFactory }).default) as RecastModuleFactory | undefined;
   if (!factory) throw new Error("recast-detour: fábrica do módulo não encontrada");
-  return await factory();
+  // o build ES do recast-detour faz `this["Recast"] = Module` dentro da fábrica; chamada solta em módulo
+  // estrito deixa `this` indefinido e quebra — chama com um receptor explícito
+  return await factory.call({});
 }
 
 /**

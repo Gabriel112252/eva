@@ -316,6 +316,17 @@ try {
   if (RUN("sistemas")) {
   // ---------------- Sistemas do Capítulo 1 ----------------
   console.log("Sistemas do Capítulo 1");
+  if (ONLY === "") {
+    // na execução completa, as partes anteriores deixam a cena suja (Javali estacionado onde o teste põe o objeto,
+    // noite, tela de fim de missão): recomeça de um jogo novo, como na execução isolada
+    await page.evaluate(() => indexedDB.deleteDatabase("eva-ultimo-veto"));
+    await page.goto(`${base}?quality=baixa&pointerlock=0`, { waitUntil: "load" });
+    await page.waitForFunction(() => document.getElementById("menu")?.classList.contains("visible"), null, { timeout: 240000 });
+    await page.click("#btn-new");
+    await page.waitForFunction(() => window.eva.state === "playing", null, { timeout: 120000 });
+    await page.waitForTimeout(1500);
+    await page.evaluate(() => window.eva.captureStart(30));
+  }
   const t0 = Date.now();
   // área aberta ao sul da praça (z ≈ -14): Custódio parado olhando para leste (+x), Matias a leste
   await page.evaluate(() => window.eva.enemies.clear());
