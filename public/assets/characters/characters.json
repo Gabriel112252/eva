@@ -146,6 +146,20 @@
       "triangles": 21868,
       "bones": 52
     },
+    "brandao": {
+      "file": "brandao.glb",
+      "label": "Samuel Brandão (44) — oficial de saída do depósito",
+      "height": 1.74,
+      "triangles": 37089,
+      "bones": 52
+    },
+    "elias": {
+      "file": "elias.glb",
+      "label": "Elias Nobre (24) — mensageiro dos Silenciosos",
+      "height": 1.79,
+      "triangles": 39204,
+      "bones": 52
+    },
     "saqueador_a": {
       "file": "saqueador_a.glb",
       "label": "Saqueador (desviador de cargas) — variante A",
