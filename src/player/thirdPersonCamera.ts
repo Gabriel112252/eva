@@ -1,3 +1,6 @@
+// FOV dinâmico e tranco de aterrissagem adaptados do BJS Character Controller V2 — MIT License,
+// Copyright (c) 2026 crazyramirez (https://github.com/crazyramirez/BJS_Character_Controller_V2;
+// texto completo da licença em ./movement.ts).
 import { TargetCamera } from "@babylonjs/core/Cameras/targetCamera";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import { PhysicsRaycastResult } from "@babylonjs/core/Physics/physicsRaycastResult";

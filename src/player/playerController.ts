@@ -1,3 +1,6 @@
+// Partes do movimento de ação (curva de aceleração, pulo/esquiva, tranco e FOV dinâmico) adaptadas do
+// BJS Character Controller V2 — MIT License, Copyright (c) 2026 crazyramirez
+// (https://github.com/crazyramirez/BJS_Character_Controller_V2; texto completo da licença em ./movement.ts).
 import { PhysicsCharacterController, CharacterSupportedState, type CharacterSurfaceInfo } from "@babylonjs/core/Physics/v2/characterController";
 import { PhysicsRaycastResult } from "@babylonjs/core/Physics/physicsRaycastResult";
 import type { PhysicsEngine } from "@babylonjs/core/Physics/v2/physicsEngine";
