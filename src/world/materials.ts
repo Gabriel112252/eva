@@ -2,7 +2,7 @@ import { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
 import { Color3 } from "@babylonjs/core/Maths/math.color";
 import { Texture } from "@babylonjs/core/Materials/Textures/texture";
 import type { Scene } from "@babylonjs/core/scene";
-import { CANVAS_AVAILABLE, foliageAlpha, heightField, normalMap, plasterBrickAlbedo, surfaceAlbedo, type HeightField } from "./textures";
+import { CANVAS_AVAILABLE, detailTexture, foliageAlpha, heightField, normalMap, plasterBrickAlbedo, surfaceAlbedo, wetnessTextures, type HeightField } from "./textures";
 
 /** Biblioteca de materiais PBR do quarteirão (texturas procedurais provisórias). */
 export class MaterialLibrary {
@@ -185,6 +185,58 @@ export class MaterialLibrary {
     this.corrugated = this.photoPbr("telha_metalica", "CorrugatedSteel005", { tileSize: 1.8, tint: "#b5b8b6", roughness: 0.85, ao: true });
     this.corrugated.metallic = 0.35;
     this.courtGreen = this.pbr("piso_quadra", { color: "#3f6b4b", roughness: 0.92 });
+
+    // --- acabamento (média/alta): microdetalhe de perto, umidade no asfalto, F0 de poças e vidro --------
+    if (quality !== "baixa") this.addSurfaceFinish(quality === "alta");
+  }
+
+  /**
+   * Microdetalhe (mapa de detalhe do Babylon, ~0,6 m por repetição) nas superfícies grandes do blockout e da
+   * praça; asfalto com manchas de umidade e poças (rugosidade em escala de ~24 m); na alta, poças e vidros com F0 um
+   * pouco maior — só eles passam do limiar do SSR (postfx.ts).
+   */
+  private addSurfaceFinish(ssr: boolean): void {
+    const scene = this.scene;
+    const detail = detailTexture(scene, "detalhe_superficie", 256, 917);
+    if (detail) {
+      const add = (m: PBRMaterial, o: { albedo: number; rough: number; bump: number } = { albedo: 0.14, rough: 0.25, bump: 0.32 }) => {
+        const t = detail.clone();
+        const reps = Math.max(1, ((m.metadata as { tileSize?: number } | null)?.tileSize || 2) / 0.6);
+        t.uScale = reps;
+        t.vScale = reps;
+        m.detailMap.texture = t;
+        m.detailMap.isEnabled = true;
+        m.detailMap.diffuseBlendLevel = o.albedo;
+        m.detailMap.roughnessBlendLevel = o.rough;
+        m.detailMap.bumpLevel = o.bump;
+      };
+      for (const m of [this.asphalt, this.sidewalk, this.concrete, this.burnt, this.soil, ...this.plaster]) add(m);
+      for (const m of [this.pavingStones, this.concretePhoto, this.plasterPhoto.gray, this.plasterPhoto.warm, this.plasterPhoto.sand]) add(m, { albedo: 0.1, rough: 0.2, bump: 0.25 });
+    }
+    const wet = wetnessTextures(scene, "umidade_asfalto", 256, 4242);
+    if (wet) {
+      const reps = 5 / 24; // asfalto: 5 m por repetição da textura-base → umidade a cada 24 m
+      for (const t of [wet.roughness, wet.reflectance]) {
+        t.uScale = reps;
+        t.vScale = reps;
+      }
+      const a = this.asphalt;
+      a.metallicTexture = wet.roughness;
+      a.useRoughnessFromMetallicTextureAlpha = false;
+      a.useRoughnessFromMetallicTextureGreen = true;
+      a.useMetallnessFromMetallicTextureBlue = true;
+      a.metallic = 1;
+      a.roughness = 1;
+      if (ssr) {
+        a.metallicReflectanceTexture = wet.reflectance;
+        a.metallicReflectanceColor = new Color3(2.2, 2.2, 2.2);
+      } else {
+        wet.reflectance.dispose();
+      }
+    }
+    // alta: vidro e poças com F0 ~0,065–0,09 (antes ~0,03) — só eles passam do limiar do SSR. Sem SSR o F0 maior
+    // só clarearia o reflexo do céu (a água da fonte virava um disco branco), então fica como estava.
+    if (ssr) for (const m of [this.glass, this.puddle]) m.metallicReflectanceColor = new Color3(2.2, 2.2, 2.2);
   }
 
   /**

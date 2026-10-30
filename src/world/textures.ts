@@ -6,6 +6,7 @@
  */
 import { DynamicTexture } from "@babylonjs/core/Materials/Textures/dynamicTexture";
 import { Texture } from "@babylonjs/core/Materials/Textures/texture";
+import { RawTexture } from "@babylonjs/core/Materials/Textures/rawTexture";
 import type { Scene } from "@babylonjs/core/scene";
 
 /** Há um canvas 2D disponível? (false em testes headless/Node: materiais caem para cores lisas) */
@@ -349,4 +350,93 @@ export function signTexture(scene: Scene, name: string, o: SignOptions): Texture
   tex.update(true);
   tex.hasAlpha = false;
   return tex;
+}
+
+// --- Acabamento de superfície (média/alta) ------------------------------------
+
+/**
+ * Mapa de detalhe do Babylon (DetailMapConfiguration) em uma textura RGBA tileável:
+ * R = variação de albedo (0,5 neutro), G = normal Y, B = variação de rugosidade (0,5 neutro), A = normal X.
+ * Grão fino (poros, agregado, riscos) para dar microrrelevo de perto às superfícies grandes do blockout.
+ */
+export function detailTexture(scene: Scene, name: string, size: number, seed: number): RawTexture | null {
+  if (!CANVAS_AVAILABLE) return null;
+  const grain = heightField(size, 24, 4, seed, 0.55);
+  const pits = heightField(size, 9, 3, seed + 7, 0.5);
+  const h = new Float32Array(size * size);
+  for (let i = 0; i < h.length; i++) {
+    // agregado + poros: o ruído grosso vira cavidades esparsas
+    const p = Math.max(0, (pits.data[i]! - 0.62) * 3.2);
+    h[i] = grain.data[i]! - p * 0.6;
+  }
+  const at = (x: number, y: number) => h[((y + size) % size) * size + ((x + size) % size)]!;
+  const data = new Uint8Array(size * size * 4);
+  const strength = 3.2;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = (at(x + 1, y) - at(x - 1, y)) * strength;
+      const dy = (at(x, y + 1) - at(x, y - 1)) * strength;
+      const len = Math.hypot(dx, dy, 1);
+      // textura crua sem invertY: +v = linhas maiores, então a derivada em v entra com sinal trocado
+      const nx = -dx / len;
+      const ny = -dy / len;
+      const v = at(x, y);
+      const i = (y * size + x) * 4;
+      data[i] = Math.round(clamp01(0.5 + (v - 0.5) * 0.9) * 255);
+      data[i + 1] = Math.round(clamp01(ny * 0.5 + 0.5) * 255);
+      // cavidades mais ásperas, topos levemente polidos
+      data[i + 2] = Math.round(clamp01(0.5 - (v - 0.5) * 0.8) * 255);
+      data[i + 3] = Math.round(clamp01(nx * 0.5 + 0.5) * 255);
+    }
+  }
+  const t = RawTexture.CreateRGBATexture(data, size, size, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE);
+  t.name = name;
+  t.gammaSpace = false;
+  t.wrapU = Texture.WRAP_ADDRESSMODE;
+  t.wrapV = Texture.WRAP_ADDRESSMODE;
+  t.anisotropicFilteringLevel = 4;
+  return t;
+}
+
+/**
+ * Umidade do asfalto (escala grande, repete a cada dezenas de metros):
+ * - `roughness`: textura metálica do PBR (G = rugosidade, B = metal 0) — seco 0,92, manchas úmidas ~0,4, poças ~0,07;
+ * - `reflectance`: multiplicador do F0 dielectrico (metallicReflectanceTexture) — 0,45 no seco (com cor 2,2 → F0
+ *   0,04, igual ao de antes) e 1,0 nas poças (F0 ~0,09): só as poças passam do limiar do SSR na qualidade alta.
+ */
+export function wetnessTextures(scene: Scene, name: string, size: number, seed: number): { roughness: RawTexture; reflectance: RawTexture } | null {
+  if (!CANVAS_AVAILABLE) return null;
+  const blot = heightField(size, 3, 5, seed, 0.55);
+  const fine = heightField(size, 11, 3, seed + 3, 0.5);
+  const rough = new Uint8Array(size * size * 4);
+  const refl = new Uint8Array(size * size * 4);
+  for (let i = 0; i < size * size; i++) {
+    const b = blot.data[i]! + (fine.data[i]! - 0.5) * 0.25;
+    const damp = smooth01(0.5, 0.62, b); // mancha úmida
+    const pool = smooth01(0.66, 0.71, b); // poça
+    const r = 0.92 * (1 - damp) + 0.42 * damp;
+    const rr = r * (1 - pool) + 0.07 * pool;
+    rough.set([255, Math.round(rr * 255), 0, 255], i * 4);
+    const f = 0.45 + 0.55 * pool + 0.08 * damp * (1 - pool);
+    const fb = Math.round(clamp01(f) * 255);
+    refl.set([fb, fb, fb, 255], i * 4);
+  }
+  const mk = (n: string, d: Uint8Array) => {
+    const t = RawTexture.CreateRGBATexture(d, size, size, scene, true, false, Texture.TRILINEAR_SAMPLINGMODE);
+    t.name = n;
+    t.gammaSpace = false;
+    t.wrapU = Texture.WRAP_ADDRESSMODE;
+    t.wrapV = Texture.WRAP_ADDRESSMODE;
+    return t;
+  };
+  return { roughness: mk(`${name}_rugosidade`, rough), reflectance: mk(`${name}_f0`, refl) };
+}
+
+function clamp01(v: number): number {
+  return v < 0 ? 0 : v > 1 ? 1 : v;
+}
+
+function smooth01(a: number, b: number, x: number): number {
+  const t = clamp01((x - a) / (b - a));
+  return t * t * (3 - 2 * t);
 }
