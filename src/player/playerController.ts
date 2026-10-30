@@ -146,6 +146,8 @@ export class PlayerController {
 
   private velocity = new Vector3();
   private horizontalSpeed = 0;
+  /** velocidade horizontal real depois do solver (contra uma parede é ~0 mesmo com o direcional apertado) */
+  private actualSpeed = 0;
   /** direção do deslocamento no chão (rad) — a velocidade segue o direcional com curva */
   private moveYaw = 0;
   /** direção travada do rolamento / impulso / deslize */
@@ -275,6 +277,7 @@ export class PlayerController {
     this.cc.setVelocity(Vector3.Zero());
     this.velocity.setAll(0);
     this.horizontalSpeed = 0;
+    this.actualSpeed = 0;
     this.sprintTimer = 0;
     this.sprinting = false;
     this.yaw = yaw;
@@ -311,7 +314,7 @@ export class PlayerController {
   setCrouched(value: boolean): boolean {
     if (value === this.crouched) return true;
     if (value) {
-      if (!this.inVehicle && this.motion.tryStartSlide(this.horizontalSpeed, this.groundedLast)) this.beginSlide();
+      if (!this.inVehicle && this.motion.tryStartSlide(Math.min(this.horizontalSpeed, this.actualSpeed + 0.5), this.groundedLast)) this.beginSlide();
       this.crouched = true;
       if (this.motion.phase !== "roll") this.setCapsule(CROUCH_HEIGHT);
       return true;
@@ -394,9 +397,8 @@ export class PlayerController {
 
   private playMovementShot(clip: AnimationClip, speed: number, fade = 12): void {
     const anim = this.model.animator;
-    if (this.locked || anim.isHoldingPose || !anim.has(clip)) return;
-    const shot = anim.oneShotClip;
-    if (shot && !MOVEMENT_SHOTS.has(shot)) return; // gesto/tiro/morte em curso têm prioridade
+    if (this.locked || anim.isHoldingPose || !anim.has(clip) || anim.oneShotClip === "Death") return;
+    // pulo/rolamento cortam gesto, tiro ou recarga em curso (as fases da arma correm por tempo, não pelo clipe)
     anim.playOneShot(clip, undefined, false, { speed, exclusive: true, fade });
   }
 
@@ -554,7 +556,7 @@ export class PlayerController {
     const runHeld = !this.locked && !this.crouched && input.isHeld("run") && moving && this.aimYaw === null;
     const level = Math.abs(this.climbRate) < 0.35 && (!supported || support.averageSurfaceNormal.y > 0.95 || support.averageSurfaceNormal.lengthSquared() < 0.5);
     const straight = Math.abs(angleDelta(this.moveYaw, wantYaw)) < 1.2;
-    this.sprintTimer = sprintCharge(this.sprintTimer, dt, runHeld && phase === "ground" && grounded && level && straight && this.horizontalSpeed >= PLAYER_SPEEDS.run * 0.9);
+    this.sprintTimer = sprintCharge(this.sprintTimer, dt, runHeld && phase === "ground" && grounded && level && straight && this.actualSpeed >= PLAYER_SPEEDS.run * 0.85);
     this.sprinting = this.sprintTimer >= T.sprintAfter;
 
     let targetSpeed = !moving ? 0 : this.crouched ? PLAYER_SPEEDS.crouch : runHeld ? (this.sprinting ? PLAYER_SPEEDS.sprint : PLAYER_SPEEDS.run) : PLAYER_SPEEDS.walk;
@@ -657,6 +659,8 @@ export class PlayerController {
     const yBefore = this.cc.getPosition().y;
     this.cc.integrate(dt, support, GRAVITY);
     this.lastRise = this.cc.getPosition().y - yBefore;
+    const solved = this.cc.getVelocity();
+    this.actualSpeed = Math.hypot(solved.x, solved.z);
     this.velocity.copyFrom(output);
     this.groundedLast = grounded && !this.motion.airborne;
 
@@ -691,7 +695,8 @@ export class PlayerController {
     const anim = this.model.animator;
     if (anim.isHoldingPose) return;
     const shot = anim.oneShotClip;
-    if (shot && !MOVEMENT_SHOTS.has(shot)) return; // gesto, tiro, morte: como antes
+    // gesto de corpo inteiro (interagir, pegar, morte) manda; tiro/recarga/reação são só do tronco: as pernas seguem
+    if (shot && !MOVEMENT_SHOTS.has(shot) && !anim.oneShotIsUpper) return;
     // aterrissagem interrompível: andar já corta o agachamento do impacto
     if (shot === "JumpLand" && this.inputMoving && anim.oneShotElapsed > 0.1) anim.stopOneShot(10);
     const s = this.horizontalSpeed;
@@ -751,7 +756,7 @@ export class PlayerController {
     if (!this.locked && this.aimYaw === null) {
       if (phase === "airDash") fov = 0.12;
       else {
-        const k = Math.max(0, Math.min(1, (this.horizontalSpeed - PLAYER_SPEEDS.walk) / (PLAYER_SPEEDS.sprint - PLAYER_SPEEDS.walk)));
+        const k = Math.max(0, Math.min(1, (Math.min(this.horizontalSpeed, this.actualSpeed) - PLAYER_SPEEDS.walk) / (PLAYER_SPEEDS.sprint - PLAYER_SPEEDS.walk)));
         fov = k * 0.1 + (phase === "slide" ? 0.03 : 0);
       }
     }

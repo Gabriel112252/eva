@@ -315,6 +315,11 @@ export class CharacterAnimator {
     return this.oneShot.replace(/_upper$/, "") as AnimationClip;
   }
 
+  /** O clipe único em curso é só da camada superior (tiro/recarga/reação): as pernas seguem o clipe-base. */
+  get oneShotIsUpper(): boolean {
+    return this.oneShot !== null && this.oneShot.endsWith("_upper");
+  }
+
   /** Segundos desde o início do clipe único em curso. */
   get oneShotElapsed(): number {
     return this.oneShot ? this.oneShotTime : 0;
