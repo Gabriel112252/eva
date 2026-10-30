@@ -1350,13 +1350,18 @@ export class Game {
     this.input.onActionReleased.on((a) => {
       if (a === "interact" && this.repair.active && this.state === "playing") this.repair.release();
     });
-    // pistas: aviso na HUD, aba da mochila, gatilho e autosave
+    // pistas: aviso na HUD, aba da mochila, flag `pista.<slug>` (convenção do Enredo), gatilho e autosave
     this.clues.onAdded.on((c) => {
       this.audio.playUi("paper", 0.5);
       this.hud.showNotice(`Nova pista: ${c.title}`, 3.5);
       this.hud.setClues(this.clues.list());
+      this.flags.set(c.id, true);
       this.script.fire({ kind: "pista", id: c.id });
       void this.saveGame(false);
+    });
+    // o caminho inverso: um diálogo que põe `pista.<slug> = true` (setFlag) também anota a pista no diário
+    this.flags.onChange.on(({ key, value }) => {
+      if (value === true && key.startsWith("pista.") && this.clues.get(key)) this.clues.add(key);
     });
     // timers: gatilho ao zerar
     this.timers.onExpired.on((t) => {
@@ -1477,7 +1482,7 @@ export class Game {
     this.camera.setProfile({ distance: v.def.camera.distance, shoulder: 0, fov: 1.05, pitch: v.def.camera.pitch, pivotLift: v.def.camera.height, minDistance: 3.5 });
     this.camera.yaw = v.heading;
     this.camera.snapBehind(v.heading);
-    const hint = v.def.kind === "hover" ? "W/S empuxo · A/D guinada · Espaço subir · Ctrl descer · Shift turbo · E sair" : "W/S acelerar/frear · A/D virar · Espaço freio de mão · F faróis · E sair";
+    const hint = v.def.kind === "hover" ? "Mouse aponta (olhe para cima para subir) · W/S empuxo · A/D deslocar · Espaço sobe · Ctrl desce · Shift turbo · E sair" : "W/S acelerar/frear · A/D virar · Espaço freio de mão · F faróis · E sair";
     this.hud.setVehicle(v.def.displayName, hint);
     this.audio.startEngine(v.def.kind);
     this.audio.playUi("switch", 0.5);
@@ -1516,12 +1521,28 @@ export class Game {
     const v = this.driving!;
     const axis = this.input.rawAxis();
     const held = (a: GameAction) => this.input.isHeld(a);
+    const throttle = Math.max(-1, Math.min(1, axis.y));
+    let lift = 0;
+    let headingTarget: number | null = null;
+    if (v.def.kind === "hover") {
+      // Espaço/Ctrl mandam; sem eles, acelerando (W) a moto sobe ou desce conforme a câmera olha para cima
+      // ou para baixo (zona morta de ±0,08 rad em torno da inclinação neutra do perfil da câmera)
+      const direct = (held("advance") ? 1 : 0) - (held("crouchHold") || held("crouchToggle") ? 1 : 0);
+      if (direct !== 0) lift = direct;
+      else if (throttle > 0.05) {
+        const look = -(this.camera.pitch - v.def.camera.pitch);
+        const dead = 0.08;
+        lift = Math.abs(look) < dead ? 0 : Math.max(-1, Math.min(1, (look - Math.sign(look) * dead) / 0.45));
+      }
+      headingTarget = this.camera.yaw;
+    }
     v.controls = {
-      throttle: Math.max(-1, Math.min(1, axis.y)),
+      throttle,
       steer: Math.max(-1, Math.min(1, axis.x)),
       handbrake: v.def.kind !== "hover" && held("advance"),
-      lift: v.def.kind === "hover" ? (held("advance") ? 1 : 0) - (held("crouchHold") || held("crouchToggle") ? 1 : 0) : 0,
+      lift,
       boost: held("run"),
+      headingTarget,
     };
     this.hud.setVehicleSpeed(v.speedKmh, v.def.kind === "hover" ? v.altitudeAbs : null);
     if (v.outOfBounds && !this.boundsNoticeShown) {

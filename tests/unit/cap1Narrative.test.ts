@@ -12,29 +12,29 @@ describe("ClueLog (diário de pistas)", () => {
     const added: string[] = [];
     log.onAdded.on((c) => added.push(c.id));
     expect(log.count).toBe(0);
-    expect(log.add("pista.caixa_vazia")).toBe(true);
-    expect(log.add("pista.manifesto_selo")).toBe(true);
-    expect(log.add("pista.caixa_vazia")).toBe(false); // repetida
+    expect(log.add("pista.caixas_vazias")).toBe(true);
+    expect(log.add("pista.manifesto_rasurado")).toBe(true);
+    expect(log.add("pista.caixas_vazias")).toBe(false); // repetida
     expect(log.add("pista.inexistente")).toBe(false); // desconhecida
-    expect(added).toEqual(["pista.caixa_vazia", "pista.manifesto_selo"]);
-    expect(log.list().map((c) => c.id)).toEqual(["pista.caixa_vazia", "pista.manifesto_selo"]);
-    expect(log.has("pista.caixa_vazia")).toBe(true);
-    expect(log.hasAll(["pista.caixa_vazia", "pista.manifesto_selo"])).toBe(true);
-    expect(log.hasAll(["pista.caixa_vazia", "pista.x"])).toBe(false);
+    expect(added).toEqual(["pista.caixas_vazias", "pista.manifesto_rasurado"]);
+    expect(log.list().map((c) => c.id)).toEqual(["pista.caixas_vazias", "pista.manifesto_rasurado"]);
+    expect(log.has("pista.caixas_vazias")).toBe(true);
+    expect(log.hasAll(["pista.caixas_vazias", "pista.manifesto_rasurado"])).toBe(true);
+    expect(log.hasAll(["pista.caixas_vazias", "pista.x"])).toBe(false);
     expect(log.list("rastro_do_lote")).toHaveLength(2);
     expect(log.list("a_vigilia")).toHaveLength(0);
   });
 
   it("serializa e restaura sem emitir, ignorando ids desconhecidos", () => {
     const log = new ClueLog(CLUES);
-    log.add("pista.manifesto_selo");
+    log.add("pista.manifesto_rasurado");
     const snap = log.toJSON();
-    expect(snap).toEqual(["pista.manifesto_selo"]);
+    expect(snap).toEqual(["pista.manifesto_rasurado"]);
     const other = new ClueLog(CLUES);
     let emitted = 0;
     other.onAdded.on(() => emitted++);
-    other.load([...snap, "pista.fantasma", "pista.manifesto_selo"]);
-    expect(other.toJSON()).toEqual(["pista.manifesto_selo"]);
+    other.load([...snap, "pista.fantasma", "pista.manifesto_rasurado"]);
+    expect(other.toJSON()).toEqual(["pista.manifesto_rasurado"]);
     expect(emitted).toBe(0);
     other.clear();
     expect(other.count).toBe(0);
@@ -42,11 +42,11 @@ describe("ClueLog (diário de pistas)", () => {
 
   it("entra no save (campos novos) e sobrevive à migração", () => {
     const data = createEmptySave({ position: { x: 0, y: 0, z: 0 }, yaw: 0, crouched: false });
-    data.clues = ["pista.caixa_vazia"];
+    data.clues = ["pista.caixas_vazias"];
     data.timers = { entrega: { remaining: 42, label: "Entrega" } };
     data.inventory = { kit_medico: 1 };
     const migrated = migrateSave(JSON.parse(JSON.stringify(data)));
-    expect(migrated?.clues).toEqual(["pista.caixa_vazia"]);
+    expect(migrated?.clues).toEqual(["pista.caixas_vazias"]);
     expect(migrated?.timers?.entrega?.remaining).toBe(42);
     expect(migrated?.inventory).toEqual({ kit_medico: 1 });
   });

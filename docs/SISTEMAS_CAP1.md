@@ -54,15 +54,16 @@ game.addZone({ id: "portao_posto", center: { x: 0, y: 1, z: 30 }, size: { x: 6, 
 
 ## 2. Diário de pistas (`ClueLog`)
 
-Dados em `src/data/clues.ts` (`ClueDef[]` — o Enredo é dono do texto; hoje há 2 placeholders). API:
+Dados em `src/data/clues.ts` (`ClueDef[]`, texto do Enredo — 12 pistas do Cap. 1). API:
 `add(id)` (false se já tinha), `has(id)`, `hasAll(ids)`, `list(quest?)`, `get(id)`, `count`, `toJSON()/load()`.
-`onAdded` mostra "Nova pista: <título>" na HUD, atualiza a aba **Pistas** da mochila (I, depois 2) e dispara
-`{kind:"pista"}`. Persistência: `SaveData.clues` (ids em ordem de descoberta). Pistas de outro capítulo:
-`game.clues.register(defs)`.
+`onAdded` mostra "Nova pista: <título>" na HUD, atualiza a aba **Pistas** da mochila (I, depois 2), põe a flag
+`pista.<slug> = true` (convenção do Enredo: diálogos/consequências reagem a ela) e dispara `{kind:"pista"}`. O
+inverso também vale: um diálogo que faz `setFlag pista.<slug> = true` anota a pista no diário. Persistência:
+`SaveData.clues` (ids em ordem de descoberta). Pistas de outro capítulo: `game.clues.register(defs)`.
 
 ```ts
-game.clues.add("pista.manifesto_selo");
-if (game.clues.hasAll(["pista.manifesto_selo", "pista.caixa_vazia", "pista.testemunha_banca"])) { /* nome montado */ }
+game.clues.add("pista.manifesto_rasurado");
+if (game.clues.hasAll(["pista.caderno_de_saida", "pista.testemunha_samuel", "pista.manifesto_rasurado"])) { /* nome montado */ }
 ```
 
 ## 3. Examinar (`ExaminableSpec`)
@@ -74,7 +75,7 @@ game.addExaminable({
   radius: 2.2,                           // prompt a partir desta distância
   title: "Manifesto da van",
   text: "O selo de cota do lote 17 não existe na lista do setor.",
-  clue: "pista.manifesto_selo",          // opcional: vai ao diário ao abrir
+  clue: "pista.manifesto_rasurado",      // opcional: vai ao diário ao abrir
   flag: "cap1.m2.leu_manifesto",         // opcional: posta em true
   prompt: "Ler o manifesto",             // opcional (padrão "Examinar: <title>")
   once: false,                           // true = some do prompt depois de examinado

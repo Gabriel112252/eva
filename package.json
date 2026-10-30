@@ -30,6 +30,7 @@
     "@babylonjs/havok": "^1.3.14",
     "@babylonjs/loaders": "^9.32.0",
     "@babylonjs/materials": "^9.32.0",
+    "recast-detour": "^1.6.4",
     "yuka": "^0.7.8"
   },
   "devDependencies": {

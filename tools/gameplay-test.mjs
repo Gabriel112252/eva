@@ -387,7 +387,7 @@ try {
   // examinar: objeto de teste ao lado de Matias → prompt, close-up, pista, gatilhos
   await page.evaluate(() => {
     window.eva.teleportPlayer(30, 0.22, -14, 0);
-    window.eva.addExaminable({ id: "caixa_teste", position: { x: 30, y: 0.6, z: -12.6 }, title: "Caixa vazia", text: "Lacre cortado e refeito com fita.", clue: "pista.caixa_vazia", flag: "teste.examinou" });
+    window.eva.addExaminable({ id: "caixa_teste", position: { x: 30, y: 0.6, z: -12.6 }, title: "Caixa vazia", text: "Lacre cortado e refeito com fita.", clue: "pista.caixas_vazias", flag: "teste.examinou" });
   });
   await step(6);
   s = await snap();
@@ -398,8 +398,8 @@ try {
   s = await snap();
   const examineVisible = await page.evaluate(() => document.getElementById("examine")?.classList.contains("visible"));
   check(s.state === "dialogue" && s.examining === "caixa_teste" && examineVisible === true, `close-up aberto (estado ${s.state}, examinando ${s.examining})`);
-  check(s.clues.includes("pista.caixa_vazia") && s.flags["teste.examinou"] === true, `pista anotada e flag posta (${JSON.stringify(s.clues)})`);
-  check(s.triggers.some((t) => t.kind === "examinar" && t.objeto === "caixa_teste") && s.triggers.some((t) => t.kind === "pista" && t.id === "pista.caixa_vazia"), "gatilhos examinar e pista disparados");
+  check(s.clues.includes("pista.caixas_vazias") && s.flags["pista.caixas_vazias"] === true && s.flags["teste.examinou"] === true, `pista anotada e flag posta (${JSON.stringify(s.clues)})`);
+  check(s.triggers.some((t) => t.kind === "examinar" && t.objeto === "caixa_teste") && s.triggers.some((t) => t.kind === "pista" && t.id === "pista.caixas_vazias"), "gatilhos examinar e pista disparados");
   await shot("sistemas_examinar");
   await press("interact", true);
   await press("interact", false);
@@ -413,7 +413,7 @@ try {
   await press("choice2", false);
   await step(2);
   const clueItems = await page.evaluate(() => Array.from(document.querySelectorAll("#clue-list li .clue-title")).map((e) => e.textContent));
-  check(clueItems.includes("Caixa vazia com lacre rompido"), `aba Pistas da mochila: ${JSON.stringify(clueItems)}`);
+  check(clueItems.includes("Três caixas vazias"), `aba Pistas da mochila: ${JSON.stringify(clueItems)}`);
   await shot("sistemas_pistas");
   await press("inventory", true);
   await press("inventory", false);
