@@ -84,9 +84,17 @@ export function speakerVoice(speaker: string): CharacterInfo["voice"] {
 }
 
 export const ANIMATION_CLIPS = ["Idle", "Walk", "Run", "CrouchIdle", "CrouchWalk", "Talk", "Interact", "PickUp", "PistolIdle", "PistolAim", "PistolShoot", "PistolReload", "Hit", "Death", "Driving", "Sit"] as const;
-export type AnimationClip = (typeof ANIMATION_CLIPS)[number];
+/**
+ * Clipes de movimento de ação (pulo, aterrissagem, rolamento, embalo) — UAL CC0 retargeteada por
+ * `tools/blender/retarget.py --clips movimento --anim-only` num GLB só de armadura
+ * (`public/assets/characters/<personagem>_movimento.glb`), ligado ao esqueleto em tempo de execução
+ * (`src/player/movementClips.ts`). Ficam fora de ANIMATION_CLIPS: os GLBs dos personagens não mudam.
+ */
+export const MOVEMENT_CLIPS = ["JumpStart", "JumpLoop", "JumpLand", "Roll", "Sprint"] as const;
+export type MovementClip = (typeof MOVEMENT_CLIPS)[number];
+export type AnimationClip = (typeof ANIMATION_CLIPS)[number] | MovementClip;
 /** Clipes tocados uma vez (não em loop). */
-export const ONE_SHOT_CLIPS: readonly AnimationClip[] = ["Interact", "PickUp", "PistolShoot", "PistolReload", "Hit", "Death"];
+export const ONE_SHOT_CLIPS: readonly AnimationClip[] = ["Interact", "PickUp", "PistolShoot", "PistolReload", "Hit", "Death", "JumpStart", "JumpLand", "Roll"];
 /** Clipes que param no último quadro em vez de voltar ao anterior (morte). */
 export const HOLD_LAST_FRAME_CLIPS: readonly AnimationClip[] = ["Death"];
 
@@ -95,7 +103,7 @@ export const HOLD_LAST_FRAME_CLIPS: readonly AnimationClip[] = ["Death"];
  * loops in-place da Quaternius Universal Animation Library (manequim de ~1,80 m). O controlador ajusta
  * a velocidade de reprodução para `velocidade real / (natural × altura/1,80)`, eliminando pés deslizando.
  */
-export const CLIP_SPEEDS: Partial<Record<AnimationClip, number>> = { Walk: 0.98, Run: 6.1, CrouchWalk: 0.7 };
+export const CLIP_SPEEDS: Partial<Record<AnimationClip, number>> = { Walk: 0.98, Run: 6.1, CrouchWalk: 0.7, Sprint: 8.9 };
 export const CLIP_REFERENCE_HEIGHT = 1.8;
 
 /**

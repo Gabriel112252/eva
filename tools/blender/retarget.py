@@ -177,8 +177,10 @@ def _frame_is_duplicate(src_arm, action, f_first: int, f_last: int) -> bool:
     return diff < 1e-3
 
 
-def retarget_action(lib: AnimationLibrary, tgt_arm, src_name: str, dst_name: str, loop: bool, hips_scale: float | None = None, start_offset: int = 0, max_frames: int | None = None):
-    """Cria uma Action `dst_name` no alvo com a animação `src_name` da biblioteca."""
+def retarget_action(lib: AnimationLibrary, tgt_arm, src_name: str, dst_name: str, loop: bool, hips_scale: float | None = None, start_offset: int = 0, max_frames: int | None = None, frame_range: tuple[int, int] | None = None):
+    """Cria uma Action `dst_name` no alvo com a animação `src_name` da biblioteca.
+    `frame_range` (primeiro, último — inclusivos, em quadros da fonte) recorta clipes únicos: tira a antecipação
+    do pulo/rolamento para a resposta ao botão ser imediata."""
     src_arm = lib.arm
     action = lib.actions[src_name]
     scene = bpy.context.scene
@@ -187,6 +189,8 @@ def retarget_action(lib: AnimationLibrary, tgt_arm, src_name: str, dst_name: str
     if loop and f1 > f0 and _frame_is_duplicate(src_arm, action, f0, f1):
         f1 -= 1
     frames = list(range(f0, f1 + 1))
+    if frame_range is not None:
+        frames = [f for f in frames if frame_range[0] <= f <= frame_range[1]]
     if start_offset:
         frames = frames[start_offset:] + frames[:start_offset]
     if max_frames:
@@ -322,17 +326,34 @@ GAME_CLIPS: dict[str, tuple[str, bool]] = {
 }
 
 
-def retarget_clips(lib: AnimationLibrary, tgt_arm, clips: dict[str, tuple[str, bool]] = GAME_CLIPS) -> dict[str, int]:
+# clipes de movimento de ação (pulo, pulo duplo, esquiva, embalo): exportados à parte, só a armadura, em
+# public/assets/characters/<personagem>_movimento.glb e ligados em tempo de execução por nome de osso
+# (src/player/movementClips.ts). Assim os GLBs dos personagens e o manifesto continuam intactos.
+# (fonte, loop[, primeiro quadro, último quadro])
+MOVEMENT_CLIPS: dict[str, tuple] = {
+    "JumpStart": ("Jump_Start", False, 2, 40),  # sem o agachamento inicial (q. 0-1): impulso já estendido
+    "JumpLoop": ("Jump_Loop", True),
+    "JumpLand": ("Jump_Land", False, 1, 30),  # impacto, agachamento e volta à postura
+    "Roll": ("Roll", False, 2, 44),  # mergulho, rolamento e levantar
+    "Sprint": ("Sprint_Loop", True),  # embalo (corrida longa) — velocidade natural ~8,9 m/s
+}
+
+CLIP_SETS = {"jogo": GAME_CLIPS, "movimento": MOVEMENT_CLIPS}
+
+
+def retarget_clips(lib: AnimationLibrary, tgt_arm, clips: dict[str, tuple] = GAME_CLIPS) -> dict[str, int]:
     """Retargeteia todos os clipes do jogo para o alvo e os empilha como trilhas NLA. Devolve frames por clipe."""
     # limpa trilhas antigas
     if tgt_arm.animation_data:
         for tr in list(tgt_arm.animation_data.nla_tracks):
             tgt_arm.animation_data.nla_tracks.remove(tr)
     result = {}
-    for dst, (src, loop) in clips.items():
+    for dst, spec in clips.items():
+        src, loop = spec[0], spec[1]
+        frame_range = (spec[2], spec[3]) if len(spec) >= 4 else None
         if src not in lib.actions:
             raise KeyError(f"Animação '{src}' não existe na biblioteca ({sorted(lib.actions)[:5]}…)")
-        action, n = retarget_action(lib, tgt_arm, src, dst, loop)
+        action, n = retarget_action(lib, tgt_arm, src, dst, loop, frame_range=frame_range)
         push_to_nla(tgt_arm, action, dst)
         result[dst] = n
     # pose neutra para o viewer (sem ação ativa)
@@ -344,13 +365,20 @@ def retarget_clips(lib: AnimationLibrary, tgt_arm, clips: dict[str, tuple[str, b
 
 def main():
     """Desenvolvimento: aplica a biblioteca a um GLB existente e reexporta.
-    python3.11 tools/blender/retarget.py --library <UAL.glb> --target public/assets/characters/matias.glb --out /tmp/matias_ual.glb"""
+    python3.11 tools/blender/retarget.py --library <UAL.glb> --target public/assets/characters/matias.glb --out /tmp/matias_ual.glb
+
+    Biblioteca de movimento (só a armadura + clipes de MOVEMENT_CLIPS, sem malhas — não mexe no GLB do personagem):
+    python3.11 tools/blender/retarget.py --library assets-src/animations/ual-standard/standard/Unreal-Godot/UAL1_Standard.glb \
+        --target public/assets/characters/matias.glb --clips movimento --anim-only \
+        --out public/assets/characters/matias_movimento.glb"""
     import argparse
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--library", required=True)
     ap.add_argument("--target", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--clips", choices=sorted(CLIP_SETS), default="jogo", help="conjunto de clipes (jogo = GAME_CLIPS; movimento = MOVEMENT_CLIPS)")
+    ap.add_argument("--anim-only", action="store_true", help="exporta só a armadura e as animações (biblioteca carregada em tempo de execução)")
     args = ap.parse_args()
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.context.scene.render.fps = FPS
@@ -361,10 +389,10 @@ def main():
     for a in list(bpy.data.actions):
         bpy.data.actions.remove(a)
     lib = load_library(args.library)
-    counts = retarget_clips(lib, tgt)
+    counts = retarget_clips(lib, tgt, CLIP_SETS[args.clips])
     print("clipes:", counts)
     for o in bpy.context.scene.objects:
-        o.select_set(o in tgt_objs)
+        o.select_set(o is tgt if args.anim_only else o in tgt_objs)
     bpy.context.view_layer.objects.active = tgt
     bpy.ops.export_scene.gltf(
         filepath=args.out,
