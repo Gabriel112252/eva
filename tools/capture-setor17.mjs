@@ -1,18 +1,21 @@
 /**
- * Capturas do Setor 17 em blockout (qualidade média): 4 ao nível da rua, 1 aérea a 150 m e 1 do depósito por
- * dentro, salvas em docs/screenshots/setor17/. A câmera é posicionada livremente (modo "dialogue" da
- * ThirdPersonCamera) e Matias é teleportado para dar escala.
+ * Capturas do Setor 17 (qualidade média): 4 ao nível da rua, 1 aérea a 150 m e 1 do depósito por dentro. A
+ * câmera é posicionada livremente (modo "dialogue" da ThirdPersonCamera) e Matias é teleportado para dar escala.
+ * `--kit 0` desliga o kit (`?kit=0`, blockout puro) e `--kit 1` usa o kit (padrão do jogo); com `--kit` a
+ * pasta padrão vira docs/screenshots/setor17_kit/{antes,depois} (antes = blockout, depois = kit).
  *
- * Uso: npm run build && node tools/capture-setor17.mjs [--out docs/screenshots/setor17] [--quality media] [--navmesh]
+ * Uso: npm run build && node tools/capture-setor17.mjs [--kit 0|1] [--out docs/screenshots/setor17] [--quality media] [--navmesh] [--only 01_rua_recicladores,05_aerea_150m]
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { loadPlaywright, serveDist, CHROMIUM_ARGS, argValue } from "./lib/harness.mjs";
 
 const { chromium } = loadPlaywright();
-const OUT = resolve(argValue("--out", "docs/screenshots/setor17"));
+const KIT = argValue("--kit", "");
+const OUT = resolve(argValue("--out", KIT === "" ? "docs/screenshots/setor17" : `docs/screenshots/setor17_kit/${KIT === "0" ? "antes" : "depois"}`));
 const QUALITY = argValue("--quality", "media");
 const NAVMESH = process.argv.includes("--navmesh");
+const ONLY = argValue("--only", "");
 mkdirSync(OUT, { recursive: true });
 
 /** [nome, olho, alvo, posição de Matias (ou null), yaw de Matias] */
@@ -33,7 +36,7 @@ page.on("pageerror", (e) => errors.push(String(e)));
 page.on("console", (m) => { if (m.type() === "error" && !/favicon/.test(m.text())) errors.push(m.text()); });
 const step = (n) => page.evaluate((k) => { for (let i = 0; i < k; i++) window.eva.captureFrame(0.3); }, n);
 try {
-  await page.goto(`${base}?quality=${QUALITY}&pointerlock=0${NAVMESH ? "&navmesh=1" : ""}`, { waitUntil: "load" });
+  await page.goto(`${base}?quality=${QUALITY}&pointerlock=0${NAVMESH ? "&navmesh=1" : ""}${KIT === "0" ? "&kit=0" : ""}`, { waitUntil: "load" });
   await page.waitForFunction(() => document.getElementById("menu")?.classList.contains("visible"), null, { timeout: 240000 });
   await page.click("#btn-new");
   await page.waitForFunction(() => window.eva.state === "playing");
@@ -42,7 +45,7 @@ try {
     window.eva.captureStart(30);
     window.eva["hud"].setObjectiveVisible(false);
   });
-  for (const [name, eye, at, feet, yaw] of SHOTS) {
+  for (const [name, eye, at, feet, yaw] of SHOTS.filter(([n]) => !ONLY || ONLY.split(",").includes(n))) {
     await page.evaluate(([eye, at, feet, yaw]) => {
       const g = window.eva;
       if (feet) g.teleportPlayer(feet[0], feet[1], feet[2], yaw);
