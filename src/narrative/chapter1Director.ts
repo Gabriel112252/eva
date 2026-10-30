@@ -30,6 +30,8 @@ import type { Material } from "@babylonjs/core/Materials/material";
 import { PhysicsBody } from "@babylonjs/core/Physics/v2/physicsBody";
 import { PhysicsMotionType } from "@babylonjs/core/Physics/v2/IPhysicsEnginePlugin";
 import { PhysicsShapeBox } from "@babylonjs/core/Physics/v2/physicsShape";
+import type { PhysicsEngine } from "@babylonjs/core/Physics/v2/physicsEngine";
+import { PhysicsRaycastResult } from "@babylonjs/core/Physics/physicsRaycastResult";
 import type { Scene } from "@babylonjs/core/scene";
 
 import { CAP1_FLAGS, QUEST_A_VIGILIA, QUEST_PARTIDA, QUEST_RASTRO_DO_LOTE, type ConsequenceRule, type MissionTrigger } from "@/data/cap1Contracts";
@@ -137,10 +139,30 @@ export const CAP1_POINTS = {
   postoCaixa: v3(23.0, 0.12, -16.2),
   quadraArquibancada: at(-22.5, 0.12, -23.6, Math.PI),
   patioEscada: at(5.2, 0.12, -31.0, -Math.PI / 2),
+  /** câmera da partida quando não se sabe onde a van está (ao lado da guarita do posto norte) */
   guarita: v3(79.5, 3.6, 75.5),
   /** fora de vista (terreno baldio do canto sudoeste): onde ficam os NPCs "em casa" */
   bastidor: at(-72, 0.12, -66, 0),
 } as const;
+
+/** Asfalto da Avenida do Maglev onde a câmera da partida pode ficar (ao sul da cancela e da guarita do posto norte). */
+export const PARTIDA_CAMERA_AREA = { x0: 62.3, x1: 82.7, z0: 44, z1: 77.6 } as const;
+
+/**
+ * Câmera da cena de partida: parada atrás e à esquerda da van, quase na altura do teto e dentro da avenida — a
+ * van se afasta rumo ao portão norte. (De frente, o para-brisa opaco do GLB deixa ver só as pernas de quem vai
+ * dentro.) O palco ainda puxa o ponto para antes de paredes e pilares.
+ */
+export function departureShot(van: Placement): Vec3 {
+  const back = 7.5;
+  const left = 2.8;
+  const A = PARTIDA_CAMERA_AREA;
+  const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+  // frente = (sen yaw, cos yaw); direita = (cos yaw, −sen yaw)
+  const x = van.x - Math.sin(van.yaw) * back - Math.cos(van.yaw) * left;
+  const z = van.z - Math.cos(van.yaw) * back + Math.sin(van.yaw) * left;
+  return { x: clamp(x, A.x0, A.x1), y: van.y + 2.3, z: clamp(z, A.z0, A.z1) };
+}
 
 /** Onde cada ator fica em cada momento. */
 export const CAP1_SPOTS = {
@@ -964,7 +986,8 @@ export class Chapter1Director {
       this.phase = "m4_partida";
       h.setLetterbox(true);
       h.setAutoDrive({ throttle: 0.32, steer: 0, handbrake: false });
-      h.setCinematicShot(CAP1_POINTS.guarita, "modulo_v7");
+      const van = h.vehiclePlacement("modulo_v7");
+      h.setCinematicShot(van ? departureShot(van) : CAP1_POINTS.guarita, "modulo_v7");
       await this.pause(2600);
       h.fade(true);
       await this.pause(1100);
@@ -1575,7 +1598,21 @@ export class Chapter1Stage implements Chapter1Host {
       this.b.setCameraShot(null);
       return;
     }
-    this.shot = { from: new Vector3(from.x, from.y, from.z), follow: followVehicle };
+    const p = new Vector3(from.x, from.y, from.z);
+    const v = this.vehicle(followVehicle);
+    this.shot = { from: v ? this.unblockedShot(v.position.add(new Vector3(0, 1.3, 0)), p) : p, follow: followVehicle };
+  }
+
+  /** Puxa a câmera de cena para antes da primeira parede/pilar entre o alvo e ela (mesmo raio da câmera do jogo). */
+  private unblockedShot(target: Vector3, from: Vector3): Vector3 {
+    const engine = this.b.scene.getPhysicsEngine() as PhysicsEngine | null;
+    if (!engine) return from;
+    const hit = new PhysicsRaycastResult();
+    engine.raycastToRef(target, from, hit, { membership: COLLISION.PLAYER, collideWith: COLLISION.CAMERA_BLOCKER });
+    if (!hit.hasHit) return from;
+    const dir = from.subtract(target);
+    const keep = Math.max(2.5, Vector3.Distance(target, hit.hitPointWorld) - 0.4);
+    return target.add(dir.scale(Math.min(1, keep / Math.max(0.01, dir.length()))));
   }
 
   // --- atores

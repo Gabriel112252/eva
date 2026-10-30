@@ -47,10 +47,10 @@ const snap = () => page.evaluate(() => window.eva.snapshot());
 const flag = (k) => page.evaluate((key) => window.eva.flags.get(key), k);
 const shot = async (name) => {
   if (!SHOTS) return;
-  // espera a cena ficar pronta (SwiftShader recompila materiais quando as luzes mudam) e a câmera assentar:
-  // logo depois de um teleporte o SwiftShader chega a desenhar o cenário em branco por alguns quadros
+  // espera a cena ficar pronta e a câmera assentar: depois de um teleporte, as luzes locais mais próximas mudam
+  // (SectorLights) e os materiais recompilam — no SwiftShader o cenário some (fica branco) por ~10 quadros
   await page.evaluate(() => { for (let i = 0; i < 12 && !window.eva.scene.isReady(); i++) window.eva.captureFrame(0.3); });
-  await step(6);
+  await step(14);
   const dataUrl = await page.evaluate(() => window.eva.captureFrame(0.85));
   writeFileSync(resolve(SHOTS, `${name}.jpg`), Buffer.from(dataUrl.split(",")[1], "base64"));
 };
@@ -377,6 +377,7 @@ try {
   const pass = await until(() => window.eva.chapter1Stage.passenger !== null, null, { tries: 25, perStep: 1, waitMs: 300 });
   check(pass, "Ana no banco do passageiro");
   await moveVehicle("modulo_v7", 66.5, 0.4, 64.5, 0);
+  await page.evaluate(() => window.eva.camera.snapBehind(0)); // a câmera não atravessa o setor atrás da van teleportada
   await step(4);
   s = await snap();
   check(s.chapter1.phase === "m4_partida" || s.chapter1.phase === "fim", `limite do setor → cena de partida (fase ${s.chapter1.phase})`);

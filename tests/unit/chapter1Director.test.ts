@@ -16,8 +16,10 @@ import {
   CAP1_STAGE_FLAGS as D,
   Chapter1Director,
   M3_PATROLS,
+  PARTIDA_CAMERA_AREA,
   TIMER_ENTREGA,
   TIMER_TOQUE,
+  departureShot,
   deriveChapter1Phase,
   npcLayout,
   resolveConsequences,
@@ -341,6 +343,19 @@ describe("Capítulo 1 — fase e posições a partir do estado salvo", () => {
       expect(speakerVoice(info.role)).not.toEqual(CHARACTERS.matias.voice);
     }
     expect(speakerVoice("radio")).toEqual(CHARACTERS.matias.voice);
+  });
+
+  it("câmera da partida: atrás e à esquerda da van, presa ao asfalto da avenida", () => {
+    const norte = departureShot({ x: 66.5, y: 0.1, z: 62, yaw: 0 });
+    expect(norte.x).toBeCloseTo(63.7, 5);
+    expect(norte.z).toBeCloseTo(54.5, 5);
+    expect(norte.y).toBeCloseTo(2.4, 5);
+    // van já junto da cancela, virada para leste: o ponto não passa da guarita nem sai da avenida
+    const leste = departureShot({ x: 80, y: 0, z: 76, yaw: Math.PI / 2 });
+    expect(leste.x).toBeCloseTo(72.5, 5);
+    expect(leste.z).toBe(PARTIDA_CAMERA_AREA.z1);
+    const oeste = departureShot({ x: 63, y: 0, z: 50, yaw: Math.PI / 2 });
+    expect(oeste.x).toBe(PARTIDA_CAMERA_AREA.x0);
   });
 });
 
