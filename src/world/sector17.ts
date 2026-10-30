@@ -885,7 +885,21 @@ function stairs(ctx: WorldContext, id: string, start: Vector3, dir: Facing, widt
   for (let i = 0; i < steps; i++) {
     const h = (i + 1) * r;
     const c = start.add(d.scale((i + 0.5) * tread));
-    ctx.box(`${id}_degrau_${i}`, alongZ ? { w: width, h, d: tread } : { w: tread, h, d: width }, new Vector3(c.x, start.y + h / 2, c.z), mat, { collider: true, shadow: i % 4 === 0, cameraBlocker: false });
+    // degraus só visuais: o controlador de personagem (cápsula) não sobe degraus de 25 cm sozinho
+    ctx.box(`${id}_degrau_${i}`, alongZ ? { w: width, h, d: tread } : { w: tread, h, d: width }, new Vector3(c.x, start.y + h / 2, c.z), mat, { collider: false, shadow: i % 4 === 0 });
+  }
+  // colisor em rampa invisível rente às quinas dos degraus (como nos jogos em geral): inclinação < maxSlope do personagem
+  {
+    const run = steps * tread;
+    const p = Math.atan2(rise, run);
+    const len = Math.hypot(run, rise) + 0.3;
+    const thick = 0.2;
+    // normal da superfície da rampa (aponta para cima e para trás)
+    const normal = new Vector3(-d.x * Math.sin(p), Math.cos(p), -d.z * Math.sin(p));
+    const topCenter = start.add(d.scale(run / 2)).add(new Vector3(0, rise / 2, 0));
+    const center = topCenter.subtract(normal.scale(thick / 2));
+    const rampRot = alongZ ? new Vector3(-p * (dir === "N" ? 1 : -1), 0, 0) : new Vector3(0, 0, p * (dir === "E" ? 1 : -1));
+    ctx.staticBoxCollider(`${id}_rampa`, alongZ ? { w: width, h: thick, d: len } : { w: len, h: thick, d: width }, center, rampRot, false);
   }
   // corrimão (sem colisor) no lado externo
   const len = Math.hypot(steps * tread, rise);

@@ -115,7 +115,7 @@ try {
   await step(3);
   await press("forward", true);
   await press("run", true);
-  await step(40);
+  await step(55);
   await press("run", false);
   await press("forward", false);
   s = await snap();
@@ -124,13 +124,16 @@ try {
   s = await snap();
   check(s.zone === "zona.escola_salas", `Matias na sala de aula (zona ${s.zone})`);
   // sobe a escada externa da escola andando
-  await page.evaluate(() => window.eva.teleportPlayer(2.7, 0.2, -34.4, 0));
+  // (pé da escada fica dentro do pátio, entre o muro da rua em z=-34 e o 1º degrau em z=-33.6)
+  await page.evaluate(() => window.eva.teleportPlayer(2.7, 0.2, -33.8, 0));
   await step(3);
   await press("forward", true);
-  await step(110);
+  await press("run", true);
+  await step(150);
+  await press("run", false);
   await press("forward", false);
   s = await snap();
-  check(s.feet.y > 6.5 && s.zone === "zona.telhado_escola", `subiu a escada até o telhado da escola andando (y=${s.feet.y.toFixed(2)}, zona ${s.zone})`);
+  check(s.feet.y > 6.5 && s.zone === "zona.telhado_escola", `subiu a escada até o telhado da escola correndo (y=${s.feet.y.toFixed(2)}, zona ${s.zone})`);
   await shot("matias_telhado_escola");
 
   // ---------------- van na rota ----------------
