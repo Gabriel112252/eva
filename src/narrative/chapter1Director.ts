@@ -38,7 +38,7 @@ import { CAP1_FLAGS, QUEST_A_VIGILIA, QUEST_PARTIDA, QUEST_RASTRO_DO_LOTE, type 
 import { CONSEQUENCES } from "@/data/consequences";
 import { CAP1_AUX_FLAGS, DIALOGUES, DIALOGUE_RADIO_ELIAS } from "@/data/dialogues";
 import { QUESTS, QUEST_CARREGAMENTO } from "@/data/quests";
-import { PROVISIONAL_CAST, isCastRole, type CastRole } from "@/data/characters";
+import { CHAPTER1_CAST, isCastRole, type CastRole } from "@/data/characters";
 import { loadCharacter, type CharacterModel } from "@/characters/characterModel";
 import { Npc } from "@/characters/npc";
 import { COLLISION } from "@/world/context";
@@ -1701,11 +1701,11 @@ export class Chapter1Stage implements Chapter1Host {
     this.b.startRadio(graph);
   }
 
-  /** Carrega o papel provisório (GLB de outra variante) e o registra como NPC falante. */
+  /** Carrega o papel do elenco do capítulo (GLB próprio: brandao.glb, elias.glb) e o registra como NPC falante. */
   private ensureCast(role: CastRole): Promise<Npc | null> {
     const loading = this.castLoading.get(role);
     if (loading) return loading;
-    const info = PROVISIONAL_CAST[role];
+    const info = CHAPTER1_CAST[role];
     const p = (async () => {
       try {
         const start = this.desired.get(role) ?? CAP1_POINTS.bastidor;

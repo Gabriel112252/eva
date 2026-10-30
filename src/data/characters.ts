@@ -1,5 +1,5 @@
-/** Metadados dos personagens 3D (arquivos em public/assets/characters/, gerados por tools/gen-character.mjs). */
-export type CharacterVariant = "matias" | "miriam" | "custodio" | "comerciante" | "raquel" | "ana" | "saqueador_a" | "saqueador_b";
+/** Metadados dos personagens 3D (arquivos em public/assets/characters/, gerados por tools/blender/make_character.py). */
+export type CharacterVariant = "matias" | "miriam" | "custodio" | "comerciante" | "raquel" | "ana" | "saqueador_a" | "saqueador_b" | "brandao" | "elias";
 
 export interface CharacterInfo {
   variant: CharacterVariant;
@@ -24,6 +24,9 @@ export const CHARACTERS: Record<CharacterVariant, CharacterInfo> = {
   ana: { variant: "ana", displayName: "Ana", height: 1.6, radius: 0.28, prompt: "Falar com Ana", voice: { pitch: 1.2, rate: 1.02, gender: "female" } },
   saqueador_a: { variant: "saqueador_a", displayName: "Desviador", height: 1.78, radius: 0.32, voice: { pitch: 0.85, rate: 1.0, gender: "male" } },
   saqueador_b: { variant: "saqueador_b", displayName: "Desviador", height: 1.74, radius: 0.32, voice: { pitch: 0.78, rate: 0.97, gender: "male" } },
+  // Capítulo 1 (carregados sob demanda pelo diretor; não nascem com a praça)
+  brandao: { variant: "brandao", displayName: "Samuel Brandão", height: 1.74, radius: 0.33, prompt: "Falar com Samuel Brandão", voice: { pitch: 0.68, rate: 0.9, gender: "male" } },
+  elias: { variant: "elias", displayName: "Elias Nobre", height: 1.79, radius: 0.3, prompt: "Falar com Elias", voice: { pitch: 1.02, rate: 1.12, gender: "male" } },
 };
 
 /** Variantes que são NPCs falantes da praça/rua (os saqueadores são inimigos: ver src/ai/). */
@@ -31,54 +34,51 @@ export const NPC_TALKERS: CharacterVariant[] = ["miriam", "custodio", "comercian
 export const ENEMY_VARIANTS: CharacterVariant[] = ["saqueador_a", "saqueador_b"];
 
 /**
- * Elenco do Capítulo 1 SEM GLB próprio (docs/ROTEIRO_CAP1.md §1): cada papel reaproveita o modelo rigado de
- * outra variante — **PROVISÓRIO e declarado** (docs/STATUS.md) até a Arte gerar `brandao.glb`/`elias.glb`.
- * O nome nas legendas vem de `SPEAKER_NAMES` (dialogues.ts); aqui ficam o modelo, o prompt e a voz sintetizada.
- * Os modelos escolhidos não aparecem na mesma cena que o papel (os saqueadores só existem como inimigos em M1).
+ * Elenco do Capítulo 1 carregado sob demanda pelo diretor (docs/ROTEIRO_CAP1.md §1): papéis que não nascem com a
+ * praça. Cada papel tem GLB próprio gerado por tools/blender/make_character.py — `brandao.glb` (farda cinza de
+ * oficial de distribuição, sem armadura, prancheta e crachá) e `elias.glb` (mensageiro de 24 anos: jaqueta leve
+ * aberta, lenço, bolsa transversal com documentos). O nome nas legendas vem de `SPEAKER_NAMES` (dialogues.ts).
  */
 export type CastRole = "brandao" | "elias";
 
 export interface CastInfo {
   role: CastRole;
-  /** GLB reaproveitado (provisório) */
+  /** GLB do papel (a própria variante) */
   model: CharacterVariant;
   displayName: string;
   prompt: string;
   /** perfil de voz provisório (síntese do navegador), distinto dos demais falantes */
   voice: CharacterInfo["voice"];
-  /** o que falta para o papel deixar de ser provisório */
+  /** o que ainda falta para o papel */
   pending: string;
 }
 
-export const PROVISIONAL_CAST: Record<CastRole, CastInfo> = {
-  brandao: {
-    role: "brandao",
-    model: "saqueador_b",
-    displayName: "Samuel Brandão",
-    prompt: "Falar com Samuel Brandão",
-    voice: { pitch: 0.68, rate: 0.9, gender: "male" },
-    pending: "GLB próprio: oficial de distribuição, farda cinza sem armadura, ~45 anos (hoje usa saqueador_b, 41 anos, camisa cinza-azulada)",
-  },
-  elias: {
-    role: "elias",
-    model: "saqueador_a",
-    displayName: "Elias Nobre",
-    prompt: "Falar com Elias",
-    voice: { pitch: 1.02, rate: 1.12, gender: "male" },
-    pending: "GLB próprio: mensageiro dos Silenciosos, 24 anos, roupa leve de quem carrega (hoje usa saqueador_a, 29 anos)",
-  },
+function castOf(role: CastRole, pending: string): CastInfo {
+  const info = CHARACTERS[role];
+  return { role, model: role, displayName: info.displayName, prompt: info.prompt ?? `Falar com ${info.displayName}`, voice: info.voice, pending };
+}
+
+export const CHAPTER1_CAST: Record<CastRole, CastInfo> = {
+  brandao: castOf("brandao", "dublagem (voz sintetizada provisória)"),
+  elias: castOf("elias", "dublagem (voz sintetizada provisória)"),
 };
 
-/** Papel de um NPC/falante: variante com GLB próprio ou papel do elenco provisório. */
+/**
+ * Papéis que ainda reaproveitam o GLB de outra variante (provisório declarado em docs/STATUS.md).
+ * Vazio desde 30/10/2026: Brandão e Elias ganharam modelos próprios (`CHAPTER1_CAST`).
+ */
+export const PROVISIONAL_CAST: Readonly<Record<string, CastInfo>> = {};
+
+/** Papel de um NPC/falante: variante da praça ou papel do elenco do capítulo. */
 export type NpcRole = CharacterVariant | CastRole;
 
 export function isCastRole(role: string): role is CastRole {
-  return role in PROVISIONAL_CAST;
+  return role in CHAPTER1_CAST;
 }
 
-/** Perfil de voz de um falante (variante, papel provisório ou Matias como padrão). */
+/** Perfil de voz de um falante (variante, papel do elenco ou Matias como padrão). */
 export function speakerVoice(speaker: string): CharacterInfo["voice"] {
-  if (isCastRole(speaker)) return PROVISIONAL_CAST[speaker].voice;
+  if (isCastRole(speaker)) return CHAPTER1_CAST[speaker].voice;
   if (speaker in CHARACTERS) return CHARACTERS[speaker as CharacterVariant].voice;
   return CHARACTERS.matias.voice;
 }
