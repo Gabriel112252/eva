@@ -167,4 +167,10 @@ Texturas procedurais ficam em cache em `tools/blender/.cache/kit/` (apague para 
 - A pele fotovoltaica e os módulos não têm LOD; a torre (3.150 tri) e o viaduto (1.892 tri) são leves o
   bastante para dispensar LOD neste capítulo.
 - Normal maps procedurais vêm de altura (Sobel) — relevo sutil; o volume real vem da geometria.
-- Veículos (`refine_vehicles.py`) não foram alterados nesta entrega.
+- Veículos: passe de silhueta em `tools/blender/refine_vehicles.py` (Javali: estepe, snorkel, guincho, grades
+  dos faróis, barra de faróis de teto emissivos, limpadores, para-barros; Módulo V-7: para-choques, baterias
+  externas na porta traseira, painel fotovoltaico no rack, limpadores, tomada de recarga, degrau; Atlas: para-lamas
+  em arco, caixa de bateria, manoplas, espelho, lanterna, encosto; Rastro: anéis de LED nos rotores, pedaleiras,
+  para-brisa, lanterna, espelhos). Nós `WHEEL_*`/`ROTOR_*` intactos; ≤ 24 draw calls por veículo (teste unitário).
+  `tools/vehicles-test.mjs` já falhava em `main` (5 verificações: procura colisores `col_veiculo_*` que deixaram de
+  existir quando os veículos viraram corpos Havok) — mesmas 5 falhas antes e depois deste passe.
