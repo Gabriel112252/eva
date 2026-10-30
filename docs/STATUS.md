@@ -1,6 +1,6 @@
 # STATUS — O Último Veto / EVA
 
-Atualizado em 25/10/2026 (personagens realistas, controles de toque, animações CC0 retargeteadas).
+Atualizado em 30/10/2026 (Setor 17 montado com o kit 2072; antes: personagens realistas, controles de toque, animações CC0 retargeteadas).
 
 ## Marco atual: **Vertical slice jogável — "A Apuração" + "O Carregamento"** ✅
 
@@ -64,7 +64,7 @@ O jogo roda no navegador (Chrome/Edge/Firefox recentes no desktop; Chrome/Safari
 
 - Sem gamepad (teclado + mouse no desktop; toque no celular/tablet). No celular, o toque foi verificado em Chromium emulado — não em aparelhos reais; iOS Safari não permite tela cheia em páginas (o jogo segue na aba normal).
 - Vista aérea: a cidade real (600 m) aparece como um quadrado de chão marrom sobre a ortofoto gerada; o anel entre 6 km e 300 km usa uma só imagem (borrada abaixo de ~10 km de altitude). Pendente: calota intermediária e costura do chão real com a ortofoto.
-- Sem LOD/streaming: a cena inteira é carregada de uma vez (~140 meshes, 22–35 K triângulos por personagem); roda bem em GPU integrada moderna; em celular começa em qualidade baixa, sem medição em aparelhos fracos.
+- Sem streaming: a cena inteira é carregada de uma vez (~140 meshes, 22–35 K triângulos por personagem); só o kit do Setor 17 tem LOD (por instância, com cartões de fachada distantes). Roda bem em GPU integrada moderna; em celular começa em qualidade baixa (kit "leve": sem remendos miúdos), sem medição em aparelhos fracos.
 - WebGL 2 apenas (WebGPU não habilitado ainda).
 - Renderização por software (sem GPU) fica em ~2–5 FPS — só para testes automatizados; no Chromium headless o pointer lock ativo deixa os frames 5–10× mais lentos, por isso o teste visual roda com `?pointerlock=0` (`--lock` para o caminho com cursor travado).
 - A voz sintetizada depende das vozes instaladas no sistema do jogador (Chrome tem vozes pt-BR online; Firefox depende do SO; no celular costuma haver uma voz pt-BR).
@@ -75,6 +75,13 @@ O jogo roda no navegador (Chrome/Edge/Firefox recentes no desktop; Chrome/Safari
 ## Sistemas do Capítulo 1 (branch `agente/gameplay`) ✅
 
 Entregues e cobertos por testes (`tests/unit/cap1Narrative.test.ts`, `tests/unit/cap1Stealth.test.ts`, `node tools/gameplay-test.mjs --only sistemas`): diário de pistas com aba na mochila e save; examinar com close-up; reparo em 3 passos; furtividade (ruído por estado, cone 70°/22 m com lanterna, calmo → suspeito → alerta → perseguição, Custódio que dá voz de prisão e só atira provocado, toque de recolher); timers com HUD mm:ss e carga visível no Atlas; gatilhos `MissionTrigger` por dados com zonas; clarão/fumaça/poeira novos. Guia de uso por dados em `docs/SISTEMAS_CAP1.md`.
+
+## Setor 17 com o kit 2072 (branch `agente/kit-setor17`) ✅
+
+O blockout do Setor 17 ganhou a aparência do kit `kit_tech.glb` (regra das três camadas) sem mexer na física: `src/world/sector17Kit.ts` compõe cada lote com módulos de 6 m (térreo conforme `ground`, pavimentos, esquinas, topos, cor 0/1 por semente), camada tecnológica (pele fotovoltaica ou anexo em 42 % dos lotes, recicladores, caixas d'água, dosséis solares, letreiros LED) e remendos (fiação de poste a fachada, varais, ar-condicionado, toldos, tubulação); viaduto com pilares nas juntas e tabuleiros de 24 m; Torre Verde com 3 blocos da base de vidro; canopy com dosséis e totens. Detalhes, regras e faltas do kit em `docs/MAPA_SETOR17.md` → "Troca blockout → kit"; capturas antes/depois em `docs/screenshots/setor17_kit/`. `?kit=0` volta ao blockout.
+
+- **Desempenho**: instâncias de malha com LOD por instância (fachadas 70 m, miudezas 45 m, lajes 90 m) e cartões de fachada distantes; materiais do kit fundidos na carga (paleta + cor por vértice): 455 malhas do GLB → 154 fontes, 3.075 colocações, 383 mil triângulos se tudo estivesse no quadro. Draw calls sem sombras na rota do `setor17-test` (média, Chromium sem GPU): máximo 389 → 423 (limite 450). O kit só recebe sol + hemisférica (sem luz de poste nas fachadas — evita recompilar variantes de shader a cada troca de postes acesos).
+- **Pendências**: fachada queimada, trecho caído do viaduto, reservatório da cisterna, antena da Central e as peças de depósito/escola não existem no kit (seguem blockout); `TECH_poste_sensor`/`PROP_*` fora do setor por orçamento de draw calls; transição de LOD a 70 m visível de perto da névoa; telhados dos lotes mostram a textura do reboco do blockout.
 
 ## Próxima etapa
 

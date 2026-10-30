@@ -38,8 +38,9 @@ const step = (n) => page.evaluate((k) => { for (let i = 0; i < k; i++) window.ev
 try {
   await page.goto(`${base}?quality=${QUALITY}&pointerlock=0${NAVMESH ? "&navmesh=1" : ""}${KIT === "0" ? "&kit=0" : ""}`, { waitUntil: "load" });
   await page.waitForFunction(() => document.getElementById("menu")?.classList.contains("visible"), null, { timeout: 240000 });
-  await page.click("#btn-new");
-  await page.waitForFunction(() => window.eva.state === "playing");
+  // sem GPU, o primeiro quadro de jogo compila dezenas de variantes de shader (luzes locais trocam): folga larga
+  await page.click("#btn-new", { timeout: 180000 });
+  await page.waitForFunction(() => window.eva.state === "playing", null, { timeout: 180000, polling: 500 });
   await page.waitForTimeout(1200);
   await page.evaluate(() => {
     window.eva.captureStart(30);

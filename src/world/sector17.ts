@@ -17,10 +17,10 @@ import { STREET } from "./street";
 /**
  * SETOR 17 — blockout do setor inteiro de São Paulo Velha em volta do quarteirão da Apuração.
  *
- * Tudo aqui é dirigido por dados (`SECTOR17`): ruas, lotes, marcos e pontos de interesse, para a
- * geometria provisória (caixas com relevo mínimo e os materiais existentes) ser trocada peça a peça
- * pelo kit `public/assets/environments/kit_tech.glb` quando ele chegar — cada lote declara o nó do
- * kit que o substitui (`kit`). Planta, nomes e coordenadas em docs/MAPA_SETOR17.md.
+ * Tudo aqui é dirigido por dados (`SECTOR17`): ruas, lotes, marcos e pontos de interesse. A física e o
+ * layout são sempre estes; a aparência dos lotes e marcos vem do kit `kit_tech.glb` (`sector17Kit.ts`),
+ * que cobre o visual separado aqui em `kitCovered` (`?kit=0` deixa o blockout puro). Planta, nomes,
+ * coordenadas e regras da troca em docs/MAPA_SETOR17.md.
  *
  * Convenções: eixo X = leste, Z = norte, metros; `facing` é o lado do lote que dá para a rua.
  * O quarteirão original (rua x∈[-48,14], praça x∈[14,46], oficina) não é tocado: o setor cresce para fora.
@@ -1736,9 +1736,8 @@ export function sectorMaxLights(quality: "baixa" | "media" | "alta"): number {
 }
 
 /**
- * Tabela blockout → kit: posições (origem no chão, frente para +Z do módulo) para instanciar os nós de
- * `kit_tech.glb` por nome com `loadHeroAssets(scene, ctx, sector17KitPlacements(), kitUrl)` quando o kit
- * existir. O yaw segue a convenção dos módulos da praça (fachada olhando para a rua).
+ * Tabela blockout → kit por tipologia (um ponto por lote/marco/segmento, frente +Z olhando para a rua). A
+ * composição real — módulos, pavimentos, camadas — é de `planSector17Kit()` em `sector17Kit.ts`.
  */
 export function sector17KitPlacements(): Array<{ asset: string; position: Vector3; yaw: number; id: string }> {
   const yawOf = (f: Facing) => (f === "N" ? 0 : f === "S" ? Math.PI : f === "E" ? Math.PI / 2 : -Math.PI / 2);

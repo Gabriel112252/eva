@@ -862,6 +862,8 @@ async function runKit(ctx: WorldContext, covered: Mesh[], plan: Sector17KitPlan,
     const result = await instantiateKit(ctx, plan, url, mode);
     dropCovered(ctx, covered);
     await placeKitSigns(ctx, plan);
+    // o jogo ainda liga sombras e pós-processamento depois daqui: no 1º quadro (menu) recompila o que mudou
+    ctx.scene.onAfterRenderObservable.addOnce(() => void precompileKit(ctx.scene));
     console.info(`[setor17-kit] ${result.sources} malhas-fonte, ${result.instances} colocações (${mode}), ${Math.round(result.triangles / 1000)} mil triângulos`);
     return result;
   } catch (err) {
@@ -909,18 +911,20 @@ function isFlat(m: PBRMaterial): boolean {
 /** Grupo de fusão de um material: "paleta", "familia:<nome>" (mesmas texturas) ou "mat:<id>". */
 function groupKey(m: PBRMaterial, families: Map<string, PBRMaterial>): string {
   if (isFlat(m)) return "paleta";
+  // identidade das texturas pela imagem do GLB (o nome do Babylon leva o nome do material)
+  const sig = [m.albedoTexture, m.bumpTexture, m.metallicTexture, m.ambientTexture].map((t) => (t instanceof Texture ? t.url : "")).join("|");
   for (const [re, fam] of FAMILIES) {
     if (!re.test(m.name)) continue;
     const base = families.get(fam);
     if (!base) {
       const clone = m.clone(`kit_${fam}`);
       clone.albedoColor = new Color3(1, 1, 1);
-      clone.metadata = { kitFamily: fam, albedoTexture: m.albedoTexture?.name ?? "" };
+      clone.metadata = { kitFamily: fam, textures: sig };
       families.set(fam, clone);
       return `familia:${fam}`;
     }
     // só funde se as texturas forem de fato as mesmas (o gerador do kit pode mudar)
-    if ((base.metadata as { albedoTexture: string }).albedoTexture === (m.albedoTexture?.name ?? "")) return `familia:${fam}`;
+    if ((base.metadata as { textures: string }).textures === sig) return `familia:${fam}`;
   }
   return `mat:${m.uniqueId}`;
 }
@@ -1164,6 +1168,9 @@ async function instantiateKit(ctx: WorldContext, plan: Sector17KitPlan, url: str
       m.rotation.setAll(0);
       m.scaling.setAll(1);
       m.bakeTransformIntoVertices(bake);
+      // o bake devolve as submalhas antigas: caixa envolvente recalculada (senão o culling usa a do nó original)
+      m.refreshBoundingInfo();
+      for (const sm of m.subMeshes) sm.refreshBoundingInfo();
       baked.push(m);
       const key = groupKey(m.material, families);
       const g = groups.get(key) ?? [];
@@ -1273,12 +1280,21 @@ async function instantiateKit(ctx: WorldContext, plan: Sector17KitPlan, url: str
   // do jogador (SectorLights) e cada combinação vira uma variante de shader por material — com ~40 materiais
   // de kit isso recompila dezenas de shaders a cada troca (segundos sem GPU). Fachadas não perdem leitura: o
   // poste ilumina a calçada e a rua (blockout), e as janelas acesas do kit são emissivas.
-  excludeLocalLights(ctx.scene, [...used]);
+  // (os cartões distantes, fundidos no finalize, seguem a mesma regra)
+  const cards = ctx.scene.meshes.filter((m) => m.material?.name === "kit_fachada_longe");
+  excludeLocalLights(ctx.scene, [...used, ...cards]);
+  await Promise.all(cards.map((m) => m.material?.forceCompilationAsync(m).catch(() => undefined)));
   // compila os shaders do kit (e a sombra dos que projetam) ainda na carga: sem isso, o primeiro quadro que
   // enxerga o setor trava compilando cada variante
   // (com e sem instâncias: quando só a fonte está no quadro o Babylon desenha sem instanciamento)
   for (const useInstances of [true, false]) await Promise.all([...used].map((m) => m.material?.forceCompilationAsync(m, { useInstances }).catch(() => undefined)));
   return { meshes: all, shadowCasters: casters, sources: used.size, instances, triangles, mode };
+}
+
+/** Compila (com e sem instanciamento) os shaders de todas as malhas do kit — fontes, cartões e placas. */
+async function precompileKit(scene: Scene): Promise<void> {
+  const meshes = scene.meshes.filter((m): m is Mesh => m instanceof Mesh && !!m.material && (/^(kit_|placa_s17kit_)/.test(m.name) || /^kit_/.test(m.material.name)));
+  for (const useInstances of [true, false]) await Promise.all(meshes.map((m) => m.material!.forceCompilationAsync(m, { useInstances }).catch(() => undefined)));
 }
 
 /** Exclui as malhas do kit das luzes locais (pontuais e spots), inclusive das criadas depois (faróis). */
