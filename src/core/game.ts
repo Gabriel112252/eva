@@ -13,6 +13,8 @@ import { Environment } from "@/world/environment";
 import { buildWorld, type World } from "@/world/worldBuilder";
 import { loadHeroAssets } from "@/world/heroAssets";
 import { vehicleSpawns } from "@/world/vehiclesPack";
+import { buildNavmesh } from "@/world/navmesh";
+import { zoneAt } from "@/world/sector17Zones";
 import { Vehicle } from "@/vehicles/vehicle";
 import { Quaternion } from "@babylonjs/core/Maths/math.vector";
 import { STREET } from "@/world/street";
@@ -180,6 +182,13 @@ export class Game {
       } catch (err) {
         console.error(`[vehicles] falha ao carregar ${sp.id}`, err);
       }
+    }
+    progress(0.49, "Calculando a malha de navegação do Setor 17…");
+    try {
+      this.world.navmesh = await buildNavmesh(this.scene);
+      if (params.get("navmesh") === "1") this.world.navmesh.showDebug(this.scene);
+    } catch (err) {
+      console.error("[navmesh] falha ao gerar a malha de navegação", err);
     }
     progress(0.5, "Carregando Matias…");
     this.matias = await loadCharacter(this.scene, "matias");
@@ -592,6 +601,10 @@ export class Game {
       curfew: this.enemies?.curfew ?? false,
       triggers: this.script.history.slice(-8),
       zonesInside: [...this.script.zones.keys()].filter((id) => this.script.isInside(id)),
+      // Setor 17
+      zone: zoneAt(feet.x, feet.z, feet.y)?.id ?? null,
+      navmesh: this.world.navmesh?.stats ?? null,
+      lightsActive: this.world.sector17.lights.activeCount,
     };
   }
 
@@ -1564,6 +1577,9 @@ export class Game {
   }
 
   private updateLights(dt: number): void {
+    // luzes locais do setor: só as mais próximas do observador ficam acesas (limite de luzes por material)
+    const viewer = this.state === "menu" || this.state === "loading" ? this.camera.camera.globalPosition : this.driving ? this.driving.position : this.player.feet;
+    this.world.sector17.lights.update(dt, viewer);
     const t = performance.now() / 1000;
     for (const l of this.flickerLights) {
       const meta = l.metadata as { base: number; glow: Mesh };

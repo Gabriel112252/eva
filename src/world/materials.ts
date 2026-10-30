@@ -38,6 +38,10 @@ export class MaterialLibrary {
   readonly pavingStones: PBRMaterial;
   readonly plasterPhoto: { gray: PBRMaterial; warm: PBRMaterial; sand: PBRMaterial };
   readonly concretePhoto: PBRMaterial;
+  /** telha metálica ondulada (CorrugatedSteel005, CC0) — galpões, marquises, telhados do Setor 17 */
+  readonly corrugated: PBRMaterial;
+  /** piso pintado de quadra esportiva (verde desbotado) */
+  readonly courtGreen: PBRMaterial;
 
   private readonly all: PBRMaterial[] = [];
 
@@ -178,6 +182,9 @@ export class MaterialLibrary {
       sand: this.photoPbr("reboco_foto_areia", "PaintedPlaster017", { tileSize: 1.6, tint: "#d6c6a2" }),
     };
     this.concretePhoto = this.photoPbr("concreto_foto", "Concrete034", { tileSize: 2.0, tint: "#d8d6d0" });
+    this.corrugated = this.photoPbr("telha_metalica", "CorrugatedSteel005", { tileSize: 1.8, tint: "#b5b8b6", roughness: 0.85, ao: true });
+    this.corrugated.metallic = 0.35;
+    this.courtGreen = this.pbr("piso_quadra", { color: "#3f6b4b", roughness: 0.92 });
   }
 
   /**

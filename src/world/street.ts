@@ -1,5 +1,6 @@
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { WorldContext } from "./context";
+import { GROUND_SIZE } from "./bounds";
 
 /**
  * Layout do quarteirão (metros, eixo X = leste, Z = norte):
@@ -22,10 +23,11 @@ export function buildStreet(ctx: WorldContext): void {
   const streetLen = S.xEast - S.xWest;
   const streetCx = (S.xEast + S.xWest) / 2;
 
-  // Base de terra sob tudo + colisor único do chão (topo em y=0). O chão vai longe (600 m) porque a aeromoto
-  // sobrevoa o quarteirão; a silhueta da cidade ao redor é construída em buildSkyline (worldBuilder).
-  ctx.ground("terra_base", { w: 600, h: 600 }, new Vector3(0, -0.03, 0), mats.soil, 2);
-  ctx.staticBoxCollider("chao", { w: 600, h: 1, d: 600 }, new Vector3(0, -0.5, 0), undefined, false);
+  // Base de terra sob tudo + colisor único do chão (topo em y=0). O chão cobre o Setor 17 inteiro e a
+  // silhueta distante (GROUND_SIZE, 600 m) porque a aeromoto sobrevoa o setor; a silhueta é construída em
+  // buildSkyline (worldBuilder) e o setor em sector17.ts.
+  ctx.ground("terra_base", { w: GROUND_SIZE, h: GROUND_SIZE }, new Vector3(0, -0.03, 0), mats.soil, 2);
+  ctx.staticBoxCollider("chao", { w: GROUND_SIZE, h: 1, d: GROUND_SIZE }, new Vector3(0, -0.5, 0), undefined, false);
   // piso de segurança da região (40 km): quem voa para longe da cidade e desce ainda encontra chão
   ctx.staticBoxCollider("chao_regiao", { w: 40000, h: 1, d: 40000 }, new Vector3(0, -0.6, 0), undefined, false);
 
@@ -71,10 +73,7 @@ export function buildStreet(ctx: WorldContext): void {
     ctx.box(`entulho_oeste_${i}`, { w: 1.6, h: 0.9 + (i % 3) * 0.3, d: 1.2 }, new Vector3(x, 0.45 + (i % 3) * 0.15, z), mats.concrete, { rotationY: (i * 0.7) % 1.2, collider: true });
   }
   ctx.box("muro_oeste", { w: 1, h: 6, d: 16 }, new Vector3(S.xWest - 0.5, 3, 0), mats.concrete, { collider: true, uvScale: 1 });
-  // paredes invisíveis de limite do mundo
-  ctx.staticBoxCollider("limite_oeste", { w: 1, h: 10, d: 60 }, new Vector3(S.xWest - 1, 5, 0));
-  ctx.staticBoxCollider("limite_leste", { w: 1, h: 10, d: 60 }, new Vector3(S.plaza.x1 + 0.5, 5, 0));
-  // (as fachadas dos prédios são os limites norte/sul; a oficina abre para a rua)
-  ctx.staticBoxCollider("limite_norte_praca", { w: 40, h: 10, d: 1 }, new Vector3(30, 5, S.plaza.z1 + 12.5));
-  ctx.staticBoxCollider("limite_sul_praca", { w: 40, h: 10, d: 1 }, new Vector3(30, 5, S.plaza.z0 - 10.5));
+  // Os antigos colisores invisíveis de limite do quarteirão (oeste, leste, norte e sul da praça) saíram: o
+  // mundo continua pelo Setor 17 (sector17.ts) e termina nos muros do setor (bounds.ts). A praça abre para o
+  // Largo do Mercado pelo canto sudeste (x=46,5, z∈[-28,0]); o oeste da rua segue fechado pelo muro acima.
 }
