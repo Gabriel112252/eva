@@ -148,6 +148,8 @@ export class PlayerController {
   private horizontalSpeed = 0;
   /** velocidade horizontal real depois do solver (contra uma parede é ~0 mesmo com o direcional apertado) */
   private actualSpeed = 0;
+  /** módulo da velocidade horizontal pedida no último quadro (o solver só pode reduzi-la, nunca aumentá-la) */
+  private lastPlanarSpeed = 0;
   /** direção do deslocamento no chão (rad) — a velocidade segue o direcional com curva */
   private moveYaw = 0;
   /** direção travada do rolamento / impulso / deslize */
@@ -278,6 +280,7 @@ export class PlayerController {
     this.velocity.setAll(0);
     this.horizontalSpeed = 0;
     this.actualSpeed = 0;
+    this.lastPlanarSpeed = 0;
     this.sprintTimer = 0;
     this.sprinting = false;
     this.yaw = yaw;
@@ -463,9 +466,16 @@ export class PlayerController {
     const canJump = !this.motion.jumpPending || !needStand || this.canStandUp();
     const events = this.motion.update(dt, { grounded, y: bottom, vy: currentVelocity.y, locked: this.locked, canJump, slopeAccel });
 
-    // velocidade horizontal no ar (parte da atual: colisões já descontadas pelo solver)
+    // velocidade horizontal no ar (parte da atual: colisões já descontadas pelo solver). No impacto com o chão
+    // o solver às vezes converte parte da queda em velocidade horizontal: limita ao que foi pedido no quadro anterior.
     let airX = currentVelocity.x;
     let airZ = currentVelocity.z;
+    const solvedPlanar = Math.hypot(airX, airZ);
+    if (solvedPlanar > this.lastPlanarSpeed + 0.05) {
+      const k = this.lastPlanarSpeed / solvedPlanar;
+      airX *= k;
+      airZ *= k;
+    }
     let jumpVy: number | null = null;
     let liftVy: number | null = null;
     for (const e of events) {
@@ -630,6 +640,7 @@ export class PlayerController {
 
     this.tmpDesired.set(planarX, 0, planarZ);
     this.tmpForward.set(Math.sin(this.yaw), 0, Math.cos(this.yaw));
+    this.lastPlanarSpeed = Math.hypot(planarX, planarZ);
 
     let output: Vector3;
     const onGroundSolver = grounded && !airborne && jumpVy === null;

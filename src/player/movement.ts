@@ -69,8 +69,8 @@ export const MOVEMENT_TUNING = {
   slideEnterSpeed: 4.2,
   slideBoost: 1.2,
   slideMaxSpeed: 8.2,
-  slideFriction: 4.6,
-  slideEndSpeed: 2.2,
+  slideFriction: 3.4,
+  slideEndSpeed: 2.0,
   slideMaxTime: 1.15,
   /** curva máxima do deslize (rad/s) */
   slideSteer: 1.6,
