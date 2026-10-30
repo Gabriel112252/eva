@@ -205,7 +205,10 @@ export class Game {
     const spawn = this.world.spawns.get("oficina")!;
     this.player = new PlayerController(this.scene, this.matias, spawn.position, spawn.yaw);
     this.player.onFootstep.on((step) => this.audio.playFootstep(step.kind, step.surface));
+    // pulo/rolamento/embalo (matias_movimento.glb); sem o arquivo o movimento funciona, só sem esses clipes
+    await this.player.loadMovementClips().catch((err) => console.warn("[movimento] clipes de ação indisponíveis", err));
     this.camera = new ThirdPersonCamera(this.scene, spawn.yaw);
+    this.player.attachCamera(this.camera);
     this.scene.activeCamera = this.camera.camera;
     this.effects = new CombatEffects(this.scene);
     this.enemies = new EnemyManager(this.scene);

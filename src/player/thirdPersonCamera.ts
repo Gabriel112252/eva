@@ -19,7 +19,10 @@ export function damp(current: number, target: number, smoothing: number, dt: num
 /**
  * Câmera em terceira pessoa sobre o ombro: mouse gira (pointer lock), roda
  * aproxima/afasta, oclusão por raio físico (não atravessa paredes) e
- * enquadramentos cinematográficos para diálogos.
+ * enquadramentos cinematográficos para diálogos. A pé, recebe do PlayerController
+ * o FOV dinâmico da corrida (`motionFov`) e o tranco das aterrissagens (`addImpact`),
+ * ideia do BJS Character Controller V2 (MIT, crazyramirez) refeita para esta câmera:
+ * mergulho amortecido do pivô + tremida determinística, sem mexer no yaw/pitch do jogador.
  */
 export class ThirdPersonCamera {
   readonly camera: TargetCamera;
@@ -45,6 +48,15 @@ export class ThirdPersonCamera {
   private dialogueFrom = new Vector3();
   private dialogueAt = new Vector3();
   private menuTime = 0;
+  /** FOV extra pedido pelo movimento (rad): corrida/embalo abrem o quadro; a câmera suaviza */
+  motionFov = 0;
+  private fovBoost = 0;
+  /** mergulho do pivô (m, negativo = abaixo) e sua velocidade — mola amortecida */
+  private dip = 0;
+  private dipVel = 0;
+  /** amplitude (m) e relógio da tremida de impacto */
+  private shake = 0;
+  private shakeClock = 0;
 
   constructor(
     private readonly scene: Scene,
@@ -85,6 +97,22 @@ export class ThirdPersonCamera {
 
   setFollow(): void {
     this.mode = "follow";
+  }
+
+  /**
+   * Tranco de aterrissagem (0–1): o pivô mergulha alguns centímetros e volta com mola, com uma tremida
+   * curta que decai (referência: 0,08 suave / 0,22 pesada no controlador MIT).
+   */
+  addImpact(intensity: number): void {
+    const k = Math.max(0, Math.min(1, intensity));
+    if (k <= 0) return;
+    this.dipVel = Math.min(this.dipVel, -1.7 * k);
+    this.shake = Math.max(this.shake, 0.05 * k);
+  }
+
+  /** Mergulho atual do pivô (m) — testes. */
+  get impactOffset(): number {
+    return this.dip;
   }
 
   /** Perfil de seguimento: a pé, mirando ou dirigindo. */
@@ -143,11 +171,33 @@ export class ThirdPersonCamera {
         break;
       }
     }
-    // no exame o FOV estreita independentemente do perfil (que o Game só ajusta no modo seguir)
-    this.camera.fov = damp(this.camera.fov, this.mode === "inspect" ? this.inspectFov : this.fovTarget, 10, dt);
+    // FOV dinâmico do movimento (só seguindo); no exame o FOV estreita independentemente do perfil
+    this.fovBoost = damp(this.fovBoost, this.mode === "follow" ? this.motionFov : 0, 6, dt);
+    this.camera.fov = damp(this.camera.fov, this.mode === "inspect" ? this.inspectFov : this.fovTarget + this.fovBoost, 10, dt);
+  }
+
+  /** Avança a mola do mergulho e a tremida de impacto; devolve o deslocamento a somar ao pivô/alvo. */
+  private updateImpact(dt: number): { y: number; sx: number; sy: number } {
+    if (dt > 0) {
+      // mola subamortecida (ω≈11 rad/s): mergulha ~0,15 m no tranco máximo e volta em ~0,4 s
+      const steps = Math.max(1, Math.ceil(dt / (1 / 120)));
+      const h = dt / steps;
+      for (let i = 0; i < steps; i++) {
+        this.dipVel += (-125 * this.dip - 15 * this.dipVel) * h;
+        this.dip += this.dipVel * h;
+      }
+      if (Math.abs(this.dip) < 1e-4 && Math.abs(this.dipVel) < 1e-3) {
+        this.dip = 0;
+        this.dipVel = 0;
+      }
+      this.shakeClock += dt;
+      this.shake = this.shake > 1e-4 ? this.shake * Math.exp(-9 * dt) : 0;
+    }
+    return { y: this.dip, sx: Math.sin(this.shakeClock * 47) * this.shake, sy: Math.cos(this.shakeClock * 53) * this.shake * 0.7 };
   }
 
   private updateFollow(dt: number, input: InputManager, pivot: Vector3, eyeHeight: number, alignYaw?: number): void {
+    const impact = this.updateImpact(dt);
     const { dx, dy } = input.consumeMouseDelta();
     const sens = 0.0022 * this.sensitivity;
     this.yaw += dx * sens;
@@ -169,7 +219,7 @@ export class ThirdPersonCamera {
     // pivô no ombro do personagem (ou acima do veículo)
     const fwd = new Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw));
     const right = new Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
-    const pivotPos = pivot.add(new Vector3(0, eyeHeight + this.pivotLift, 0)).add(right.scale(this.shoulder));
+    const pivotPos = pivot.add(new Vector3(0, eyeHeight + this.pivotLift + impact.y, 0)).add(right.scale(this.shoulder));
 
     // posição desejada atrás e acima
     const cp = Math.cos(this.pitch);
@@ -202,7 +252,9 @@ export class ThirdPersonCamera {
       this.smoothedTarget.set(damp(this.smoothedTarget.x, lookAt.x, sTgt, dt), damp(this.smoothedTarget.y, lookAt.y, sTgt, dt), damp(this.smoothedTarget.z, lookAt.z, sTgt, dt));
     }
     this.camera.position.copyFrom(this.smoothedPos);
-    this.camera.setTarget(this.smoothedTarget);
+    // tremida depois da suavização (senão o filtro a apagaria)
+    if (impact.sx !== 0 || impact.sy !== 0) this.camera.setTarget(this.smoothedTarget.add(right.scale(impact.sx)).addInPlaceFromFloats(0, impact.sy, 0));
+    else this.camera.setTarget(this.smoothedTarget);
   }
 
   /** Distância atual entre câmera e pivô (para ocultar o modelo quando colada). */
