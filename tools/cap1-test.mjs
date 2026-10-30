@@ -47,9 +47,10 @@ const snap = () => page.evaluate(() => window.eva.snapshot());
 const flag = (k) => page.evaluate((key) => window.eva.flags.get(key), k);
 const shot = async (name) => {
   if (!SHOTS) return;
-  // SwiftShader recompila materiais quando as luzes mudam (faróis, lanternas) e o Babylon pula o que não está
-  // pronto: espera a cena ficar pronta para a captura não sair com o cenário em branco
+  // espera a cena ficar pronta (SwiftShader recompila materiais quando as luzes mudam) e a câmera assentar:
+  // logo depois de um teleporte o SwiftShader chega a desenhar o cenário em branco por alguns quadros
   await page.evaluate(() => { for (let i = 0; i < 12 && !window.eva.scene.isReady(); i++) window.eva.captureFrame(0.3); });
+  await step(6);
   const dataUrl = await page.evaluate(() => window.eva.captureFrame(0.85));
   writeFileSync(resolve(SHOTS, `${name}.jpg`), Buffer.from(dataUrl.split(",")[1], "base64"));
 };
@@ -391,6 +392,41 @@ try {
   s = await snap();
   check(s.state === "playing", "continuar explorando depois do capítulo");
   console.log(`  (capítulo inteiro em ${elapsed()})`);
+
+  // ======================================================== caminho do silêncio (M1 = silencio): grade só agachado
+  console.log(`Caminho do silêncio: portão fechado, grade dos fundos (${elapsed()})`);
+  await page.evaluate(() => window.eva.startNewGame());
+  await until(() => window.eva.state === "playing" && window.eva.chapter1.phase === "inativo", null, { tries: 15, perStep: 1, waitMs: 300 });
+  await page.evaluate(() => {
+    const g = window.eva;
+    g.flags.set("matiasTrustsSystem", false);
+    g.flags.set("carregamento.decisao", "silencio");
+    g.quests.complete("a_apuracao");
+    g.quests.start("o_carregamento");
+    g.quests.complete("o_carregamento");
+  });
+  await until(() => document.getElementById("mission-end")?.classList.contains("visible"), null, { tries: 20, perStep: 0, waitMs: 300 });
+  await page.click("#btn-mission-continue");
+  await until(() => window.eva.chapter1.phase === "m2" && !window.eva.chapter1.busy, null, { tries: 30, perStep: 1, waitMs: 250 });
+  s = await snap();
+  check(s.chapter1.agua === 40 && s.chapter1.actors.pieces.includes("porta_deposito"), `novo jogo → silêncio: água ${s.chapter1.agua}/100 e o portão do depósito fechado`);
+  // de pé, encostado na grade (lado leste), andando para oeste: não passa
+  await page.evaluate(() => window.eva.teleportPlayer(46.2, 0.2, 70, -Math.PI / 2));
+  await step(3);
+  await hold("forward", true);
+  await step(40);
+  await hold("forward", false);
+  const standX = (await snap()).feet.x;
+  // agachado (C): passa por baixo da grade e entra no depósito
+  await page.evaluate(() => window.eva.teleportPlayer(46.2, 0.2, 70, -Math.PI / 2));
+  await step(2);
+  await press("crouchToggle");
+  await step(3);
+  await hold("forward", true);
+  await step(100);
+  await hold("forward", false);
+  s = await snap();
+  check(standX > 44.6 && s.crouched && s.feet.x < 44.4 && s.quests.rastro_do_lote.objectives.deposito, `grade dos fundos: de pé para em x=${standX.toFixed(2)}; agachado entra (x=${s.feet.x.toFixed(2)}, objetivo depósito)`);
   await page.evaluate(() => window.eva.captureStop());
 } catch (err) {
   console.error(err);

@@ -1117,7 +1117,8 @@ export class Chapter1Director {
         this.zone({ id: "posto", center: v3(24.4, 1, -12.5), radius: 6.5, requires: "veiculo", once: false });
         // portão de correr fechado até o Custódio liberar; grade de ventilação dos fundos (só agachado passa)
         if (!f.getBool(X.depositoLiberado)) this.barrier("porta_deposito", "porta", v3(33.5, 2.1, 57.75), v3(5.3, 4.2, 0.14));
-        this.barrier("grade_fundos", "grade", v3(44.8, 1.87, 70), v3(0.5, 1.0, 1.4));
+        // barra da grade de 1,5 m a 2,3 m, dentro da espessura da parede (longe do degrau do piso): de pé (1,78 m) não passa
+        this.barrier("grade_fundos", "grade", v3(44.75, 1.9, 70), v3(0.2, 0.8, 1.4));
         // fundos do depósito: sacos de farinha na frente, caixas vazias atrás (a do meio é do mapa)
         h.addProp("saco_1", "saco", v3(33.1, 0.1, 69.3), 0.2);
         h.addProp("saco_2", "saco", v3(34.3, 0.1, 69.1), -0.1);
