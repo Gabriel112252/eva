@@ -30,6 +30,59 @@ export const CHARACTERS: Record<CharacterVariant, CharacterInfo> = {
 export const NPC_TALKERS: CharacterVariant[] = ["miriam", "custodio", "comerciante", "raquel", "ana"];
 export const ENEMY_VARIANTS: CharacterVariant[] = ["saqueador_a", "saqueador_b"];
 
+/**
+ * Elenco do Capítulo 1 SEM GLB próprio (docs/ROTEIRO_CAP1.md §1): cada papel reaproveita o modelo rigado de
+ * outra variante — **PROVISÓRIO e declarado** (docs/STATUS.md) até a Arte gerar `brandao.glb`/`elias.glb`.
+ * O nome nas legendas vem de `SPEAKER_NAMES` (dialogues.ts); aqui ficam o modelo, o prompt e a voz sintetizada.
+ * Os modelos escolhidos não aparecem na mesma cena que o papel (os saqueadores só existem como inimigos em M1).
+ */
+export type CastRole = "brandao" | "elias";
+
+export interface CastInfo {
+  role: CastRole;
+  /** GLB reaproveitado (provisório) */
+  model: CharacterVariant;
+  displayName: string;
+  prompt: string;
+  /** perfil de voz provisório (síntese do navegador), distinto dos demais falantes */
+  voice: CharacterInfo["voice"];
+  /** o que falta para o papel deixar de ser provisório */
+  pending: string;
+}
+
+export const PROVISIONAL_CAST: Record<CastRole, CastInfo> = {
+  brandao: {
+    role: "brandao",
+    model: "saqueador_b",
+    displayName: "Samuel Brandão",
+    prompt: "Falar com Samuel Brandão",
+    voice: { pitch: 0.68, rate: 0.9, gender: "male" },
+    pending: "GLB próprio: oficial de distribuição, farda cinza sem armadura, ~45 anos (hoje usa saqueador_b, 41 anos, camisa cinza-azulada)",
+  },
+  elias: {
+    role: "elias",
+    model: "saqueador_a",
+    displayName: "Elias Nobre",
+    prompt: "Falar com Elias",
+    voice: { pitch: 1.02, rate: 1.12, gender: "male" },
+    pending: "GLB próprio: mensageiro dos Silenciosos, 24 anos, roupa leve de quem carrega (hoje usa saqueador_a, 29 anos)",
+  },
+};
+
+/** Papel de um NPC/falante: variante com GLB próprio ou papel do elenco provisório. */
+export type NpcRole = CharacterVariant | CastRole;
+
+export function isCastRole(role: string): role is CastRole {
+  return role in PROVISIONAL_CAST;
+}
+
+/** Perfil de voz de um falante (variante, papel provisório ou Matias como padrão). */
+export function speakerVoice(speaker: string): CharacterInfo["voice"] {
+  if (isCastRole(speaker)) return PROVISIONAL_CAST[speaker].voice;
+  if (speaker in CHARACTERS) return CHARACTERS[speaker as CharacterVariant].voice;
+  return CHARACTERS.matias.voice;
+}
+
 export const ANIMATION_CLIPS = ["Idle", "Walk", "Run", "CrouchIdle", "CrouchWalk", "Talk", "Interact", "PickUp", "PistolIdle", "PistolAim", "PistolShoot", "PistolReload", "Hit", "Death", "Driving", "Sit"] as const;
 export type AnimationClip = (typeof ANIMATION_CLIPS)[number];
 /** Clipes tocados uma vez (não em loop). */

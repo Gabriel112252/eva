@@ -25,7 +25,8 @@
     "assets:props": "python3.11 tools/blender/make_props.py",
     "capture:altitude": "node tools/capture-altitude.mjs",
     "assets:kit": "python3.11 tools/blender/make_kit_tech.py",
-    "test:kit": "node tools/kit-test.mjs"
+    "test:kit": "node tools/kit-test.mjs",
+    "test:cap1": "node tools/cap1-test.mjs"
   },
   "dependencies": {
     "@babylonjs/core": "^9.32.0",

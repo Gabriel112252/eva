@@ -36,7 +36,7 @@ import { Inventory } from "@/items/inventory";
 import { Pickup, type PickupSpec } from "@/items/pickup";
 import { MissionDirector, MISSION_POINTS, type MissionHost } from "@/narrative/missionDirector";
 import { WORKSHOP } from "@/world/workshop";
-import { CHARACTERS, characterUrl, type CharacterVariant } from "@/data/characters";
+import { CHARACTERS, characterUrl, speakerVoice } from "@/data/characters";
 import { AudioEngine } from "@/audio/audioEngine";
 import { VoiceService } from "@/audio/voice";
 import { Hud } from "@/ui/hud";
@@ -49,15 +49,16 @@ import { CLUES } from "@/data/clues";
 import { MissionTimers, formatClock } from "@/narrative/timers";
 import { MissionScript, type ZoneSpec } from "@/narrative/missionScript";
 import { DeliveryCargo } from "@/narrative/delivery";
-import { ExamineController, type ExaminableSpec } from "@/interaction/examinable";
+import { ExamineController, type Examinable, type ExaminableSpec } from "@/interaction/examinable";
 import { RepairController, type RepairSpec } from "@/interaction/repair";
 import type { EnemySpawnSpec } from "@/ai/enemyManager";
 import { VEHICLE_NOISE } from "@/ai/stealth";
 import type { MissionTrigger } from "@/data/cap1Contracts";
+import { Chapter1Director, Chapter1Stage, type AutoDrive } from "@/narrative/chapter1Director";
 
 export type GameState = "loading" | "menu" | "playing" | "paused" | "dialogue";
 
-const NPC_VARIANTS: CharacterVariant[] = ["miriam", "custodio", "comerciante", "raquel", "ana"];
+const NPC_VARIANTS = ["miriam", "custodio", "comerciante", "raquel", "ana"] as const;
 
 /** Orquestra engine, mundo, jogador, NPCs, narrativa, áudio, UI e salvamento. */
 export class Game {
@@ -110,6 +111,14 @@ export class Game {
   examine!: ExamineController;
   repair!: RepairController;
   cargo!: DeliveryCargo;
+  /** Capítulo 1 (M2 Rastro do Lote · M3 A Vigília · M4 Partida): diretor e palco (`window.eva.chapter1`) */
+  chapter1!: Chapter1Director;
+  chapter1Stage!: Chapter1Stage;
+  /** papel de cada NPC quando difere da variante do GLB (elenco provisório: brandao, elias) */
+  private npcRoles = new WeakMap<Npc, string>();
+  /** controle automático do veículo (cena de partida do Capítulo 1) */
+  private autoDrive: AutoDrive | null = null;
+  private saveQueued: { notify: boolean } | null = null;
   private noiseTimer = 0;
   private deathTimer = -1;
   private cameraShake = 0;
@@ -227,6 +236,7 @@ export class Game {
     this.collectFlickerLights();
     this.setupWorldInteractables();
     this.wireEvents();
+    this.setupChapter1();
 
     progress(1, "Pronto.");
     this.engine.runRenderLoop(() => this.frame());
@@ -347,6 +357,7 @@ export class Game {
     this.player.teleport(spawn.position, spawn.yaw);
     this.quests.start(QUEST_APURACAO);
     this.director = new MissionDirector(this.missionHost());
+    this.chapter1.reset();
     await this.enterPlay(spawn.yaw);
     this.hud.showNotice("São Paulo Velha · Setor 17 · 2072", 4.5);
     window.setTimeout(() => this.hud.showNotice("Dia de Apuração", 3.5), 5200);
@@ -427,6 +438,7 @@ export class Game {
   private handleAction(a: GameAction): void {
     switch (this.state) {
       case "playing":
+        if (this.autoDrive && a !== "pause") break; // cena de partida: o volante é do roteiro
         if (a === "pause") {
           this.pause();
         } else if (a === "interact" && this.repair.active) {
@@ -497,8 +509,8 @@ export class Game {
   }
 
   /** Coloca Matias de frente para um NPC, a `distance` metros, pronto para interagir. */
-  approachNpc(variant: CharacterVariant, distance = 1.6): boolean {
-    const npc = this.npcs.find((n) => n.variant === variant);
+  approachNpc(role: string, distance = 1.6): boolean {
+    const npc = this.npcs.find((n) => this.roleOf(n) === role && n.model.root.isEnabled() && n.model.meshes.some((m) => m.isVisible));
     if (!npc) return false;
     const p = npc.getPosition();
     const f = npc.facing;
@@ -575,6 +587,7 @@ export class Game {
       prompt: document.getElementById("prompt-text")?.textContent ?? "",
       flags: this.flags.toJSON(),
       objectiveDone: Object.fromEntries((this.quests.get(QUEST_APURACAO)?.def.objectives ?? []).map((o) => [o.id, this.quests.isObjectiveDone(QUEST_APURACAO, o.id)])),
+      quests: this.quests.toJSON(),
       saveBackend: this.saves.backend,
       fps: Number(this.engine.getFps().toFixed(1)),
       audioReady: this.audio.isReady,
@@ -606,6 +619,7 @@ export class Game {
       zone: zoneAt(feet.x, feet.z, feet.y)?.id ?? null,
       navmesh: this.world.navmesh?.stats ?? null,
       lightsActive: this.world.sector17.lights.activeCount,
+      chapter1: this.chapter1?.snapshot() ?? null,
     };
   }
 
@@ -675,7 +689,7 @@ export class Game {
   // ---------------------------------------------------------------------
   private async startDialogue(npc: Npc, graphOverride?: DialogueGraph): Promise<void> {
     if (this.state !== "playing" || this.dialogue.isRunning) return;
-    const graph = graphOverride ?? DIALOGUES[npc.variant];
+    const graph = graphOverride ?? DIALOGUES[this.roleOf(npc)];
     if (!graph) return;
     if (this.driving) this.exitVehicle();
     this.state = "dialogue";
@@ -697,14 +711,14 @@ export class Game {
 
     const presenter: DialoguePresenter = {
       showLine: async (line: DialogueLine, speakerName: string) => {
-        const speakerNpc = this.npcs.find((n) => n.variant === line.speaker);
+        const speakerNpc = this.npcs.find((n) => this.roleOf(n) === line.speaker);
         const isMatias = line.speaker === "matias";
         for (const n of this.npcs) n.setTalking(n === speakerNpc);
         if (isMatias) this.matias.animator.play("Talk");
         else this.matias.animator.play("Idle");
         this.frameShot(npc, speakerNpc ?? null, line.shot ?? "speaker", isMatias);
         if (this.state === "dialogue") this.touch.setMode("dialogue");
-        const profile = CHARACTERS[(line.speaker in CHARACTERS ? line.speaker : "matias") as CharacterVariant].voice;
+        const profile = speakerVoice(line.speaker);
         this.hud.showSubtitle(speakerName, line.text, false);
         const playback = this.voice.speak(line.text, profile, line.voice);
         const minTime = new Promise<void>((r) => window.setTimeout(r, 650));
@@ -843,7 +857,12 @@ export class Game {
 
   private saving = false;
   async saveGame(notify: boolean): Promise<void> {
-    if (this.state === "loading" || this.state === "menu" || this.saving) return;
+    if (this.state === "loading" || this.state === "menu") return;
+    if (this.saving) {
+      // salvamento em curso: grava de novo ao terminar (o checkpoint de uma transição não se perde)
+      this.saveQueued = { notify: notify || (this.saveQueued?.notify ?? false) };
+      return;
+    }
     this.saving = true;
     try {
       await this.saves.save(this.buildSave());
@@ -856,6 +875,11 @@ export class Game {
       if (notify) this.menus.setPauseStatus("Falha ao salvar (ver console).");
     } finally {
       this.saving = false;
+      const queued = this.saveQueued;
+      if (queued) {
+        this.saveQueued = null;
+        void this.saveGame(queued.notify);
+      }
     }
   }
 
@@ -899,6 +923,7 @@ export class Game {
     });
     this.director = new MissionDirector(this.missionHost());
     this.director.syncFromFlags();
+    this.chapter1.syncFromFlags();
     if (typeof w.drivingId === "string") {
       const v = this.vehicles.find((x) => x.def.id === w.drivingId);
       if (v) window.setTimeout(() => this.enterVehicle(v), 50);
@@ -966,6 +991,7 @@ export class Game {
     for (const p of this.pickups) p.update(dt);
     this.effects.update(dt);
     if (this.state === "playing") this.director.update(dt);
+    this.chapter1.update(dt, this.state === "playing");
     // sistemas do Capítulo 1: timers só correm jogando (pausa/menus congelam), reparo, zonas, ruído, HUD
     if (this.state === "playing") {
       this.timers.update(dt);
@@ -1070,6 +1096,8 @@ export class Game {
     this.hud.onMissionContinue.on(() => {
       this.hud.hideMissionEnd();
       if (!this.touch.enabled) void this.input.requestPointerLock();
+      // fim do Capítulo 0 → amanhece o dia 2 (M2); fim do Capítulo 1 → solta a câmera da cena de partida
+      this.chapter1.onMissionContinue();
     });
     this.hud.onMissionMenu.on(() => {
       this.hud.hideMissionEnd();
@@ -1195,14 +1223,16 @@ export class Game {
     this.combat.revive();
     if (this.combat.weapon && this.combat.weapon.reserve < 12) this.combat.weapon.reserve = 12;
     this.player.locked = false;
-    const rp = this.director.respawnPoint;
-    this.player.teleport(rp, Math.PI);
+    const ch = this.chapter1.respawn();
+    const rp = ch ? new Vector3(ch.x, ch.y, ch.z) : this.director.respawnPoint;
+    const yaw = ch ? ch.yaw : Math.PI;
+    this.player.teleport(rp, yaw);
     this.camera.setWalkProfile();
-    this.camera.snapBehind(Math.PI);
+    this.camera.snapBehind(yaw);
     this.hud.setFade(true);
     window.setTimeout(() => this.hud.setFade(false), 200);
     if (!this.touch.enabled) void this.input.requestPointerLock();
-    this.hud.showNotice("De volta ao portão.", 2.5);
+    this.hud.showNotice(ch ? "De volta ao último ponto." : "De volta ao portão.", 2.5);
   }
 
   private applyCameraShake(dt: number): void {
@@ -1384,7 +1414,7 @@ export class Game {
     });
     // furtividade: voz de prisão (fala provisória sintetizada) e gatilho de detecção
     this.enemies.onDetected.on(({ count, hostile }) => {
-      const line = hostile ? "Última vez! Mãos para cima — vocês da oficina nunca aprendem." : count > 1 ? "De novo você? Parado aí, Setor 17, vou te levar." : "Toque de recolher! Parado aí — identifique-se!";
+      const line = this.chapter1?.detectionLine(count, hostile) ?? (hostile ? "Última vez! Mãos para cima — vocês da oficina nunca aprendem." : count > 1 ? "De novo você? Parado aí, Setor 17, vou te levar." : "Toque de recolher! Parado aí — identifique-se!");
       this.hud.showSubtitle(CHARACTERS.custodio.displayName, line, false);
       const playback = this.voice.speak(line, CHARACTERS.custodio.voice);
       void playback.done.then(() => {
@@ -1393,7 +1423,10 @@ export class Game {
       this.audio.playUi("objective", 0.5);
       this.script.fire({ kind: "detectado" });
     });
-    this.enemies.onCaught.on(() => this.hud.showNotice("Um Custódio alcançou Matias.", 3));
+    // prisão: no toque de recolher do Capítulo 1 Matias volta ao último ponto; fora dele só avisa
+    this.enemies.onCaught.on(() => {
+      if (!this.chapter1?.onCaught()) this.hud.showNotice("Um Custódio alcançou Matias.", 3);
+    });
   }
 
   /** Nó de diálogo alcançado → gatilho `{kind:"dialogo"}` (ligado a cada DialogueRunner novo). */
@@ -1466,6 +1499,98 @@ export class Game {
     return this.script.history[this.script.history.length - 1] ?? null;
   }
 
+  /** Papel do NPC no roteiro (variante do GLB, ou o papel provisório que ele interpreta). */
+  private roleOf(npc: Npc): string {
+    return this.npcRoles.get(npc) ?? npc.variant;
+  }
+
+  /** Recado pelo rádio da oficina (M3): o "interlocutor" é o próprio rádio — a câmera enquadra Matias e o aparelho. */
+  private startRadioAt(graph: DialogueGraph): void {
+    const pos = this.world.workshop.radio.getAbsolutePosition().clone();
+    const head = pos.add(new Vector3(0, 0.12, 0));
+    const radio = { variant: "radio", getPosition: () => pos, headPosition: head, setAttention: () => undefined, setTalking: () => undefined } as unknown as Npc;
+    void this.startRadioDialogue(radio, graph);
+  }
+
+  /** Capítulo 1: palco + diretor ligados ao jogo por uma ponte mínima (ver src/narrative/chapter1Director.ts). */
+  private setupChapter1(): void {
+    this.chapter1Stage = new Chapter1Stage({
+      scene: this.scene,
+      mats: this.world.mats,
+      flags: this.flags,
+      clues: this.clues,
+      timers: this.timers,
+      script: this.script,
+      cargo: this.cargo,
+      enemies: this.enemies,
+      quests: () => this.quests,
+      spawnPoint: (id) => this.world.spawns.get(id),
+      npcs: () => this.npcs,
+      roleOf: (n) => this.roleOf(n),
+      registerNpc: (npc, role) => {
+        this.npcRoles.set(npc, role);
+        npc.onInteract = (n) => void this.startDialogue(n);
+        this.npcs.push(npc);
+        this.interactables.push(npc);
+      },
+      createExaminable: (spec) => {
+        const ex = this.examine.create(spec);
+        this.interactables.push(ex);
+        return ex;
+      },
+      removeExaminable: (it) => {
+        this.examine.remove(it as Examinable);
+        this.interactables = this.interactables.filter((i) => i !== it);
+      },
+      vehicles: () => this.vehicles,
+      drivingId: () => this.driving?.def.id ?? null,
+      exitVehicle: () => {
+        if (this.driving) this.exitVehicle();
+      },
+      setCargo: (id) => this.setCargo(id),
+      spawnCustodio: (x, z, yaw, patrol, extra) => this.spawnCustodio(x, z, yaw, patrol, extra),
+      setCurfew: (on) => this.setCurfew(on),
+      navmesh: () => this.world.navmesh,
+      setDusk: (level, instant) => {
+        this.env.setDusk(level);
+        if (instant) this.env.updateTimeOfDay(10);
+      },
+      notice: (t, sec) => this.hud.showNotice(t, sec),
+      fade: (black) => this.hud.setFade(black),
+      setLetterbox: (on) => this.hud.setLetterbox(on),
+      showMissionEnd: (title, text, stats, opts) => {
+        this.input.exitPointerLock();
+        this.hud.showMissionEnd(title, text, stats, opts);
+      },
+      setCameraShot: (from, at) => {
+        if (!from || !at) {
+          this.camera.setFollow();
+          this.camera.snapBehind(this.driving?.heading ?? this.player.yaw);
+          return;
+        }
+        this.camera.setDialogueShot(from, at);
+      },
+      playerFeet: () => this.player.feet,
+      teleportPlayer: (p, yaw) => {
+        this.teleportPlayer(p.x, p.y, p.z, yaw);
+        this.player.setCrouched(false);
+      },
+      isPlaying: () => this.state === "playing",
+      startDialogue: (npc) => void this.startDialogue(npc),
+      startRadio: (graph) => this.startRadioAt(graph),
+      setAutoDrive: (c) => {
+        this.autoDrive = c;
+      },
+      save: () => void this.saveGame(false),
+      sting: (kind) => this.audio.playUi(kind === "vitoria" ? "chime" : "objective", 0.7),
+      playTime: () => this.playTime,
+      addShadowCasters: (meshes) => {
+        if (this.settings.quality !== "baixa") this.env.addShadowCasters(meshes);
+      },
+    });
+    this.chapter1 = new Chapter1Director(this.chapter1Stage);
+  }
+
   /** Diálogo pelo rádio: sem NPC presente, a câmera fica em Matias e a voz vem com estática. */
   private async startRadioDialogue(remote: Npc, graph: DialogueGraph): Promise<void> {
     if (this.state !== "playing" || this.dialogue.isRunning) return;
@@ -1533,6 +1658,11 @@ export class Game {
 
   private updateDriving(dt: number): void {
     const v = this.driving!;
+    if (this.autoDrive) {
+      v.controls = { throttle: this.autoDrive.throttle, steer: this.autoDrive.steer, handbrake: this.autoDrive.handbrake, lift: 0, boost: false };
+      this.hud.setVehicleSpeed(v.speedKmh, null);
+      return;
+    }
     const axis = this.input.rawAxis();
     const held = (a: GameAction) => this.input.isHeld(a);
     const throttle = Math.max(-1, Math.min(1, axis.y));

@@ -67,6 +67,8 @@ export class Hud {
   private missionEndTitle = el("mission-end-title");
   private missionEndText = el("mission-end-text");
   private missionEndStats = el("mission-end-stats");
+  private missionEndKicker = el("mission-end-kicker");
+  private missionEndContinue = el<HTMLButtonElement>("btn-mission-continue");
   readonly onRetry = new TypedEvent<void>();
   readonly onMissionContinue = new TypedEvent<void>();
   readonly onMissionMenu = new TypedEvent<void>();
@@ -265,7 +267,13 @@ export class Hud {
     this.death.classList.remove("visible");
   }
 
-  showMissionEnd(title: string, text: string, stats: Array<[string, string]>): void {
+  /**
+   * Tela de conclusão. `opts.kicker` troca a linha de cima (padrão "Capítulo 0 concluído"; o Capítulo 1 usa
+   * "Fim do Capítulo 1") e `opts.continueLabel` o texto do botão de continuar.
+   */
+  showMissionEnd(title: string, text: string, stats: Array<[string, string]>, opts: { kicker?: string; continueLabel?: string } = {}): void {
+    this.missionEndKicker.textContent = opts.kicker ?? "Capítulo 0 concluído";
+    this.missionEndContinue.textContent = opts.continueLabel ?? "Continuar explorando";
     this.missionEndTitle.textContent = title;
     this.missionEndText.textContent = text;
     this.missionEndStats.replaceChildren(
