@@ -97,6 +97,19 @@ export const CONSEQUENCES: ConsequenceRule[] = [
   // água do bairro (continua refletindo M1)
   { flag: F.carregamentoDecisao, equals: "registro", quest: QUEST_PARTIDA, effects: [{ kind: "agua", delta: 5 }] },
   { flag: F.carregamentoDecisao, equals: "silencio", quest: QUEST_PARTIDA, effects: [{ kind: "agua", delta: -5 }] },
+  // furtividade de M3 — vem ANTES das regras de Brandão: no Custódio, "detectado" tem a menor prioridade
+  // (preso/transferido/lista/hostil o substituem e o grafo acrescenta a linha `m4_detectado_extra`).
+  // Com "fala = última regra vence", esta posição faz a tabela coincidir com o `start` do grafo.
+  {
+    flag: F.detectado,
+    equals: true,
+    quest: QUEST_PARTIDA,
+    effects: [
+      { kind: "patrulha", nivel: "tensa" },
+      { kind: "fala", npc: "custodio", set: "m4_detectado" },
+      { kind: "aviso", texto: "Os Custódios sabem que alguém andou pela rua depois do toque." },
+    ],
+  },
   // entrega contra o tempo
   {
     flag: F.entregaNoPrazo,
@@ -167,17 +180,7 @@ export const CONSEQUENCES: ConsequenceRule[] = [
       { kind: "aviso", texto: "Brandão continua no depósito. O Custódio da praça será transferido no fim do mês." },
     ],
   },
-  // furtividade de M3
-  {
-    flag: F.detectado,
-    equals: true,
-    quest: QUEST_PARTIDA,
-    effects: [
-      { kind: "patrulha", nivel: "tensa" },
-      { kind: "fala", npc: "custodio", set: "m4_detectado" },
-      { kind: "aviso", texto: "Os Custódios sabem que alguém andou pela rua depois do toque." },
-    ],
-  },
+  // tiros em Custódios em M3 (prioridade máxima no Custódio e no comerciante)
   {
     flag: F.custodiosHostis,
     equals: true,
