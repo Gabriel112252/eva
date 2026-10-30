@@ -751,7 +751,9 @@ export function sector17KitEnabled(search?: string): boolean {
 }
 
 export function sector17KitUrl(): string {
-  return `${import.meta.env.BASE_URL}assets/environments/kit_tech.glb`;
+  // mesma extensão configurável dos outros GLBs (a versão publicada como artefato serve .glb.wasm)
+  const ext = (import.meta.env.VITE_CHARACTER_EXT as string | undefined) ?? ".glb";
+  return `${import.meta.env.BASE_URL}assets/environments/kit_tech${ext}`;
 }
 
 /**
