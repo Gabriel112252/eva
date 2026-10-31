@@ -8,20 +8,30 @@ import { MeshBuilder } from "@babylonjs/core/Meshes/meshBuilder";
 import { Mesh } from "@babylonjs/core/Meshes/mesh";
 import { Scene } from "@babylonjs/core/scene";
 import { SkyMaterial } from "@babylonjs/materials/sky/skyMaterial";
-import { DefaultRenderingPipeline } from "@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline";
-import { ImageProcessingConfiguration } from "@babylonjs/core/Materials/imageProcessingConfiguration";
+import type { DefaultRenderingPipeline } from "@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline";
 import { EquiRectangularCubeTexture } from "@babylonjs/core/Materials/Textures/equiRectangularCubeTexture";
+import { CubeTexture } from "@babylonjs/core/Materials/Textures/cubeTexture";
+import { PBRMaterial } from "@babylonjs/core/Materials/PBR/pbrMaterial";
+import type { Material } from "@babylonjs/core/Materials/material";
 import type { Camera } from "@babylonjs/core/Cameras/camera";
 import type { AbstractMesh } from "@babylonjs/core/Meshes/abstractMesh";
 import type { QualityLevel } from "@/core/settings";
 import { CANVAS_AVAILABLE } from "./textures";
 import { PlanetLayer } from "./planet";
+import { PostFx } from "./postfx";
+import { setCharacterShadingQuality, setRimLight } from "@/characters/characterShading";
+import "@babylonjs/core/Materials/Textures/Loaders/envTextureLoader";
 import "@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent";
 import "@babylonjs/core/Rendering/depthRendererSceneComponent";
 
 /**
  * Luz, céu, névoa, sombras e pós-processamento cinematográfico.
  * Hora da cena: ~14h30, outubro, São Paulo — sol alto a noroeste, luz quente e seca.
+ *
+ * Iluminação baseada em imagem: dois HDRIs CC0 reais (Poly Haven, via pmndrs/assets) pré-filtrados para PBR em
+ * `public/assets/env/*.env` — tarde (praça urbana com céu claro) e anoitecer (praça ao pôr do sol). Ambos foram
+ * girados para o brilho do céu cair no azimute do sol da cena e tiveram o disco do sol cortado (o sol é a
+ * DirectionalLight). O céu visível continua sendo o SkyMaterial (que escurece com a altitude da aeromoto).
  */
 export class Environment {
   readonly sun: DirectionalLight;
@@ -29,6 +39,16 @@ export class Environment {
   readonly skyDome: Mesh;
   readonly shadows: CascadedShadowGenerator | ShadowGenerator;
   pipeline: DefaultRenderingPipeline | null = null;
+  /** pós-processamento por qualidade (SSAO2, SSR, TAA, raios, LUT…) — ver postfx.ts */
+  post: PostFx | null = null;
+  /** IBL: HDRIs pré-filtrados (tarde/anoitecer); null em testes sem DOM ou se o arquivo falhar */
+  private envDay: CubeTexture | null = null;
+  private envDusk: CubeTexture | null = null;
+  private envFallback: EquiRectangularCubeTexture | null = null;
+  /** materiais congelados (freeze) descongelados enquanto o ambiente muda (o UBO congelado não relê IBL/emissivo) */
+  private thawed: Material[] = [];
+  private thawFrames = 0;
+  private startThawDone = false;
   /** 0 = tarde (14h30), 1 = anoitecer (18h40): o confronto da missão acontece ao cair da noite */
   private dusk = 0;
   private duskTarget = 0;
@@ -40,7 +60,7 @@ export class Environment {
   /** 0..1: o céu escurece até o espaço entre 8 km e 80 km */
   private altSpace = 0;
   /** valores-base da hora do dia (antes do efeito da altitude) */
-  private base = { fogDensity: 0.0085, skyLum: 0.9, skyTurb: 6.5, skyIntensity: 0.55, envIntensity: 0.7 };
+  private base = { ...DAY_ATMOSPHERE };
 
   constructor(
     readonly scene: Scene,
@@ -48,40 +68,46 @@ export class Environment {
   ) {
     scene.clearColor = new Color4(0.72, 0.78, 0.84, 1);
     scene.ambientColor = new Color3(0.18, 0.18, 0.2);
+    setCharacterShadingQuality(quality);
+    setRimLight(DAY_LIGHT.rim, DAY_LIGHT.rimIntensity, DAY_SUN_DIR.scale(-1));
 
     // --- Sol -------------------------------------------------------------
-    const sunDir = new Vector3(0.52, -0.68, -0.52).normalize();
+    const sunDir = DAY_SUN_DIR.clone();
     this.sun = new DirectionalLight("sol", sunDir, scene);
     this.sun.position = sunDir.scale(-80);
-    this.sun.intensity = 3.2;
-    this.sun.diffuse = new Color3(1.0, 0.93, 0.82);
+    this.sun.intensity = DAY_LIGHT.sun;
+    this.sun.diffuse = DAY_LIGHT.sunColor.clone();
     this.sun.specular = new Color3(1.0, 0.95, 0.88);
     this.sun.shadowMinZ = 1;
     this.sun.shadowMaxZ = 140;
 
     // --- Luz do céu ------------------------------------------------------
+    // com o IBL real o céu/chão já entram pelo HDRI; a hemisférica fica só como preenchimento leve
+    // (materiais não-PBR e o caso sem HDRI)
     this.sky = new HemisphericLight("ceu", new Vector3(0, 1, 0), scene);
-    this.sky.intensity = 0.55;
-    this.sky.diffuse = new Color3(0.78, 0.86, 1.0);
-    this.sky.groundColor = new Color3(0.42, 0.36, 0.3);
+    this.sky.intensity = DAY_ATMOSPHERE.skyIntensity;
+    this.sky.diffuse = DAY_LIGHT.skyColor.clone();
+    this.sky.groundColor = DAY_LIGHT.groundColor.clone();
     this.sky.specular = Color3.Black();
 
     // --- Névoa seca / poeira --------------------------------------------
     scene.fogMode = Scene.FOGMODE_EXP2;
-    scene.fogDensity = 0.0085;
-    scene.fogColor = new Color3(0.78, 0.76, 0.7);
+    scene.fogDensity = DAY_ATMOSPHERE.fogDensity;
+    scene.fogColor = DAY_LIGHT.fogColor.clone();
 
     // --- Céu -------------------------------------------------------------
     const skyMat = new SkyMaterial("ceu_material", scene);
     skyMat.backFaceCulling = false;
     skyMat.useSunPosition = true;
     skyMat.sunPosition = sunDir.scale(-100);
-    skyMat.turbidity = 6.5;
-    skyMat.luminance = 0.9;
-    skyMat.rayleigh = 1.6;
-    skyMat.mieCoefficient = 0.012;
-    skyMat.mieDirectionalG = 0.86;
+    skyMat.turbidity = DAY_ATMOSPHERE.skyTurb;
+    skyMat.luminance = DAY_ATMOSPHERE.skyLum;
+    skyMat.rayleigh = DAY_ATMOSPHERE.skyRayleigh;
+    skyMat.mieCoefficient = DAY_ATMOSPHERE.skyMie;
+    skyMat.mieDirectionalG = 0.84;
     skyMat.fogEnabled = false;
+    // o céu não escreve profundidade: SSAO/SSR/raios tratam o fundo como céu e o brilho do sol fica atrás dos prédios
+    skyMat.disableDepthWrite = true;
     this.skyMaterial = skyMat;
     // metade da aresta (200) × √3 ≈ 346 m < maxZ da câmera (500): o domo nunca é cortado pelo plano distante
     this.skyDome = MeshBuilder.CreateBox("ceu_domo", { size: 400 }, scene);
@@ -90,10 +116,29 @@ export class Environment {
     this.skyDome.isPickable = false;
     this.skyDome.applyFog = false;
 
-    // --- Ambiente para PBR (equirect procedural, sem arquivos externos) ----
-    const envTex = createProceduralEnvironment(scene);
-    if (envTex) scene.environmentTexture = envTex;
-    scene.environmentIntensity = 0.7;
+    // --- Ambiente para PBR: HDRI real pré-filtrado (.env) --------------------
+    this.envDay = loadEnvironment(
+      scene,
+      "tarde",
+      () => {
+        // a do anoitecer vem depois, sem disputar banda com a carga inicial
+        if (!this.envDusk) this.envDusk = loadEnvironment(scene, "anoitecer", undefined, () => (this.envDusk = null));
+      },
+      () => {
+        // sem o arquivo (404/rede): volta ao equirect procedural para os materiais PBR não ficarem esperando
+        this.envDay = null;
+        this.envFallback ??= createProceduralEnvironment(scene);
+        scene.environmentTexture = this.envFallback;
+      },
+    );
+    if (this.envDay) {
+      scene.environmentTexture = this.envDay;
+    } else {
+      // sem DOM (testes) ou sem suporte: equirect procedural
+      this.envFallback = createProceduralEnvironment(scene);
+      if (this.envFallback) scene.environmentTexture = this.envFallback;
+    }
+    scene.environmentIntensity = DAY_ATMOSPHERE.envIntensity;
 
     // --- Sombras ---------------------------------------------------------
     if (quality === "baixa") {
@@ -116,7 +161,8 @@ export class Environment {
       csm.cascadeBlendPercentage = 0.1;
       this.shadows = csm;
     }
-    this.shadows.setDarkness(0.25);
+    // sombra quase cheia: o preenchimento vem do IBL/hemisférica (antes 0,25 deixava o sol vazar e achatava a cena)
+    this.shadows.setDarkness(0.06);
 
     // --- Terra vista de cima (voo da aeromoto) ---------------------------
     try {
@@ -142,28 +188,84 @@ export class Environment {
 
   /** Interpola sol, céu, névoa e ambiente entre tarde e anoitecer (chamar a cada frame). */
   updateTimeOfDay(dt: number): void {
-    if (Math.abs(this.duskTarget - this.dusk) < 1e-4) return;
+    if (!this.startThawDone) {
+      // primeiros quadros do jogo: materiais congelados na carga reavaliam o shader uma vez com o conjunto final
+      // de luzes (pool do Setor 17, exclusões do kit) — corrige variantes com luzes fantasmas e evita compilar
+      // tudo isso no meio da transição para o anoitecer
+      this.startThawDone = true;
+      this.thawFrozenMaterials(10);
+    }
+    this.tickThaw();
+    if (Math.abs(this.duskTarget - this.dusk) < 1e-4) {
+      // o HDRI do anoitecer pode terminar de baixar depois da transição: troca assim que estiver pronto
+      if (this.syncEnvironmentTexture()) this.thawFrozenMaterials(4);
+      return;
+    }
     this.dusk += (this.duskTarget - this.dusk) * Math.min(1, dt * 0.35);
+    if (Math.abs(this.duskTarget - this.dusk) < 1e-4) this.dusk = this.duskTarget;
     const k = this.dusk;
     // sol baixo a oeste, alaranjado
-    const day = new Vector3(0.52, -0.68, -0.52).normalize();
-    const eve = new Vector3(0.86, -0.18, -0.48).normalize();
-    const dir = Vector3.Lerp(day, eve, k).normalize();
+    const dir = Vector3.Lerp(DAY_SUN_DIR, DUSK_SUN_DIR, k).normalize();
     this.sun.direction = dir;
     this.sun.position = dir.scale(-80);
-    this.sun.intensity = 3.2 * (1 - k) + 1.1 * k;
-    this.sun.diffuse = Color3.Lerp(new Color3(1.0, 0.93, 0.82), new Color3(1.0, 0.58, 0.32), k);
-    this.base.skyIntensity = 0.55 * (1 - k) + 0.28 * k;
-    this.sky.diffuse = Color3.Lerp(new Color3(0.78, 0.86, 1.0), new Color3(0.36, 0.4, 0.62), k);
-    this.sky.groundColor = Color3.Lerp(new Color3(0.42, 0.36, 0.3), new Color3(0.2, 0.16, 0.16), k);
-    this.scene.fogColor = Color3.Lerp(new Color3(0.78, 0.76, 0.7), new Color3(0.36, 0.3, 0.32), k);
-    this.base.fogDensity = 0.0085 + 0.004 * k;
-    this.base.envIntensity = 0.7 * (1 - k) + 0.35 * k;
+    this.sun.intensity = DAY_LIGHT.sun * (1 - k) + DUSK_LIGHT.sun * k;
+    this.sun.diffuse = Color3.Lerp(DAY_LIGHT.sunColor, DUSK_LIGHT.sunColor, k);
+    this.sky.diffuse = Color3.Lerp(DAY_LIGHT.skyColor, DUSK_LIGHT.skyColor, k);
+    this.sky.groundColor = Color3.Lerp(DAY_LIGHT.groundColor, DUSK_LIGHT.groundColor, k);
+    this.scene.fogColor = Color3.Lerp(DAY_LIGHT.fogColor, DUSK_LIGHT.fogColor, k);
     this.scene.ambientColor = Color3.Lerp(new Color3(0.18, 0.18, 0.2), new Color3(0.12, 0.1, 0.14), k);
     if (this.skyMaterial) this.skyMaterial.sunPosition = dir.scale(-100);
-    this.base.skyLum = 0.9 * (1 - k) + 0.45 * k;
-    this.base.skyTurb = 6.5 + 5 * k;
+    for (const key of Object.keys(DAY_ATMOSPHERE) as Array<keyof typeof DAY_ATMOSPHERE>) this.base[key] = DAY_ATMOSPHERE[key] * (1 - k) + DUSK_ATMOSPHERE[key] * k;
+    // IBL: troca o HDRI na metade da transição; a intensidade passa por um vale ali para a troca não estalar
+    this.syncEnvironmentTexture();
+    if (this.envDay) this.base.envIntensity *= 0.55 + 0.45 * Math.min(1, Math.abs(k - 0.5) * 4);
+    this.applyNightEmissives(k);
+    this.post?.setTimeOfDay(k);
+    setRimLight(Color3.Lerp(DAY_LIGHT.rim, DUSK_LIGHT.rim, k), DAY_LIGHT.rimIntensity * (1 - k) + DUSK_LIGHT.rimIntensity * k, dir.scale(-1));
     this.applyAtmosphere();
+    // UBO de materiais congelados guarda IBL/emissivo: descongela até a transição assentar (+ alguns quadros)
+    this.thawFrozenMaterials(4);
+  }
+
+  /** HDRI de acordo com a hora (anoitecer a partir da metade da transição, se já carregou). true = trocou. */
+  private syncEnvironmentTexture(): boolean {
+    const tex = this.dusk > 0.5 && this.envDusk?.isReady() ? this.envDusk : this.envDay;
+    if (!tex || this.scene.environmentTexture === tex) return false;
+    this.scene.environmentTexture = tex;
+    this.post?.setEnvironmentTexture(tex);
+    return true;
+  }
+
+  /** Janelas acesas e LEDs um pouco mais vivos à noite (blockout e kit). */
+  private applyNightEmissives(k: number): void {
+    const boost = 1 + 0.45 * k;
+    for (const [name, base] of NIGHT_EMISSIVES) {
+      const m = this.scene.getMaterialByName(name);
+      if (m instanceof PBRMaterial) m.emissiveIntensity = base * boost;
+    }
+  }
+
+  /** Descongela os materiais congelados por `frames` quadros (o UBO de um material congelado não é reenviado). */
+  private thawFrozenMaterials(frames: number): void {
+    if (this.thawFrames === 0) {
+      for (const m of this.scene.materials) {
+        if (m.isFrozen) {
+          m.unfreeze();
+          this.thawed.push(m);
+        }
+      }
+    }
+    this.thawFrames = Math.max(this.thawFrames, frames);
+  }
+
+  private tickThaw(): void {
+    if (this.thawFrames <= 0) return;
+    this.thawFrames--;
+    if (this.thawFrames === 0) {
+      const alive = new Set(this.scene.materials);
+      for (const m of this.thawed) if (alive.has(m)) m.freeze();
+      this.thawed = [];
+    }
   }
 
   /**
@@ -195,8 +297,8 @@ export class Environment {
       // no SkyMaterial, luminance maior = céu mais escuro (fator log2(2/l⁴) → 0 em l≈1,19): espaço ≈ 1,15
       this.skyMaterial.luminance = this.base.skyLum * (1 - aSpace) + 1.15 * aSpace;
       this.skyMaterial.turbidity = this.base.skyTurb * (1 - aSpace) + 1.0 * aSpace;
-      this.skyMaterial.rayleigh = 1.6 * (1 - aSpace);
-      this.skyMaterial.mieCoefficient = 0.012 * (1 - aSpace) + 0.0005 * aSpace;
+      this.skyMaterial.rayleigh = this.base.skyRayleigh * (1 - aSpace);
+      this.skyMaterial.mieCoefficient = this.base.skyMie * (1 - aSpace) + 0.0005 * aSpace;
     }
   }
 
@@ -209,56 +311,144 @@ export class Environment {
     for (const m of meshes) this.shadows.addShadowCaster(m, true);
   }
 
-  /** Pós-processamento: tonemapping ACES, bloom suave, vinheta, grão e DOF (diálogo). */
+  /**
+   * Pós-processamento por qualidade (postfx.ts): SSAO2, SSR, TAA, raios de sol, bloom, LUT de gradação, vinheta,
+   * grão e DOF de diálogo. Devolve o pipeline padrão (tonemapping/bloom/DOF) por compatibilidade.
+   */
   attachPostProcessing(camera: Camera): DefaultRenderingPipeline {
-    this.pipeline?.dispose();
-    const hdr = this.quality !== "baixa";
-    const p = new DefaultRenderingPipeline("cine", hdr, this.scene, [camera]);
-    p.fxaaEnabled = true;
-    p.samples = this.quality === "alta" ? 4 : 1;
-    p.imageProcessingEnabled = true;
-    p.imageProcessing.toneMappingEnabled = true;
-    p.imageProcessing.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
-    p.imageProcessing.exposure = 1.05;
-    p.imageProcessing.contrast = 1.12;
-    p.imageProcessing.vignetteEnabled = true;
-    p.imageProcessing.vignetteWeight = 1.6;
-    p.imageProcessing.vignetteStretch = 0.4;
-    p.imageProcessing.vignetteColor = new Color4(0.02, 0.015, 0.01, 0);
-    p.imageProcessing.colorCurvesEnabled = true;
-    if (p.imageProcessing.colorCurves) {
-      p.imageProcessing.colorCurves.globalSaturation = -8;
-      p.imageProcessing.colorCurves.shadowsHue = 215;
-      p.imageProcessing.colorCurves.shadowsSaturation = 12;
-      p.imageProcessing.colorCurves.highlightsHue = 35;
-      p.imageProcessing.colorCurves.highlightsSaturation = 10;
+    this.post?.dispose();
+    this.post = new PostFx(this.scene, camera, this.quality, this.sun);
+    this.post.setTimeOfDay(this.dusk);
+    this.pipeline = this.post.pipeline;
+    // média/alta ligam o pré-passe (SSAO2/SSR/TAA): materiais congelados na carga continuariam com shaders sem as
+    // saídas do pré-passe (normal/profundidade/velocidade) e o SSAO os pintaria de preto. O pré-passe só fica
+    // ativo depois de um quadro (atualização preguiçosa do Babylon): recompila depois do primeiro quadro.
+    if (this.scene.prePassRenderer) {
+      this.recompiling++;
+      this.scene.onAfterRenderObservable.addOnce(() => {
+        this.recompiling--;
+        if (this.scene.prePassRenderer?.enabled) this.recompileFrozenMaterials();
+      });
     }
-    if (this.quality !== "baixa") {
-      p.bloomEnabled = true;
-      p.bloomThreshold = 0.85;
-      p.bloomWeight = 0.12;
-      p.bloomKernel = 48;
-      p.bloomScale = 0.5;
-      p.grainEnabled = true;
-      p.grain.intensity = 7;
-      p.grain.animated = true;
-      p.chromaticAberrationEnabled = true;
-      p.chromaticAberration.aberrationAmount = 4;
-      p.chromaticAberration.radialIntensity = 0.6;
+    return this.pipeline;
+  }
+
+  /**
+   * As malhas fundidas do kit (`kit_*`, sector17Kit.ts) chegam com normais opostas ao sentido dos triângulos em
+   * relação à convenção das malhas do Babylon (medido no jogo: 0 % de triângulos "invertidos" no kit contra 100 % nas
+   * caixas do MeshBuilder com a mesma orientação de face). Antes isso só iluminava o lado de sombra das peças
+   * (o pilar do viaduto voltado para o sul aparecia claro); com o pré-passe, o SSAO lê a normal virada para dentro,
+   * amostra dentro da parede e pinta de preto com halo. `forceNormalForward` orienta a normal de cada fragmento pela
+   * face geométrica (derivadas de tela) — corrige luz e SSAO sem mexer na geometria do kit.
+   */
+  private fixKitNormals(): void {
+    const mats = new Set<PBRMaterial>();
+    for (const mesh of this.scene.meshes) if (/^kit_/.test(mesh.name) && mesh.material instanceof PBRMaterial) mats.add(mesh.material);
+    for (const mat of mats) mat.forceNormalForward = true;
+  }
+
+  /** Materiais ainda recompilando com as saídas do pré-passe (testes/capturas esperam chegar a zero). */
+  get recompilePending(): number {
+    return this.recompiling;
+  }
+
+  private recompiling = 0;
+
+  /**
+   * Recompila em segundo plano todo material congelado para todas as malhas que o usam (com e sem instâncias),
+   * e recongela cada um quando termina. Enquanto isso o Babylon segue desenhando com o shader anterior.
+   */
+  private recompileFrozenMaterials(): void {
+    this.fixKitNormals();
+    const byMaterial = new Map<Material, AbstractMesh[]>();
+    for (const mesh of this.scene.meshes) {
+      const mat = mesh.material;
+      if (!mat || !mat.isFrozen || mesh.getClassName() === "InstancedMesh" || mesh.getTotalVertices() === 0) continue;
+      const list = byMaterial.get(mat);
+      if (list) list.push(mesh);
+      else byMaterial.set(mat, [mesh]);
     }
-    p.depthOfFieldEnabled = false;
-    p.depthOfField.fStop = 2.2;
-    p.depthOfField.focalLength = 60;
-    p.depthOfField.focusDistance = 2500;
-    this.pipeline = p;
-    return p;
+    for (const [mat, meshes] of byMaterial) {
+      mat.unfreeze();
+      this.recompiling++;
+      const jobs: Array<Promise<void>> = [];
+      for (const mesh of meshes) {
+        const m = mesh as AbstractMesh & { instances?: unknown[]; hasThinInstances?: boolean };
+        const instanced = (m.instances?.length ?? 0) > 0 || !!m.hasThinInstances;
+        jobs.push(mat.forceCompilationAsync(mesh, { useInstances: instanced }).catch(() => undefined));
+        if (instanced) jobs.push(mat.forceCompilationAsync(mesh, { useInstances: false }).catch(() => undefined));
+      }
+      void Promise.all(jobs).then(() => {
+        this.recompiling--;
+        // no meio de uma transição de hora do dia o material fica descongelado até ela assentar (tickThaw)
+        if (this.thawFrames > 0) this.thawed.push(mat);
+        else mat.freeze();
+      });
+    }
   }
 
   setDialogueFocus(enabled: boolean, focusDistanceMeters = 2.5): void {
-    if (!this.pipeline) return;
-    if (this.quality === "baixa") return;
-    this.pipeline.depthOfFieldEnabled = enabled;
-    this.pipeline.depthOfField.focusDistance = focusDistanceMeters * 1000;
+    this.post?.setDialogueFocus(enabled, focusDistanceMeters);
+  }
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Hora do dia: tarde (14h30) e anoitecer (18h40)
+// ---------------------------------------------------------------------------------------------------------
+
+const DAY_SUN_DIR = new Vector3(0.52, -0.68, -0.52).normalize();
+const DUSK_SUN_DIR = new Vector3(0.86, -0.18, -0.48).normalize();
+
+/** Luz e cor por hora do dia (interpoladas em updateTimeOfDay). */
+const DAY_LIGHT = {
+  sun: 3.0,
+  sunColor: new Color3(1.0, 0.86, 0.68),
+  skyColor: new Color3(0.72, 0.82, 1.0),
+  groundColor: new Color3(0.45, 0.38, 0.3),
+  fogColor: new Color3(0.57, 0.6, 0.62),
+  rim: new Color3(1.0, 0.86, 0.68),
+  rimIntensity: 0.32,
+};
+const DUSK_LIGHT = {
+  sun: 1.5,
+  sunColor: new Color3(1.0, 0.52, 0.26),
+  skyColor: new Color3(0.32, 0.38, 0.62),
+  groundColor: new Color3(0.2, 0.15, 0.14),
+  fogColor: new Color3(0.27, 0.28, 0.33),
+  rim: new Color3(1.0, 0.55, 0.3),
+  rimIntensity: 0.4,
+};
+/** Parâmetros numéricos da atmosfera (a altitude da aeromoto é aplicada por cima, em applyAtmosphere). */
+const DAY_ATMOSPHERE = { fogDensity: 0.0072, skyLum: 0.62, skyTurb: 9, skyRayleigh: 1.35, skyMie: 0.009, skyIntensity: 0.2, envIntensity: 1.1 };
+const DUSK_ATMOSPHERE = { fogDensity: 0.0105, skyLum: 0.5, skyTurb: 12, skyRayleigh: 1.4, skyMie: 0.014, skyIntensity: 0.1, envIntensity: 0.8 };
+
+/** Emissivos que ganham força ao anoitecer: nome do material → intensidade de dia. */
+const NIGHT_EMISSIVES: Array<[string, number]> = [
+  ["mat_vidro_aceso", 1.6],
+  ["mat_lampada", 3.0],
+  ["mat_led_vermelho", 2.5],
+  ["mat_led_verde", 2.0],
+  ["kit_paleta", 4],
+];
+
+/** HDRI pré-filtrado (`public/assets/env/<nome>.env`); null sem DOM (testes headless). */
+function loadEnvironment(scene: Scene, name: string, onLoad?: () => void, onError?: () => void): CubeTexture | null {
+  if (!CANVAS_AVAILABLE) return null;
+  try {
+    // VITE_ENV_EXT: hospedagens que restringem extensões (como VITE_CHARACTER_EXT para os .glb); o loader recebe
+    // ".env" explicitamente, então o nome do arquivo não importa. Se nada carregar, volta ao equirect procedural.
+    const ext = (import.meta.env.VITE_ENV_EXT as string | undefined) ?? ".env";
+    const url = `${import.meta.env.BASE_URL}assets/env/${name}${ext}`;
+    const fail = (msg?: string) => {
+      console.warn(`[ambiente] HDRI ${name} indisponível`, msg);
+      onError?.();
+    };
+    const tex = new CubeTexture(url, scene, null, false, null, () => onLoad?.(), fail, undefined, true, ".env", false);
+    tex.name = `ibl_${name}`;
+    return tex;
+  } catch (err) {
+    console.warn(`[ambiente] HDRI ${name} indisponível`, err);
+    return null;
   }
 }
 
