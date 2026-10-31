@@ -129,14 +129,14 @@
       "file": "matias.glb",
       "label": "Matias (58) — protagonista",
       "height": 1.76,
-      "triangles": 34614,
+      "triangles": 46092,
       "bones": 52
     },
     "miriam": {
       "file": "miriam.glb",
       "label": "Miriam (36) — arquivista da Apuração",
       "height": 1.68,
-      "triangles": 27783,
+      "triangles": 47162,
       "bones": 52
     },
     "custodio": {
@@ -164,35 +164,35 @@
       "file": "saqueador_a.glb",
       "label": "Saqueador (desviador de cargas) — variante A",
       "height": 1.78,
-      "triangles": 21915,
+      "triangles": 34357,
       "bones": 52
     },
     "saqueador_b": {
       "file": "saqueador_b.glb",
       "label": "Saqueador (desviador de cargas) — variante B",
       "height": 1.74,
-      "triangles": 25862,
+      "triangles": 45506,
       "bones": 52
     },
     "comerciante": {
       "file": "comerciante.glb",
       "label": "Comerciante do bairro",
       "height": 1.7,
-      "triangles": 22652,
+      "triangles": 34973,
       "bones": 52
     },
     "raquel": {
       "file": "raquel.glb",
       "label": "Raquel (40) — médica da comunidade",
       "height": 1.65,
-      "triangles": 29366,
+      "triangles": 41063,
       "bones": 52
     },
     "ana": {
       "file": "ana.glb",
       "label": "Ana (15) — filha de Matias",
       "height": 1.6,
-      "triangles": 22342,
+      "triangles": 39953,
       "bones": 52
     }
   }
