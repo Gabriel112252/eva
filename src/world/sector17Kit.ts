@@ -1191,6 +1191,9 @@ async function instantiateKit(ctx: WorldContext, plan: Sector17KitPlan, url: str
       m.rotation.setAll(0);
       m.scaling.setAll(1);
       m.bakeTransformIntoVertices(bake);
+      // peças espelhadas no GLB saem do bake com a ordem dos vértices trocada em relação às normais (metade das
+      // faces do kit ficava "do avesso": lado da sombra iluminado, SSAO com halo). Normaliza pela própria normal.
+      normalizeWinding(m);
       // o bake devolve as submalhas antigas: caixa envolvente recalculada (senão o culling usa a do nó original)
       m.refreshBoundingInfo();
       for (const sm of m.subMeshes) sm.refreshBoundingInfo();
@@ -1386,4 +1389,43 @@ async function placeKitSigns(ctx: WorldContext, plan: Sector17KitPlan): Promise<
   }
   excludeLocalLights(ctx.scene, meshes);
   await Promise.all(meshes.map((m) => m.material?.forceCompilationAsync(m).catch(() => undefined)));
+}
+
+
+/**
+ * Deixa a ordem dos vértices de cada triângulo coerente com as normais guardadas, na mesma convenção das malhas do
+ * MeshBuilder: conta, numa amostra de triângulos, quantos estão do avesso em relação à normal guardada; se forem
+ * maioria, inverte as faces. Também devolve a orientação da malha ao padrão da cena (o carregador glTF deixa a
+ * orientação do espelhamento, que já foi absorvido pelo bake).
+ */
+export function normalizeWinding(m: Mesh): boolean {
+  const pos = m.getVerticesData(VertexBuffer.PositionKind);
+  const nor = m.getVerticesData(VertexBuffer.NormalKind);
+  const idx = m.getIndices();
+  // orientação padrão do Babylon para a cena (a mesma das malhas do MeshBuilder: 1 em mão esquerda, 0 em direita)
+  const rightHanded = m.getScene().useRightHandedSystem;
+  m.sideOrientation = rightHanded ? 0 : 1;
+  if (!pos || !nor || !idx || idx.length < 3) return false;
+  const tris = idx.length / 3;
+  const step = Math.max(1, Math.floor(tris / 400));
+  let inverted = 0;
+  let correct = 0;
+  for (let t = 0; t < tris; t += step) {
+    const a = idx[t * 3]!, b = idx[t * 3 + 1]!, c = idx[t * 3 + 2]!;
+    const e1x = pos[b * 3]! - pos[a * 3]!, e1y = pos[b * 3 + 1]! - pos[a * 3 + 1]!, e1z = pos[b * 3 + 2]! - pos[a * 3 + 2]!;
+    const e2x = pos[c * 3]! - pos[a * 3]!, e2y = pos[c * 3 + 1]! - pos[a * 3 + 1]!, e2z = pos[c * 3 + 2]! - pos[a * 3 + 2]!;
+    const gx = e1y * e2z - e1z * e2y, gy = e1z * e2x - e1x * e2z, gz = e1x * e2y - e1y * e2x;
+    const nx = (nor[a * 3]! + nor[b * 3]! + nor[c * 3]!), ny = (nor[a * 3 + 1]! + nor[b * 3 + 1]! + nor[c * 3 + 1]!), nz = (nor[a * 3 + 2]! + nor[b * 3 + 2]! + nor[c * 3 + 2]!);
+    const d = gx * nx + gy * ny + gz * nz;
+    // convenção medida nas malhas do MeshBuilder em mão esquerda: a normal geométrica (b−a)×(c−a) aponta para o
+    // lado oposto da normal guardada (em mão direita, o contrário)
+    const dd = rightHanded ? -d : d;
+    if (dd > 1e-12) inverted++;
+    else if (dd < -1e-12) correct++;
+  }
+  if (inverted > correct) {
+    m.flipFaces(false);
+    return true;
+  }
+  return false;
 }
