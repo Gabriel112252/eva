@@ -55,14 +55,18 @@ try {
     await page.click("#btn-new", { timeout: 300_000 });
     await page.waitForFunction(() => window.eva.state === "playing", null, { timeout: 300_000, polling: 500 });
     const loadS = (Date.now() - t0) / 1000;
+    // média/alta: espera o ambiente terminar de recompilar os materiais congelados com as saídas do pré-passe
+    const tr = Date.now();
+    await page.waitForFunction(() => !(window.eva["env"]?.recompilePending > 0), null, { timeout: 900_000, polling: 1000 });
+    const recompileS = (Date.now() - tr) / 1000;
     await page.waitForTimeout(800);
     await page.evaluate(() => {
       const g = window.eva;
       g.captureStart(30);
       g["hud"].hide();
     });
-    metrics[quality] = { loadSeconds: Number(loadS.toFixed(1)), shots: {} };
-    console.log(`[${quality}] jogo aberto em ${loadS.toFixed(0)} s`);
+    metrics[quality] = { loadSeconds: Number(loadS.toFixed(1)), recompileSeconds: Number(recompileS.toFixed(1)), shots: {} };
+    console.log(`[${quality}] jogo aberto em ${loadS.toFixed(0)} s (+ ${recompileS.toFixed(0)} s recompilando materiais com o pré-passe)`);
     let first = true;
     for (const [name, eye, at, feet, yaw, dusk, fov] of SHOTS.filter(([n]) => !ONLY || ONLY.split(",").includes(n))) {
       // o primeiro enquadramento depois da carga compila os pós e boa parte dos materiais: assenta mais

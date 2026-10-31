@@ -320,7 +320,56 @@ export class Environment {
     this.post = new PostFx(this.scene, camera, this.quality, this.sun);
     this.post.setTimeOfDay(this.dusk);
     this.pipeline = this.post.pipeline;
+    // média/alta ligam o pré-passe (SSAO2/SSR/TAA): materiais congelados na carga continuariam com shaders sem as
+    // saídas do pré-passe (normal/profundidade/velocidade) e o SSAO os pintaria de preto. O pré-passe só fica
+    // ativo depois de um quadro (atualização preguiçosa do Babylon): recompila depois do primeiro quadro.
+    if (this.scene.prePassRenderer) {
+      this.recompiling++;
+      this.scene.onAfterRenderObservable.addOnce(() => {
+        this.recompiling--;
+        if (this.scene.prePassRenderer?.enabled) this.recompileFrozenMaterials();
+      });
+    }
     return this.pipeline;
+  }
+
+  /** Materiais ainda recompilando com as saídas do pré-passe (testes/capturas esperam chegar a zero). */
+  get recompilePending(): number {
+    return this.recompiling;
+  }
+
+  private recompiling = 0;
+
+  /**
+   * Recompila em segundo plano todo material congelado para todas as malhas que o usam (com e sem instâncias),
+   * e recongela cada um quando termina. Enquanto isso o Babylon segue desenhando com o shader anterior.
+   */
+  private recompileFrozenMaterials(): void {
+    const byMaterial = new Map<Material, AbstractMesh[]>();
+    for (const mesh of this.scene.meshes) {
+      const mat = mesh.material;
+      if (!mat || !mat.isFrozen || mesh.getClassName() === "InstancedMesh" || mesh.getTotalVertices() === 0) continue;
+      const list = byMaterial.get(mat);
+      if (list) list.push(mesh);
+      else byMaterial.set(mat, [mesh]);
+    }
+    for (const [mat, meshes] of byMaterial) {
+      mat.unfreeze();
+      this.recompiling++;
+      const jobs: Array<Promise<void>> = [];
+      for (const mesh of meshes) {
+        const m = mesh as AbstractMesh & { instances?: unknown[]; hasThinInstances?: boolean };
+        const instanced = (m.instances?.length ?? 0) > 0 || !!m.hasThinInstances;
+        jobs.push(mat.forceCompilationAsync(mesh, { useInstances: instanced }).catch(() => undefined));
+        if (instanced) jobs.push(mat.forceCompilationAsync(mesh, { useInstances: false }).catch(() => undefined));
+      }
+      void Promise.all(jobs).then(() => {
+        this.recompiling--;
+        // no meio de uma transição de hora do dia o material fica descongelado até ela assentar (tickThaw)
+        if (this.thawFrames > 0) this.thawed.push(mat);
+        else mat.freeze();
+      });
+    }
   }
 
   setDialogueFocus(enabled: boolean, focusDistanceMeters = 2.5): void {
