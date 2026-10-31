@@ -9,7 +9,7 @@ import { QUESTS, QUEST_APURACAO, QUEST_CARREGAMENTO } from "@/data/quests";
 import { CLUES } from "@/data/clues";
 import { CAP1_FLAGS, QUEST_A_VIGILIA, QUEST_PARTIDA, QUEST_RASTRO_DO_LOTE } from "@/data/cap1Contracts";
 import { CAP1_AUX_FLAGS, DIALOGUES, DIALOGUE_RADIO_ELIAS, SPEAKER_NAMES } from "@/data/dialogues";
-import { PROVISIONAL_CAST, speakerVoice, CHARACTERS } from "@/data/characters";
+import { CHAPTER1_CAST, PROVISIONAL_CAST, speakerVoice, CHARACTERS } from "@/data/characters";
 import {
   CAP1_POINTS,
   CAP1_SPOTS,
@@ -334,11 +334,12 @@ describe("Capítulo 1 — fase e posições a partir do estado salvo", () => {
     expect(npcLayout("m4", f).ana).toBeNull(); // no banco do passageiro
   });
 
-  it("elenco provisório declarado: Brandão e Elias reaproveitam GLBs existentes e têm voz própria", () => {
-    for (const info of Object.values(PROVISIONAL_CAST)) {
+  it("elenco do capítulo: Brandão e Elias usam os próprios GLBs, nenhum papel emprestado, voz própria", () => {
+    expect(Object.keys(PROVISIONAL_CAST)).toHaveLength(0);
+    for (const info of Object.values(CHAPTER1_CAST)) {
+      expect(info.model).toBe(info.role);
       expect(CHARACTERS[info.model]).toBeDefined();
       expect(SPEAKER_NAMES[info.role]).toBe(info.displayName);
-      expect(info.pending.length).toBeGreaterThan(10);
       expect(speakerVoice(info.role)).toEqual(info.voice);
       expect(speakerVoice(info.role)).not.toEqual(CHARACTERS.matias.voice);
     }

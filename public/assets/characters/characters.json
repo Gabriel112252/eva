@@ -143,7 +143,21 @@
       "file": "custodio.glb",
       "label": "Custódio da praça — segurança",
       "height": 1.83,
-      "triangles": 21868,
+      "triangles": 44207,
+      "bones": 52
+    },
+    "brandao": {
+      "file": "brandao.glb",
+      "label": "Samuel Brandão (44) — oficial de saída do depósito",
+      "height": 1.74,
+      "triangles": 37089,
+      "bones": 52
+    },
+    "elias": {
+      "file": "elias.glb",
+      "label": "Elias Nobre (24) — mensageiro dos Silenciosos",
+      "height": 1.79,
+      "triangles": 39204,
       "bones": 52
     },
     "saqueador_a": {
