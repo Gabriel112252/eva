@@ -19,14 +19,28 @@ function glbMeshNames(bytes: Uint8Array): string[] {
   return json.meshes.map((m) => m.name);
 }
 
-/** Variantes geradas com o passe de roupas volumétricas/equipamento (30/10/2026) e o que cada uma precisa ter. */
-const OUTFITTED: Record<"brandao" | "elias" | "custodio", string[]> = {
+/** Passe de roupas volumétricas/equipamento (30–31/10/2026): o que cada variante precisa ter (nomes de malha). */
+const OUTFITTED: Record<CharacterVariant, string[]> = {
+  // jaqueta de engenheiro com decote em V (camisa à mostra), couro (luvas, alças, cinto, joelheiras), mochila, óculos
+  matias: ["matias_jacket", "matias_shirt", "matias_leather", "matias_pack", "matias_frame"],
+  // túnica de linho até o joelho, faixa índigo, filete dourado, lenço
+  miriam: ["miriam_jacket", "miriam_indigo", "miriam_trim", "miriam_scarf"],
+  // armadura humana fabricável: placas de cerâmica, colete índigo, detalhes de cobre e índigo, viseira do capacete
+  custodio: ["custodio_plate", "custodio_vest", "custodio_trim", "custodio_indigo", "custodio_visor"],
   // farda cinza sem armadura: gola alta, filetes de cobre, prancheta, papel (crachá/lista)
   brandao: ["brandao_shirt", "brandao_collar", "brandao_trim", "brandao_clipboard", "brandao_paper"],
   // jaqueta aberta (com capuz), camiseta, lenço, bolsa transversal com papéis
   elias: ["elias_jacket", "elias_shirt", "elias_scarf", "elias_bag", "elias_papers"],
-  // armadura humana fabricável: placas de cerâmica, colete índigo, detalhes de cobre e índigo, viseira do capacete
-  custodio: ["custodio_plate", "custodio_vest", "custodio_trim", "custodio_indigo", "custodio_visor"],
+  // colete acolchoado, boné com aba, lenço no pescoço, remendo no joelho esquerdo
+  saqueador_a: ["saqueador_a_jacket", "saqueador_a_cap", "saqueador_a_scarf", "saqueador_a_knee_L"],
+  // jaqueta aberta de mangas arregaçadas, camiseta, lenço na cabeça, remendo no joelho direito
+  saqueador_b: ["saqueador_b_jacket", "saqueador_b_shirt", "saqueador_b_scarf", "saqueador_b_knee_R"],
+  // camisa solta e avental de feira (pano + alça)
+  comerciante: ["comerciante_shirt", "comerciante_apron", "comerciante_apron_strap"],
+  // jaleco aberto sobre blusa, estetoscópio (tubo + metal)
+  raquel: ["raquel_jacket", "raquel_shirt", "raquel_dark", "raquel_metal"],
+  // moletom folgado, tênis de sola clara
+  ana: ["ana_jacket", "ana_sole"],
 };
 
 describe("Personagens GLB (modelos rigados reais)", () => {
@@ -90,9 +104,9 @@ describe("Personagens GLB (modelos rigados reais)", () => {
     }
   });
 
-  it("Brandão, Elias e o Custódio carregam no Babylon com o mesmo rig (52 ossos) e todos os clipes", async () => {
+  it("o elenco inteiro carrega no Babylon com o mesmo rig (52 ossos), todos os clipes e a altura declarada", async () => {
     const { engine, scene } = await createHeadlessScene(false);
-    for (const v of ["brandao", "elias", "custodio"] as const) {
+    for (const v of variants) {
       const model = await loadCharacter(scene, v, `_${v}`, characterDataUrl(v));
       expect(model.skeleton?.bones.length, v).toBe(52);
       for (const clip of ANIMATION_CLIPS) expect(model.animator.has(clip), `${v} ${clip}`).toBe(true);
@@ -106,6 +120,16 @@ describe("Personagens GLB (modelos rigados reais)", () => {
       }
       expect(top, v).toBeGreaterThan(CHARACTERS[v].height - 0.03);
       expect(top, v).toBeLessThan(CHARACTERS[v].height + 0.08);
+      if (v === "raquel" || v === "miriam") {
+        // jaleco e túnica descem abaixo do gancho (saia extrudada da barra), não são mais uma bermuda colada
+        const jacket = model.meshes.find((m) => m.name.endsWith(`${v}_jacket`))!;
+        expect(jacket, `${v}: jaleco/túnica`).toBeDefined();
+        const pos = jacket.getVerticesData("position")!;
+        const wm = jacket.computeWorldMatrix(true);
+        let low = Infinity;
+        for (let i = 0; i < pos.length; i += 3) low = Math.min(low, Vector3.TransformCoordinates(new Vector3(pos[i]!, pos[i + 1]!, pos[i + 2]!), wm).y);
+        expect(low, v).toBeLessThan(CHARACTERS[v].height * 0.4);
+      }
       model.dispose();
     }
     engine.dispose();
