@@ -333,6 +333,20 @@ export class Environment {
     return this.pipeline;
   }
 
+  /**
+   * As malhas fundidas do kit (`kit_*`, sector17Kit.ts) chegam com normais opostas ao sentido dos triângulos em
+   * relação à convenção das malhas do Babylon (medido no jogo: 0 % de triângulos "invertidos" no kit contra 100 % nas
+   * caixas do MeshBuilder com a mesma orientação de face). Antes isso só iluminava o lado de sombra das peças
+   * (o pilar do viaduto voltado para o sul aparecia claro); com o pré-passe, o SSAO lê a normal virada para dentro,
+   * amostra dentro da parede e pinta de preto com halo. `forceNormalForward` orienta a normal de cada fragmento pela
+   * face geométrica (derivadas de tela) — corrige luz e SSAO sem mexer na geometria do kit.
+   */
+  private fixKitNormals(): void {
+    const mats = new Set<PBRMaterial>();
+    for (const mesh of this.scene.meshes) if (/^kit_/.test(mesh.name) && mesh.material instanceof PBRMaterial) mats.add(mesh.material);
+    for (const mat of mats) mat.forceNormalForward = true;
+  }
+
   /** Materiais ainda recompilando com as saídas do pré-passe (testes/capturas esperam chegar a zero). */
   get recompilePending(): number {
     return this.recompiling;
@@ -345,6 +359,7 @@ export class Environment {
    * e recongela cada um quando termina. Enquanto isso o Babylon segue desenhando com o shader anterior.
    */
   private recompileFrozenMaterials(): void {
+    this.fixKitNormals();
     const byMaterial = new Map<Material, AbstractMesh[]>();
     for (const mesh of this.scene.meshes) {
       const mat = mesh.material;
