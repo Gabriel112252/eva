@@ -96,7 +96,16 @@ describe("Personagens GLB (modelos rigados reais)", () => {
       const model = await loadCharacter(scene, v, `_${v}`, characterDataUrl(v));
       expect(model.skeleton?.bones.length, v).toBe(52);
       for (const clip of ANIMATION_CLIPS) expect(model.animator.has(clip), `${v} ${clip}`).toBe(true);
-      expect(model.height).toBeCloseTo(CHARACTERS[v].height, 5);
+      // a malha tem a altura declarada (a cápsula de colisão usa CHARACTERS[v].height); capacete/cabelo somam poucos cm
+      scene.render();
+      let top = -Infinity;
+      for (const m of model.meshes) {
+        const pos = m.getVerticesData("position")!;
+        const wm = m.computeWorldMatrix(true);
+        for (let i = 0; i < pos.length; i += 3) top = Math.max(top, Vector3.TransformCoordinates(new Vector3(pos[i]!, pos[i + 1]!, pos[i + 2]!), wm).y);
+      }
+      expect(top, v).toBeGreaterThan(CHARACTERS[v].height - 0.03);
+      expect(top, v).toBeLessThan(CHARACTERS[v].height + 0.08);
       model.dispose();
     }
     engine.dispose();
