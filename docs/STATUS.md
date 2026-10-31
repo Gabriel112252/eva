@@ -159,6 +159,7 @@ O passe de roupas do Capítulo 1 foi aplicado ao resto do elenco (antes as roupa
 
 Corpos/rostos e esqueletos não mudaram: o esqueleto de Matias é idêntico ao anterior (nomes, ordem, poses e `inverseBindMatrices` conferidos byte a byte), então `matias_movimento.glb` continua ligando sem ser regenerado (`tests/unit/movement.test.ts` ✔). Folha de contato nova em `docs/screenshots/characters/` (Cycles, pose Idle: `<variante>_{corpo,rosto,costas}.jpg` das 7, `elenco_silhuetas.jpg` com as 10 e `elenco_animacao.jpg` com Walk/Run/CrouchWalk/Talk das 7).
 
+- **Testes** (31/10/2026, branch `agente/elenco`): `npm run check` **158** testes ✔ (em `tests/assets/characters.test.ts`: peças distintas e orçamento das 10 variantes, carga no Babylon de todas com 52 ossos/todos os clipes/altura real, jaleco e túnica abaixo do gancho); `node tools/validate-characters.mjs` 11/11 sem erros (inclui `matias_movimento.glb`); `node tools/gameplay-test.mjs` completo **71/71** ✔ (movimento com a biblioteca ligada ao `matias.glb` novo, veículos, combate com os saqueadores novos, sistemas do Capítulo 1); `node tools/cap1-test.mjs` **64/64** ✔.
 - **Pendências**: cabelo em calota e tecido sem rugas continuam; saias (jaleco, túnica) e o pano do avental são pele com pesos (sem simulação): em corrida a túnica abre na frente e, no pico da passada de corrida, o joelho do comerciante encosta no avental (ele não corre no jogo); as luvas de Matias são a casca da mão (dedos seguem o esqueleto); o lenço de Miriam e de B mantém a ponta em caixa do gerador antigo.
 
 ## Próxima etapa
