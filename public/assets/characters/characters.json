@@ -129,7 +129,7 @@
       "file": "matias.glb",
       "label": "Matias (58) — protagonista",
       "height": 1.76,
-      "triangles": 46092,
+      "triangles": 46340,
       "bones": 52
     },
     "miriam": {
@@ -164,28 +164,28 @@
       "file": "saqueador_a.glb",
       "label": "Saqueador (desviador de cargas) — variante A",
       "height": 1.78,
-      "triangles": 34357,
+      "triangles": 33681,
       "bones": 52
     },
     "saqueador_b": {
       "file": "saqueador_b.glb",
       "label": "Saqueador (desviador de cargas) — variante B",
       "height": 1.74,
-      "triangles": 45506,
+      "triangles": 45702,
       "bones": 52
     },
     "comerciante": {
       "file": "comerciante.glb",
       "label": "Comerciante do bairro",
       "height": 1.7,
-      "triangles": 34973,
+      "triangles": 34997,
       "bones": 52
     },
     "raquel": {
       "file": "raquel.glb",
       "label": "Raquel (40) — médica da comunidade",
       "height": 1.65,
-      "triangles": 41063,
+      "triangles": 41397,
       "bones": 52
     },
     "ana": {

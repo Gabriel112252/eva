@@ -1284,6 +1284,7 @@ def build_character(name: str, spec: dict, base: BaseMesh, vgroups, weights, tex
     if jacket_faces:
         jk = extract_faces(body, jacket_faces, f"{name}_jacket", jacket.get("offset", 0.027))
         cut_garment(jk, hem_z=jz_hem, opening=in_open)
+        smooth_neckline(jk, joints["mixamorig:Neck"].z - 0.1)
         fill_concave(jk, iterations=16)
         drape_torso(jk, joints, measures)
         drape_cuffs(jk, joints)
@@ -1311,7 +1312,8 @@ def build_character(name: str, spec: dict, base: BaseMesh, vgroups, weights, tex
             cut_garment(obj, hem_z=jz_hem - 0.06)  # sob o colete: barra reta da camisa
         if r == "shirt" and jacket_faces:
             # camiseta vista na abertura da jaqueta: faixa um pouco mais larga que a abertura, barra 2 cm abaixo da jaqueta
-            cut_garment(obj, hem_z=jz_hem - 0.022, opening=in_open, margin=0.035, keep="inside")
+            cut_garment(obj, hem_z=jz_hem - 0.022, opening=in_open, margin=0.035, keep="inside",
+                        top_z=joints["mixamorig:Neck"].z - 0.045 if jacket.get("neckline", True) else None)
         if r == "shirt" and z_hem is not None:
             cut_garment(obj, hem_z=z_hem)  # barra reta da túnica
         if r in ("shirt", "pants") and drape_spec.get("fill", bool(drape_spec)):
@@ -1338,6 +1340,12 @@ def build_character(name: str, spec: dict, base: BaseMesh, vgroups, weights, tex
             if not any(vi in skin_verts for vi in body.data.polygons[fi].vertices):
                 hidden_faces.add(fi)
 
+    if in_open is not None and jacket.get("neckline", True):
+        # acima do decote reto da camiseta a pele fica (senão o pescoço ganha um furo para o avesso da peça)
+        top_z = joints["mixamorig:Neck"].z - 0.045
+        nk = joints["mixamorig:Neck"]
+        hidden_faces -= {fi for fi in hidden_faces if face_center(fi).z > top_z - 0.012
+                         and math.hypot(face_center(fi).x - nk.x, face_center(fi).y - nk.y) < 0.12}
     if gloves_faces:
         gl = extract_faces(body, gloves_faces, f"{name}_gloves", 0.0035)
         set_material(gl, simple_material(f"{name}_mat_leather", spec["gloves"], 0.75))
@@ -1614,14 +1622,17 @@ def build_hair(name: str, spec: dict, body, joints, vgroups_global, verts: list[
         sub.render_levels = 1
         bpy.context.view_layer.objects.active = cap
         bpy.ops.object.modifier_apply(modifier=sub.name)
-        disp = cap.modifiers.new("Displace", "DISPLACE")
-        tex = bpy.data.textures.new(f"{name}_hair_noise", "CLOUDS")
-        tex.noise_scale = 0.03
-        tex.noise_depth = 2
-        disp.texture = tex
-        disp.strength = 0.011 if style == "short-wavy" else 0.007
-        disp.mid_level = 0.45
-        bpy.ops.object.modifier_apply(modifier=disp.name)
+        if spec.get("headscarf"):
+            smooth_mesh(cap, iterations=14, factor=0.5)  # lenço: tecido liso sobre a orelha (sem ruído de cabelo nem dobras da orelha)
+        else:
+            disp = cap.modifiers.new("Displace", "DISPLACE")
+            tex = bpy.data.textures.new(f"{name}_hair_noise", "CLOUDS")
+            tex.noise_scale = 0.03
+            tex.noise_depth = 2
+            disp.texture = tex
+            disp.strength = 0.011 if style == "short-wavy" else 0.007
+            disp.mid_level = 0.45
+            bpy.ops.object.modifier_apply(modifier=disp.name)
         mod = cap.modifiers.new("Solidify", "SOLIDIFY")
         mod.thickness = 0.012
         mod.offset = 1.0
@@ -2063,6 +2074,19 @@ def fill_concave(obj, iterations: int = 8, factor: float = 0.5):
     obj.data.update()
 
 
+def smooth_neckline(obj, z_min: float, iterations: int = 14):
+    """Borda de cima da peça (decote/cava do pescoço) suave: ela vem da fronteira das regiões de peso, em zigue-zague,
+    e aparece nos closes de diálogo onde a gola não cobre."""
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    edge = [v for v in bm.verts if v.is_boundary and v.co.z > z_min]
+    for _ in range(iterations):
+        bmesh.ops.smooth_vert(bm, verts=edge, factor=0.5, use_axis_x=True, use_axis_y=True, use_axis_z=True)
+    bm.to_mesh(obj.data)
+    bm.free()
+    obj.data.update()
+
+
 def decimate_cloth(obj, ratio):
     """Reduz a malha de uma roupa (o corpo/rosto ficam em resolução cheia): Matias usa malha cheia por causa do rosto
     em close, mas as roupas extraídas dela estourariam o orçamento de triângulos."""
@@ -2162,7 +2186,7 @@ def jacket_opening(spec, joints, m):
     return inside
 
 
-def cut_garment(obj, hem_z: float | None = None, opening=None, margin: float = 0.0, keep: str = "outside"):
+def cut_garment(obj, hem_z: float | None = None, opening=None, margin: float = 0.0, keep: str = "outside", top_z: float | None = None):
     """Corte limpo por planos (bisect) em vez de bordas em zigue-zague: barra horizontal em `hem_z` e, com `opening`,
     as duas bordas da abertura frontal (planos inclinados x = ±(meia-largura + margin)). keep="outside" apaga a
     abertura (jaqueta); keep="inside" guarda só a faixa (camiseta vista na abertura)."""
@@ -2171,6 +2195,8 @@ def cut_garment(obj, hem_z: float | None = None, opening=None, margin: float = 0
     geom = lambda: bm.verts[:] + bm.edges[:] + bm.faces[:]  # noqa: E731
     if hem_z is not None:
         bmesh.ops.bisect_plane(bm, geom=geom(), plane_co=(0.0, 0.0, hem_z), plane_no=(0.0, 0.0, 1.0), clear_inner=True)
+    if top_z is not None:  # decote reto (a borda da faixa vista na abertura deixa de ser zigue-zague)
+        bmesh.ops.bisect_plane(bm, geom=geom(), plane_co=(0.0, 0.0, top_z), plane_no=(0.0, 0.0, 1.0), clear_outer=True)
     if opening is not None:
         half, z_lo, k = opening.plane
         for sgn in (1.0, -1.0):
@@ -2744,6 +2770,33 @@ def rope(name: str, layer: BodySurface, guides: list[Vector], radius: float, mat
     return mesh_object(name, verts, faces, dirs, mat), pts
 
 
+def fold_collar(name: str, garment: BodySurface, skin: BodySurface, neck: Vector, ndir: Vector, mat, arc=None, n: int = 28):
+    """Gola virada: base deitada SOBRE a peça (raios do eixo do pescoço acham a peça em volta da base do pescoço), crista
+    estufada para fora e borda de cima encostada no pescoço. Projetar tudo na pele (com raio limitado) deixava a base
+    dentro da peça e ela furava o tecido em retalhos."""
+    _a, u, w = axis_basis(ndir, FRONT)
+    o_b, o_t = neck - ndir * 0.06, neck + ndir * 0.012
+    angles = [TAU * i / n for i in range(n)] if arc is None else [math.radians(arc[0] + (arc[1] - arc[0]) * i / (n - 1)) for i in range(n)]
+    rows = [[], [], []]
+    dirs = []
+    for th in angles:
+        d = u * math.cos(th) + w * math.sin(th)
+        rs = min(skin.dist(o_t, d) or 0.06, 0.075)
+        rb = garment.dist(o_b, d)
+        pb = o_b + d * ((rb + 0.004) if rb is not None else (min(skin.dist(o_b, d) or 0.09, 0.11) + 0.03))
+        pt = o_t + d * (rs + 0.02)
+        rows[0].append(pb)
+        rows[1].append((pb + pt) / 2 + d * 0.016)
+        rows[2].append(pt)
+        dirs.append(d)
+    pts = rows[0] + rows[1] + rows[2]
+    segs = n if arc is None else n - 1
+    faces = [(k * n + i, k * n + (i + 1) % n, (k + 1) * n + (i + 1) % n, (k + 1) * n + i) for k in range(2) for i in range(segs)]
+    obj = mesh_object(name, pts, faces, dirs * 3, mat)
+    smooth_mesh(obj, iterations=1, factor=0.4)
+    return thicken(obj, 0.005)
+
+
 def garment_arc(opening, z: float, radius: float = 0.15, pad: float = 0.012):
     """Arco (graus a partir da frente) que uma faixa fechada deve cobrir para não atravessar a abertura frontal."""
     if opening is None:
@@ -2789,9 +2842,8 @@ def build_garment_details(name: str, spec: dict, surf: BodySurface, joints, m: d
         cmat = simple_material(f"{name}_mat_{col.get('mat', 'jacket')}", col["color"], 0.88) if isinstance(col, dict) else jmat
         kind = col.get("kind") if isinstance(col, dict) else col
         arc = garment_arc(opening, neck.z, 0.075, 0.02)
-        if kind == "fold":  # gola virada deitada sobre os ombros
-            band = ring_band(f"{name}_collar", surf, neck - ndir * 0.055, neck + ndir * 0.012, 28, [0.0, 0.55, 1.0], [0.042, 0.034, 0.022],
-                             cmat, thickness=0.005, max_r=0.09, arc=arc)
+        if kind == "fold":  # gola virada deitada sobre a peça
+            band = fold_collar(f"{name}_collar", layer, surf, neck, ndir, cmat, arc=arc)
         else:  # canelada justa (moletom) ou gola alta
             band = ring_band(f"{name}_collar", surf, neck - ndir * 0.04, neck + ndir * 0.004, 28, [0.0, 1.0], [0.027, 0.02],
                              cmat, thickness=0.006, max_r=0.085, arc=arc)
@@ -3053,8 +3105,7 @@ def build_shirt_details(name: str, spec: dict, surf: BodySurface, joints, m: dic
     ndir = (head - neck).normalized()
     out = []
     if sd.get("collar"):
-        band = ring_band(f"{name}_shirt_collar", surf, neck - ndir * 0.05, neck + ndir * 0.01, 26, [0.0, 0.55, 1.0], [0.032, 0.026, 0.019],
-                         shirt.data.materials[0], thickness=0.004, max_r=0.085, arc=(18, 342))
+        band = fold_collar(f"{name}_shirt_collar", LayerSurface([shirt]), surf, neck, ndir, shirt.data.materials[0], arc=(18, 342))
         copy_weights(band, body)
         out.append((band, None))
     return out
