@@ -1,0 +1,167 @@
+{
+  "alta": {
+    "loadSeconds": 30.8,
+    "shots": {
+      "01_praca_dia": {
+        "draw": 1354,
+        "frameMs": 30.5,
+        "activeMeshes": 525,
+        "postProcesses": 8,
+        "lights": 4,
+        "dusk": 0
+      },
+      "02_rua_recicladores": {
+        "draw": 1200,
+        "frameMs": 24.3,
+        "activeMeshes": 670,
+        "postProcesses": 8,
+        "lights": 4,
+        "dusk": 0
+      },
+      "03_av_maglev": {
+        "draw": 1283,
+        "frameMs": 40.2,
+        "activeMeshes": 556,
+        "postProcesses": 8,
+        "lights": 4,
+        "dusk": 0
+      },
+      "04_praca_anoitecer": {
+        "draw": 1354,
+        "frameMs": 22.1,
+        "activeMeshes": 526,
+        "postProcesses": 8,
+        "lights": 4,
+        "dusk": 1
+      },
+      "05_close_matias": {
+        "draw": 1247,
+        "frameMs": 16.7,
+        "activeMeshes": 376,
+        "postProcesses": 8,
+        "lights": 4,
+        "dusk": 0
+      },
+      "06_rua_anoitecer": {
+        "draw": 1200,
+        "frameMs": 18.9,
+        "activeMeshes": 672,
+        "postProcesses": 8,
+        "lights": 4,
+        "dusk": 1
+      }
+    },
+    "meanFrameMs": 25.4,
+    "meanDraw": 1273
+  },
+  "media": {
+    "loadSeconds": 28.6,
+    "shots": {
+      "01_praca_dia": {
+        "draw": 1354,
+        "frameMs": 20.7,
+        "activeMeshes": 526,
+        "postProcesses": 8,
+        "lights": 4,
+        "dusk": 0
+      },
+      "02_rua_recicladores": {
+        "draw": 1200,
+        "frameMs": 28.4,
+        "activeMeshes": 672,
+        "postProcesses": 8,
+        "lights": 4,
+        "dusk": 0
+      },
+      "03_av_maglev": {
+        "draw": 1283,
+        "frameMs": 30.7,
+        "activeMeshes": 556,
+        "postProcesses": 8,
+        "lights": 4,
+        "dusk": 0
+      },
+      "04_praca_anoitecer": {
+        "draw": 1354,
+        "frameMs": 24.1,
+        "activeMeshes": 526,
+        "postProcesses": 8,
+        "lights": 4,
+        "dusk": 1
+      },
+      "05_close_matias": {
+        "draw": 1247,
+        "frameMs": 20.5,
+        "activeMeshes": 376,
+        "postProcesses": 8,
+        "lights": 4,
+        "dusk": 0
+      },
+      "06_rua_anoitecer": {
+        "draw": 1198,
+        "frameMs": 20.8,
+        "activeMeshes": 672,
+        "postProcesses": 8,
+        "lights": 4,
+        "dusk": 1
+      }
+    },
+    "meanFrameMs": 24.2,
+    "meanDraw": 1273
+  },
+  "baixa": {
+    "loadSeconds": 24.5,
+    "shots": {
+      "01_praca_dia": {
+        "draw": 640,
+        "frameMs": 16,
+        "activeMeshes": 526,
+        "postProcesses": 1,
+        "lights": 2,
+        "dusk": 0
+      },
+      "02_rua_recicladores": {
+        "draw": 472,
+        "frameMs": 10.8,
+        "activeMeshes": 636,
+        "postProcesses": 1,
+        "lights": 2,
+        "dusk": 0
+      },
+      "03_av_maglev": {
+        "draw": 566,
+        "frameMs": 9.1,
+        "activeMeshes": 552,
+        "postProcesses": 1,
+        "lights": 2,
+        "dusk": 0
+      },
+      "04_praca_anoitecer": {
+        "draw": 641,
+        "frameMs": 11.9,
+        "activeMeshes": 525,
+        "postProcesses": 1,
+        "lights": 2,
+        "dusk": 1
+      },
+      "05_close_matias": {
+        "draw": 534,
+        "frameMs": 14.8,
+        "activeMeshes": 376,
+        "postProcesses": 1,
+        "lights": 2,
+        "dusk": 0
+      },
+      "06_rua_anoitecer": {
+        "draw": 470,
+        "frameMs": 10,
+        "activeMeshes": 638,
+        "postProcesses": 1,
+        "lights": 2,
+        "dusk": 1
+      }
+    },
+    "meanFrameMs": 12.1,
+    "meanDraw": 554
+  }
+}
