@@ -1,6 +1,6 @@
 /**
- * Prova visual do pipeline de render: os mesmos 5 enquadramentos (praça de dia, Rua dos Recicladores, Avenida do
- * Maglev, praça ao anoitecer e close de Matias) em cada qualidade, com câmera fixa, HUD oculto e quadros
+ * Prova visual do pipeline de render: os mesmos enquadramentos (praça de dia, Rua dos Recicladores, Avenida do
+ * Maglev, praça ao anoitecer, close de Matias e a rua em contraluz ao anoitecer) em cada qualidade, com câmera fixa, HUD oculto e quadros
  * determinísticos (`captureStart`). Para cada enquadramento mede draw calls e o tempo médio de quadro com
  * `gl.finish()` — menor de duas medianas de N quadros (SwiftShader: custo de CPU que acompanha o trabalho de pixel; vale como
  * comparação relativa antes/depois na mesma máquina, não como FPS real de GPU).
@@ -31,6 +31,8 @@ const SHOTS = [
   ["03_av_maglev", [63.5, 1.9, -34], [72.5, 7, -2], [68, 0.12, -27], 0, 0, 0.95],
   ["04_praca_anoitecer", [32, 7, -17], [31, 1.5, 8], [30.5, 0.22, -6], Math.PI, 1, 0.95],
   ["05_close_matias", [28.25, 1.86, -6.5], [29.5, 1.72, -5.5], [29.5, 0.22, -5.5], -2.25, 0, 0.62],
+  // contraluz: a rua aponta para o sol baixo do anoitecer (raios volumétricos na alta)
+  ["06_rua_anoitecer", [30, 1.9, 43.5], [-24, 9, 46], [24, 0.12, 44], -Math.PI / 2, 1, 0.95],
 ];
 
 const { base, close } = await serveDist(resolve(DIST));

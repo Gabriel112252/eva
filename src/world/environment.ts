@@ -196,7 +196,11 @@ export class Environment {
       this.thawFrozenMaterials(10);
     }
     this.tickThaw();
-    if (Math.abs(this.duskTarget - this.dusk) < 1e-4) return;
+    if (Math.abs(this.duskTarget - this.dusk) < 1e-4) {
+      // o HDRI do anoitecer pode terminar de baixar depois da transição: troca assim que estiver pronto
+      if (this.syncEnvironmentTexture()) this.thawFrozenMaterials(4);
+      return;
+    }
     this.dusk += (this.duskTarget - this.dusk) * Math.min(1, dt * 0.35);
     if (Math.abs(this.duskTarget - this.dusk) < 1e-4) this.dusk = this.duskTarget;
     const k = this.dusk;
@@ -213,12 +217,7 @@ export class Environment {
     if (this.skyMaterial) this.skyMaterial.sunPosition = dir.scale(-100);
     for (const key of Object.keys(DAY_ATMOSPHERE) as Array<keyof typeof DAY_ATMOSPHERE>) this.base[key] = DAY_ATMOSPHERE[key] * (1 - k) + DUSK_ATMOSPHERE[key] * k;
     // IBL: troca o HDRI na metade da transição; a intensidade passa por um vale ali para a troca não estalar
-    const wantDusk = k > 0.5 && !!this.envDusk?.isReady();
-    const tex = wantDusk ? this.envDusk : this.envDay;
-    if (tex && this.scene.environmentTexture !== tex) {
-      this.scene.environmentTexture = tex;
-      this.post?.setEnvironmentTexture(tex);
-    }
+    this.syncEnvironmentTexture();
     if (this.envDay) this.base.envIntensity *= 0.55 + 0.45 * Math.min(1, Math.abs(k - 0.5) * 4);
     this.applyNightEmissives(k);
     this.post?.setTimeOfDay(k);
@@ -226,6 +225,15 @@ export class Environment {
     this.applyAtmosphere();
     // UBO de materiais congelados guarda IBL/emissivo: descongela até a transição assentar (+ alguns quadros)
     this.thawFrozenMaterials(4);
+  }
+
+  /** HDRI de acordo com a hora (anoitecer a partir da metade da transição, se já carregou). true = trocou. */
+  private syncEnvironmentTexture(): boolean {
+    const tex = this.dusk > 0.5 && this.envDusk?.isReady() ? this.envDusk : this.envDay;
+    if (!tex || this.scene.environmentTexture === tex) return false;
+    this.scene.environmentTexture = tex;
+    this.post?.setEnvironmentTexture(tex);
+    return true;
   }
 
   /** Janelas acesas e LEDs um pouco mais vivos à noite (blockout e kit). */
@@ -333,7 +341,7 @@ const DAY_LIGHT = {
   sunColor: new Color3(1.0, 0.86, 0.68),
   skyColor: new Color3(0.72, 0.82, 1.0),
   groundColor: new Color3(0.45, 0.38, 0.3),
-  fogColor: new Color3(0.7, 0.71, 0.7),
+  fogColor: new Color3(0.57, 0.6, 0.62),
   rim: new Color3(1.0, 0.86, 0.68),
   rimIntensity: 0.32,
 };
@@ -347,7 +355,7 @@ const DUSK_LIGHT = {
   rimIntensity: 0.4,
 };
 /** Parâmetros numéricos da atmosfera (a altitude da aeromoto é aplicada por cima, em applyAtmosphere). */
-const DAY_ATMOSPHERE = { fogDensity: 0.0072, skyLum: 0.95, skyTurb: 8.5, skyRayleigh: 1.25, skyMie: 0.009, skyIntensity: 0.18, envIntensity: 0.95 };
+const DAY_ATMOSPHERE = { fogDensity: 0.0072, skyLum: 0.62, skyTurb: 9, skyRayleigh: 1.35, skyMie: 0.009, skyIntensity: 0.2, envIntensity: 1.1 };
 const DUSK_ATMOSPHERE = { fogDensity: 0.0105, skyLum: 0.5, skyTurb: 12, skyRayleigh: 1.4, skyMie: 0.014, skyIntensity: 0.1, envIntensity: 0.8 };
 
 /** Emissivos que ganham força ao anoitecer: nome do material → intensidade de dia. */

@@ -381,18 +381,21 @@ export interface GradingOptions {
   satHighlight: number;
   /** preto mínimo (levanta um pouco o preto, com o tom das sombras) */
   blackLift: number;
+  /** quanto tirar de croma (e devolver de luz) dos azuis profundos muito saturados — o zênite do céu procedural */
+  deepBlueDesat: number;
 }
 
 /** Gradação do jogo: quente nas luzes, ciano nas sombras, contraste de cinema, saturação contida. */
 export const GRADING: GradingOptions = {
   contrast: 1.2,
   pivot: 0.42,
-  shadowTint: [-0.022, 0.006, 0.03],
+  shadowTint: [-0.016, 0.004, 0.022],
   highlightTint: [0.028, 0.008, -0.03],
   satMid: 1.06,
   satShadow: 0.86,
   satHighlight: 0.92,
   blackLift: 0.012,
+  deepBlueDesat: 0.35,
 };
 
 /** Aplica a gradação a uma cor em espaço gama (0..1). Pura: usada para gerar a LUT (e testável). */
@@ -410,6 +413,19 @@ export function gradeColor(r: number, g: number, b: number, o: GradingOptions = 
   let R = (r + add) * (1 - w) + r * scl * w;
   let G = (g + add) * (1 - w) + g * scl * w;
   let B = (b + add) * (1 - w) + b * scl * w;
+  // azul profundo e muito saturado (zênite do SkyMaterial depois de dois tonemappings): menos croma e um pouco
+  // mais de luz; azuis comuns (camisa, lona) quase não mudam
+  if (o.deepBlueDesat > 0) {
+    const mx = Math.max(R, G, B);
+    const mn = Math.min(R, G, B);
+    const satv = mx > 1e-4 ? (mx - mn) / mx : 0;
+    const wb = smooth(0.02, 0.22, B - Math.max(R, G)) * smooth(0.62, 0.92, satv) * (1 - smooth(0.45, 0.7, luma(R, G, B)));
+    const k = o.deepBlueDesat * wb;
+    const Lb = luma(R, G, B);
+    R = Lb + (R - Lb) * (1 - k) + 0.05 * k;
+    G = Lb + (G - Lb) * (1 - k) + 0.05 * k;
+    B = Lb + (B - Lb) * (1 - k) + 0.05 * k;
+  }
   // saturação por faixa de luminância
   const L2 = luma(R, G, B);
   const sh = 1 - smooth(0.0, 0.35, L2);
