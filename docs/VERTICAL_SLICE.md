@@ -11,6 +11,8 @@ Avaliamos bases open source completas (Three.js: Sketchbook, swift502, MIT; cann
 | Controle de voo da aeromoto (velocidade angular definida pelos comandos, PD de altitude) | Helicóptero do Sketchbook (swift502) | MIT | `src/vehicles/hoverBike.ts` |
 | Steering da IA (Arrive, Separation, ObstacleAvoidance) | yuka (npm) | MIT | `src/ai/enemy.ts` |
 | Animações (pistola, reação, morte, dirigir, sentar, locomoção) | Quaternius Universal Animation Library Standard | CC0 | `assets-src/animations/`, retarget em `tools/blender/retarget.py` |
+| Movimento de ação: máquina de estados de pulo/pulo duplo/esquiva/impulso no ar, coiote e buffer de pulo, recarga da esquiva (1,1 s), curva de aceleração do ápice, escala do tranco de aterrissagem, FOV dinâmico | BJS Character Controller V2 (crazyramirez) — portado/adaptado, física própria trocada pelo `PhysicsCharacterController` do Havok | MIT (aviso no cabeçalho dos arquivos) | `src/player/movement.ts`, `src/player/playerController.ts`, `src/player/thirdPersonCamera.ts` |
+| Clipes de pulo, aterrissagem, rolamento e embalo | Quaternius Universal Animation Library Standard (`Jump_Start`, `Jump_Loop`, `Jump_Land`, `Roll`, `Sprint_Loop`) | CC0 | `public/assets/characters/matias_movimento.glb` (só armadura), `tools/blender/retarget.py --clips movimento --anim-only` |
 | Texturas PBR do cenário | ambientCG | CC0 | `public/assets/textures/` |
 | Passos e impactos | Kenney Impact Sounds | CC0 | `public/assets/audio/sfx/` |
 
@@ -34,10 +36,11 @@ Veículos extras: Javali VB-4 (praça leste) e Rastro AV-4 (aeromoto, praça les
 - **IA** (`src/ai/`): FSM patrulha → alerta → perseguição → ataque → ferido → morto; visão em cone de 110°/28 m com raio de linha de visada; audição de tiros (34 m); steering yuka (Arrive + Separation + ObstacleAvoidance com esferas dos props da praça e dos veículos) integrado pelo `PhysicsCharacterController`; tiros com acerto probabilístico por distância; animação de pistola em camada superior sobre a locomoção.
 - **Itens** (`src/items/`): mochila (I), itens no chão (munição, kit), uso de kit (H), persistência no save.
 - **Missão** (`src/narrative/missionDirector.ts`): fases por flags, ondas, checkpoints (autosave), reinício da onda ao cair, zonas de entrega, decisão.
+- **Movimento de ação** (`src/player/movement.ts` + `playerController.ts`): pulo (Espaço, ~1,3 m) com tempo de coiote e buffer, pulo duplo (~2,4 m no total), esquiva rolando (Q, recarga 1,1 s, cápsula baixa), impulso no ar (Q no ar, uma vez por salto), deslize (Ctrl/C correndo; passa sob vãos de 1,4 m), embalo (corrida longa no plano, 7,2 m/s, clipe Sprint), encaixe em degraus e rampas, aterrissagem com tranco de câmera, FOV dinâmico e ruído para a IA (aterrissagem 10–18 m, rolamento 12 m, deslize 7 m). Decisão do criador (30/10/2026): Matias mais ágil que o cânone realista.
 
 ## Testes
 - `npm run check` — tipos, 48 testes (lógica de arma/vida/cápsula/mochila/veículo, GLB, física headless) e build.
-- `npm run test:gameplay` — no build, com quadros determinísticos: Javali (entrar, acelerar, virar, frear, sair), Rastro (subir, voar, descer), combate (pistola, mira, acertos, abate, recarga, dano sofrido), missão (ondas, Custódio, van, entrega, tranca, rádio, tela final).
+- `npm run test:gameplay` — no build, com quadros determinísticos: movimento (`--only movimento`: pulo, pulo duplo, esquiva + recarga, impulso no ar, embalo, deslize sob barra baixa, queda de 6 m), Javali (entrar, acelerar, virar, frear, sair), Rastro (subir, voar, descer), combate (pistola, mira, acertos, abate, recarga, dano sofrido), missão (ondas, Custódio, van, entrega, tranca, rádio, tela final).
 - `npm run test:visual`, `npm run test:touch` — regressão do fluxo original e do toque.
 
 ## Limitações conhecidas (honestas)
