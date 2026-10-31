@@ -180,7 +180,7 @@ export class PostFx {
       if (this.taa) {
         // o TAA amacia o detalhe fino: devolve um pouco de nitidez
         p.sharpenEnabled = true;
-        p.sharpen.edgeAmount = 0.22;
+        p.sharpen.edgeAmount = 0.12;
         p.sharpen.colorAmount = 1.0;
       }
     }
@@ -210,7 +210,7 @@ export class PostFx {
     if (this.rays) {
       // (a exposição dos raios é recalculada por quadro em updateSun, com o sol à vista)
       this.rays.decay = 0.962 * (1 - dusk) + 0.972 * dusk;
-      this.rays.weight = 0.42;
+      this.rays.weight = 0.5;
       this.rays.density = 0.9;
     }
     if (this.sunGlowMat) {
@@ -309,7 +309,7 @@ export class PostFx {
     const target = visible ? 1 : 0;
     const k = this.raysFade + (target - this.raysFade) * 0.15;
     this.raysFade = Math.abs(k - target) < 0.01 ? target : k;
-    const base = 0.16 * (1 - this.dusk) + 0.3 * this.dusk;
+    const base = 0.2 * (1 - this.dusk) + 0.42 * this.dusk;
     this.rays.exposure = base * this.raysFade;
   }
 

@@ -412,9 +412,9 @@ export function detailTextures(scene: Scene, size: number, seed: number): ((reps
 
 /**
  * Umidade do asfalto (escala grande, repete a cada dezenas de metros):
- * - `roughness`: textura metálica do PBR (G = rugosidade, B = metal 0) — seco 0,92, manchas úmidas ~0,4, poças ~0,07;
- * - `reflectance`: multiplicador do F0 dielectrico (metallicReflectanceTexture) — 0,45 no seco (com cor 2,2 → F0
- *   0,04, igual ao de antes) e 1,0 nas poças (F0 ~0,09): só as poças passam do limiar do SSR na qualidade alta.
+ * - `roughness`: textura metálica do PBR (G = rugosidade, B = metal 0) — seco 0,92, manchas úmidas ~0,45, poças ~0,12;
+ * - `reflectance`: multiplicador do F0 dielétrico (metallicReflectanceTexture) — 0,67 no seco (com cor 1,5 → F0
+ *   0,04, igual ao de antes) e 1,0 nas poças (F0 0,06): só as poças passam do limiar do SSR na qualidade alta.
  */
 export function wetnessTextures(scene: Scene, name: string, size: number, seed: number): { roughness: RawTexture; reflectance: RawTexture } | null {
   if (!CANVAS_AVAILABLE) return null;
@@ -424,12 +424,12 @@ export function wetnessTextures(scene: Scene, name: string, size: number, seed: 
   const refl = new Uint8Array(size * size * 4);
   for (let i = 0; i < size * size; i++) {
     const b = blot.data[i]! + (fine.data[i]! - 0.5) * 0.25;
-    const damp = smooth01(0.5, 0.62, b); // mancha úmida
-    const pool = smooth01(0.66, 0.71, b); // poça
-    const r = 0.92 * (1 - damp) + 0.42 * damp;
-    const rr = r * (1 - pool) + 0.07 * pool;
+    const damp = smooth01(0.5, 0.63, b); // mancha úmida
+    const pool = smooth01(0.64, 0.74, b); // poça (borda larga: sem degraus de texel na borda)
+    const r = 0.92 * (1 - damp) + 0.45 * damp;
+    const rr = r * (1 - pool) + 0.12 * pool;
     rough.set([255, Math.round(rr * 255), 0, 255], i * 4);
-    const f = 0.45 + 0.55 * pool + 0.08 * damp * (1 - pool);
+    const f = 0.67 + 0.33 * pool + 0.06 * damp * (1 - pool);
     const fb = Math.round(clamp01(f) * 255);
     refl.set([fb, fb, fb, 255], i * 4);
   }

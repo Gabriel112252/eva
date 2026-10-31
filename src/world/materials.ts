@@ -225,15 +225,16 @@ export class MaterialLibrary {
       a.metallic = 1;
       a.roughness = 1;
       if (ssr) {
+        // F0 dielétrico = 0,04 × 1,5 × textura: seco 0,67 → 0,04 (como antes), poça 1,0 → 0,06 (passa do limiar do SSR)
         a.metallicReflectanceTexture = wet.reflectance;
-        a.metallicReflectanceColor = new Color3(2.2, 2.2, 2.2);
+        a.metallicReflectanceColor = new Color3(1.5, 1.5, 1.5);
       } else {
         wet.reflectance.dispose();
       }
     }
-    // alta: vidro e poças com F0 ~0,065–0,09 (antes ~0,03) — só eles passam do limiar do SSR. Sem SSR o F0 maior
-    // só clarearia o reflexo do céu (a água da fonte virava um disco branco), então fica como estava.
-    if (ssr) for (const m of [this.glass, this.puddle]) m.metallicReflectanceColor = new Color3(2.2, 2.2, 2.2);
+    // alta: vidro com F0 ~0,065 (antes ~0,03) — passa do limiar do SSR e reflete a rua. As poças-malha (água da
+    // fonte etc.) ficam como estavam: com F0 maior viravam um disco branco refletindo o céu.
+    if (ssr) this.glass.metallicReflectanceColor = new Color3(2.2, 2.2, 2.2);
   }
 
   /**

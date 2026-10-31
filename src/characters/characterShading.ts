@@ -44,7 +44,11 @@ export function setRimLight(color: Color3, intensity: number, toSun: Vector3): v
 
 /** Plugin de material PBR: soma ao emissivo um contorno de Fresnel iluminado pelo lado do sol. */
 export class RimLightPlugin extends MaterialPluginBase {
-  constructor(material: Material) {
+  /** fator por material (cabelo e pele recebem menos: o topo da cabeça virava um brilho grisalho) */
+  constructor(
+    material: Material,
+    private readonly strength = 1,
+  ) {
     super(material, "EvaRimLight", 210, { EVA_RIM: false });
     this._enable(true);
   }
@@ -73,7 +77,7 @@ uniform vec4 evaRimDir;
   override bindForSubMesh(uniformBuffer: UniformBuffer): void {
     const c = RIM_LIGHT.color;
     const d = RIM_LIGHT.toSun;
-    uniformBuffer.updateFloat4("evaRimColor", c.r, c.g, c.b, RIM_LIGHT.intensity);
+    uniformBuffer.updateFloat4("evaRimColor", c.r, c.g, c.b, RIM_LIGHT.intensity * this.strength);
     uniformBuffer.updateFloat4("evaRimDir", d.x, d.y, d.z, RIM_LIGHT.power);
   }
 
@@ -105,12 +109,13 @@ export function applyCharacterShading(meshes: AbstractMesh[]): void {
     if (!(mat instanceof PBRMaterial) || seen.has(mat)) continue;
     seen.add(mat);
     if (/lens|lente|eyes|olho/i.test(mat.name) || mat.pluginManager?.getPlugin("EvaRimLight")) continue;
-    new RimLightPlugin(mat);
-    if (/skin|pele/i.test(mat.name)) {
+    const skin = /skin|pele/i.test(mat.name);
+    new RimLightPlugin(mat, /hair|cabelo/i.test(mat.name) ? 0.45 : skin ? 0.75 : 1);
+    if (skin) {
       const ss = mat.subSurface;
       ss.isTranslucencyEnabled = true;
-      ss.translucencyIntensity = shadingQuality === "alta" ? 0.45 : 0.35;
-      ss.tintColor = new Color3(1.0, 0.55, 0.42);
+      ss.translucencyIntensity = shadingQuality === "alta" ? 0.3 : 0.24;
+      ss.tintColor = new Color3(1.0, 0.64, 0.54);
       ss.tintColorAtDistance = 0.6;
       ss.minimumThickness = 0;
       ss.maximumThickness = 0.9;
