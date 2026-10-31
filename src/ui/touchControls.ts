@@ -66,7 +66,8 @@ function el<T extends HTMLElement = HTMLElement>(id: string): T {
 /**
  * Controles de toque para celular/tablet: joystick virtual flutuante na metade esquerda
  * (empurrar mais = correr), arrastar na metade direita gira a câmera (sem pointer lock),
- * botões de Interagir/Agachar/Correr/Pausa e toque curto para avançar o diálogo.
+ * botões de Interagir/Agachar/Correr/Pular/Esquivar/Pausa e toque curto para avançar o diálogo.
+ * Pular e Esquivar só aparecem a pé (`setOnFoot`).
  * Alimenta o mesmo InputManager do teclado, então toda a lógica do jogo permanece igual.
  */
 export class TouchControls {
@@ -87,6 +88,9 @@ export class TouchControls {
   private readonly btnReload = el<HTMLButtonElement>("tc-reload");
   private aimLatch = false;
   private readonly btnPause = el<HTMLButtonElement>("tc-pause");
+  private readonly btnJump = el<HTMLButtonElement>("tc-jump");
+  private readonly btnDodge = el<HTMLButtonElement>("tc-dodge");
+  private onFoot = false;
 
   private joyPointer: number | null = null;
   private joyOrigin = { x: 0, y: 0 };
@@ -133,6 +137,9 @@ export class TouchControls {
     });
     this.bindHold(this.btnFire, "fire");
     this.bindPress(this.btnReload, "reload");
+    // movimento: pular (no ar, de novo = pulo duplo) e esquivar (rolamento no chão, impulso no ar)
+    this.bindHold(this.btnJump, "jump");
+    this.bindPress(this.btnDodge, "dodge");
     // tocar no objetivo mostra a descrição da missão (equivale ao Tab)
     document.getElementById("objective")?.addEventListener("click", () => {
       if (this.enabled && this.mode === "play") this.press("objectives");
@@ -147,7 +154,7 @@ export class TouchControls {
     document.body.classList.add("touch-mode");
     window.removeEventListener("pointerdown", this.firstTouch);
     const hint = document.getElementById("menu-controls-hint");
-    if (hint) hint.textContent = "Joystick à esquerda · arraste à direita para olhar · botões E, agachar e correr";
+    if (hint) hint.textContent = "Joystick à esquerda · arraste à direita para olhar · botões E, agachar, correr, pular e esquivar";
     const cont = document.getElementById("subtitle-continue");
     if (cont) cont.textContent = "Toque na tela · continuar";
     this.applyMode();
@@ -168,6 +175,13 @@ export class TouchControls {
 
   setCrouched(crouched: boolean): void {
     this.btnCrouch.classList.toggle("latched", crouched);
+  }
+
+  /** Pular/Esquivar só a pé (fora de veículo, vivo, jogando). */
+  setOnFoot(onFoot: boolean): void {
+    if (onFoot === this.onFoot) return;
+    this.onFoot = onFoot;
+    this.root.classList.toggle("on-foot", onFoot);
   }
 
   /** Tela cheia + orientação horizontal quando o navegador permitir (chamar a partir de um gesto do usuário). */
@@ -350,6 +364,6 @@ export class TouchControls {
 
   /** Estado para testes automatizados. */
   snapshot(): Record<string, unknown> {
-    return { enabled: this.enabled, mode: this.mode, joystickActive: this.joyPointer !== null, lookActive: this.lookPointer !== null, runLatch: this.runLatch };
+    return { enabled: this.enabled, mode: this.mode, joystickActive: this.joyPointer !== null, lookActive: this.lookPointer !== null, runLatch: this.runLatch, onFoot: this.onFoot };
   }
 }

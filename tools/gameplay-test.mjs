@@ -1,9 +1,10 @@
 /**
  * Teste de gameplay no build (quadros determinísticos a 30 fps): veículos (entrar, dirigir, sair, voo da
  * aeromoto), combate (mirar, atirar, dano em inimigo, recarga), missão (gatilhos do confronto) e os
- * sistemas do Capítulo 1 (furtividade, examinar, pistas, timer, reparo, zonas, carga).
+ * sistemas do Capítulo 1 (furtividade, examinar, pistas, timer, reparo, zonas, carga) e o movimento de ação
+ * (pulo, pulo duplo, esquiva rolando + recarga, impulso no ar, embalo, deslize sob obstáculo baixo, aterrissagem).
  *
- * Uso: npm run build && node tools/gameplay-test.mjs [--only veiculos|missao|sistemas] [--shots docs/screenshots/gameplay]
+ * Uso: npm run build && node tools/gameplay-test.mjs [--only movimento|veiculos|missao|sistemas] [--shots docs/screenshots/gameplay]
  */
 import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -11,7 +12,7 @@ import { loadPlaywright, serveDist, CHROMIUM_ARGS, argValue } from "./lib/harnes
 
 const { chromium } = loadPlaywright();
 const SHOTS = argValue("--shots", "");
-const ONLY = argValue("--only", ""); // "veiculos" | "missao" | "sistemas" | "" (tudo)
+const ONLY = argValue("--only", ""); // "movimento" | "veiculos" | "missao" | "sistemas" | "" (tudo)
 const RUN = (part) => ONLY === "" || ONLY === part;
 if (SHOTS) mkdirSync(resolve(SHOTS), { recursive: true });
 const { base, close } = await serveDist();
@@ -44,6 +45,167 @@ try {
   await page.waitForTimeout(1500);
   await page.evaluate(() => window.eva.captureStart(30));
   let s;
+
+  // ---------------- Movimento de ação (primeiro: rua livre, antes de veículos/inimigos mexerem no mapa) ----------------
+  if (RUN("movimento")) {
+    console.log("Movimento");
+    const t0 = Date.now();
+    // pista: rua de 8 m livre a oeste (x de -18 a -46, z = 0), câmera olhando para -X
+    const LANE = { x: -18, y: 0.05, z: 0, yaw: -Math.PI / 2 };
+    const home = await page.evaluate(() => { const f = window.eva.player.feet; return { x: f.x, y: f.y, z: f.z, yaw: window.eva.player.yaw }; });
+    /** Roda `frames` quadros dentro da página (sem gerar JPEG) com ações apertadas/soltas em quadros dados; devolve amostras. */
+    const sim = (frames, script = {}) => page.evaluate(([frames, script]) => {
+      const g = window.eva;
+      const out = { peak: -Infinity, minY: Infinity, clips: [], shots: [], phases: [], maxNoise: 0, maxFov: 0, events: [] };
+      const off = g.player.onMotion.on((e) => out.events.push(e.type));
+      for (let i = 0; i < frames; i++) {
+        for (const [a, d] of script[i] ?? []) g.input.simulate(a, d);
+        g.frame();
+        const p = g.player;
+        const an = g.matias.animator;
+        out.peak = Math.max(out.peak, p.feet.y);
+        out.minY = Math.min(out.minY, p.feet.y);
+        if (!out.clips.includes(an.clip)) out.clips.push(an.clip);
+        if (an.oneShotClip && !out.shots.includes(an.oneShotClip)) out.shots.push(an.oneShotClip);
+        if (!out.phases.includes(p.motionPhase)) out.phases.push(p.motionPhase);
+        out.maxNoise = Math.max(out.maxNoise, p.noiseRadius);
+        out.maxFov = Math.max(out.maxFov, g.camera.camera.fov);
+      }
+      off();
+      const p = g.player;
+      const f = p.feet;
+      return { ...out, x: f.x, y: f.y, z: f.z, phase: p.motionPhase, air: p.airborne, speed: p.speed, sprint: p.sprinting, crouched: p.crouched, landing: p.lastLanding, cooldown: p.motion.dodgeCooldownLeft };
+    }, [frames, script]);
+    const toLane = async (x = LANE.x) => {
+      await page.evaluate(([x, y, z, yaw]) => {
+        const g = window.eva;
+        g.input.clearHeld();
+        if (g.player.crouched) g.player.setCrouched(false);
+        g.teleportPlayer(x, y, z, yaw);
+        g.camera.yaw = yaw;
+      }, [x, LANE.y, LANE.z, LANE.yaw]);
+      return sim(15);
+    };
+    const tap = (a, at = 0) => ({ [at]: [[a, true]], [at + 1]: [[a, false]] });
+    /** Junta duas amostras seguidas (antes/depois de uma captura de tela no meio da ação). */
+    const merge = (a, b) => ({
+      ...b,
+      peak: Math.max(a.peak, b.peak),
+      minY: Math.min(a.minY, b.minY),
+      clips: [...new Set([...a.clips, ...b.clips])],
+      shots: [...new Set([...a.shots, ...b.shots])],
+      phases: [...new Set([...a.phases, ...b.phases])],
+      maxNoise: Math.max(a.maxNoise, b.maxNoise),
+      maxFov: Math.max(a.maxFov, b.maxFov),
+      events: [...a.events, ...b.events],
+    });
+
+    const clips = await page.evaluate(() => ["JumpStart", "JumpLoop", "JumpLand", "Roll", "Sprint"].filter((c) => window.eva.matias.animator.has(c)));
+    check(clips.length === 5, `clipes de movimento ligados a Matias (${clips.join(", ")})`);
+
+    // pulo: sobe e volta ao chão
+    let base = await toLane();
+    let r = await sim(11, tap("jump"));
+    await shot("movimento_pulo_ar");
+    r = merge(r, await sim(33));
+    const single = r.peak - base.y;
+    check(single > 1.0 && single < 1.6 && Math.abs(r.y - base.y) < 0.05 && !r.air, `pulo: subiu ${single.toFixed(2)} m e voltou ao chão (Δy ${(r.y - base.y).toFixed(3)} m)`);
+    check(r.shots.includes("JumpStart") && r.clips.includes("JumpLoop") && r.events.join() === "jump,land", `animação e eventos do pulo (${r.shots.join("/")} · ${r.clips.join("/")} · ${r.events.join(",")})`);
+
+    // pulo duplo: mais alto
+    base = await toLane();
+    r = await sim(60, { ...tap("jump"), ...tap("jump", 9) });
+    const dbl = r.peak - base.y;
+    check(dbl > single + 0.6 && r.events.filter((e) => e === "jump").length === 2 && Math.abs(r.y - base.y) < 0.05, `pulo duplo: ${dbl.toFixed(2)} m (simples ${single.toFixed(2)} m), aterrissagem ${r.landing?.impact}`);
+
+    // esquiva rolando: desloca e respeita a recarga de 1,1 s
+    base = await toLane();
+    r = await sim(7, tap("dodge"));
+    await shot("movimento_rolamento");
+    r = merge(r, await sim(12));
+    const roll1 = Math.hypot(r.x - base.x, r.z - base.z);
+    check(roll1 > 2 && r.shots.includes("Roll") && r.maxNoise >= 12, `esquiva: rolou ${roll1.toFixed(2)} m (clipe Roll, ruído ${r.maxNoise} m)`);
+    const before = r;
+    r = await sim(6, tap("dodge"));
+    const denied = Math.hypot(r.x - before.x, r.z - before.z);
+    check(denied < 0.1 && r.events.includes("dodgeDenied") && before.cooldown > 0.3, `recarga: segunda esquiva negada (${denied.toFixed(2)} m, faltavam ${before.cooldown.toFixed(2)} s)`);
+    r = await sim(12);
+    const ready = r;
+    r = await sim(20, tap("dodge"));
+    const roll2 = Math.hypot(r.x - ready.x, r.z - ready.z);
+    check(roll2 > 2, `após a recarga a esquiva volta (${roll2.toFixed(2)} m)`);
+
+    // impulso no ar
+    base = await toLane();
+    r = await sim(35, { ...tap("jump"), ...tap("dodge", 6) });
+    const dash = Math.hypot(r.x - base.x, r.z - base.z);
+    check(dash > 3 && r.phases.includes("airDash") && !r.air, `impulso no ar: ${dash.toFixed(2)} m na horizontal`);
+
+    // corrida → embalo → deslize; FOV dinâmico
+    base = await toLane();
+    r = await sim(24, { 0: [["forward", true], ["run", true]] });
+    const runSpeed = r.speed;
+    r = await sim(36);
+    const fovSprint = r.maxFov;
+    check(runSpeed >= 4.9 && r.sprint && r.clips.includes("Sprint") && r.speed > 6.5, `embalo: corre a ${runSpeed.toFixed(1)} m/s e engata ${r.speed.toFixed(1)} m/s (clipe Sprint)`);
+    const pre = r;
+    r = await sim(8, { 0: [["crouchHold", true]] });
+    await shot("movimento_deslize");
+    r = merge(r, await sim(36));
+    const slid = Math.hypot(r.x - pre.x, r.z - pre.z);
+    check(r.phases.includes("slide") && slid > 4 && r.crouched && r.maxNoise >= 7 && r.maxNoise < 12, `deslize: ${slid.toFixed(2)} m em 1,5 s, termina agachado (ruído ${r.maxNoise} m)`);
+    check(fovSprint > 0.95 + 0.06, `FOV dinâmico no embalo (${fovSprint.toFixed(3)} rad, base 0,95)`);
+    await page.evaluate(() => { const g = window.eva; g.input.clearHeld(); g.player.setCrouched(false); });
+
+    // deslize por baixo de uma barra baixa (vão de 1,4 m): em pé bate, deslizando passa
+    const BAR_X = LANE.x - 5;
+    await page.evaluate(([bx, z]) => {
+      const g = window.eva;
+      const V = g.player.feet.constructor;
+      const gy = g.player.feet.y;
+      window.__barra = g.world.ctx.staticBoxCollider("teste_barra_deslize", { w: 0.4, h: 0.4, d: 7.5 }, new V(bx, gy + 1.4 + 0.2, z), undefined, false);
+    }, [BAR_X, LANE.z]);
+    await toLane();
+    r = await sim(45, { 0: [["forward", true], ["run", true]] });
+    check(r.x > BAR_X + 0.2, `em pé, a barra a 1,4 m bloqueia (parou em x=${r.x.toFixed(2)}, barra em ${BAR_X})`);
+    await toLane();
+    r = await sim(14, { 0: [["forward", true], ["run", true]], 11: [["crouchHold", true]] });
+    const sliding = r.phase === "slide";
+    // fase em que Matias cruza a barra (tem de ser ainda o deslize, não o agachado andando depois dele)
+    const cross = await page.evaluate((bx) => {
+      const g = window.eva;
+      let phase = null;
+      for (let i = 0; i < 40 && phase === null; i++) {
+        g.frame();
+        if (g.player.feet.x < bx - 0.3) phase = g.player.motionPhase;
+      }
+      for (let i = 0; i < 10; i++) g.frame();
+      return { phase, x: g.player.feet.x };
+    }, BAR_X);
+    check(sliding && cross.phase === "slide" && cross.x < BAR_X - 0.5, `deslizando passa por baixo (cruzou a barra em fase "${cross.phase}", x=${cross.x.toFixed(2)})`);
+    await page.evaluate(() => {
+      const g = window.eva;
+      g.input.clearHeld();
+      const b = window.__barra;
+      b.transformNode.dispose();
+      b.dispose();
+    });
+    await sim(10);
+    await page.evaluate(() => window.eva.player.setCrouched(false));
+
+    // aterrissagem de 6 m: não atravessa o chão, dura e audível
+    base = await toLane();
+    await page.evaluate(([x, y, z, yaw]) => window.eva.teleportPlayer(x, y, z, yaw), [LANE.x, base.y + 6, LANE.z, LANE.yaw]);
+    r = await sim(50);
+    check(!r.air && r.landing?.impact === "hard" && r.y > base.y - 0.03 && r.y < base.y + 0.06 && r.minY > base.y - 0.05, `queda de 6 m: aterrissou em y=${r.y.toFixed(3)} (chão ${base.y.toFixed(3)}, mínimo ${r.minY.toFixed(3)}), impacto ${r.landing?.impact}, ruído máx. ${r.maxNoise} m`);
+    check(r.maxNoise >= 14, `aterrissagem audível para a IA (${r.maxNoise} m)`);
+    await shot("movimento_aterrissagem");
+
+    // de volta ao ponto inicial para as outras partes
+    await page.evaluate(([x, y, z, yaw]) => { const g = window.eva; g.input.clearHeld(); g.teleportPlayer(x, y + 0.05, z, yaw); }, [home.x, home.y, home.z, home.yaw]);
+    await sim(10);
+    console.log(`  (movimento: ${((Date.now() - t0) / 1000).toFixed(0)} s)`);
+  }
 
   // ---------------- Javali: entrar, acelerar, virar, sair ----------------
   if (RUN("veiculos")) {

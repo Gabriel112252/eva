@@ -205,7 +205,10 @@ export class Game {
     const spawn = this.world.spawns.get("oficina")!;
     this.player = new PlayerController(this.scene, this.matias, spawn.position, spawn.yaw);
     this.player.onFootstep.on((step) => this.audio.playFootstep(step.kind, step.surface));
+    // pulo/rolamento/embalo (matias_movimento.glb); sem o arquivo o movimento funciona, só sem esses clipes
+    await this.player.loadMovementClips().catch((err) => console.warn("[movimento] clipes de ação indisponíveis", err));
     this.camera = new ThirdPersonCamera(this.scene, spawn.yaw);
+    this.player.attachCamera(this.camera);
     this.scene.activeCamera = this.camera.camera;
     this.effects = new CombatEffects(this.scene);
     this.enemies = new EnemyManager(this.scene);
@@ -1010,6 +1013,7 @@ export class Game {
     }
     this.hud.setCrosshair(this.combat.armed && !this.driving && !this.combat.dead && this.state === "playing", !aiming);
     this.touch.setArmed(this.combat.armed && !this.driving && !this.combat.dead && this.state === "playing");
+    this.touch.setOnFoot(!this.driving && !this.combat.dead && this.state === "playing");
     if (this.combat.weapon) this.hud.setAmmo(this.combat.weapon.weapon.displayName, this.combat.weapon.magazine, this.combat.weapon.reserve, this.combat.weapon.phase === "reloading");
     this.hud.setVitals(this.combat.armed || this.combat.health.current < this.combat.health.max, this.combat.health.fraction);
     // oculta Matias quando a câmera encosta nele (no close-up de exame, quando passa por cima do ombro dele)

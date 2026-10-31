@@ -22,9 +22,15 @@ export type GameAction =
   | "reload"
   | "inventory"
   | "heal"
-  | "lights";
+  | "lights"
+  | "jump"
+  | "dodge";
 
-const DEFAULT_BINDINGS: Record<string, GameAction> = {
+/**
+ * Tecla → ação(ões). Espaço gera "advance" (avançar fala, freio de mão, subir a aeromoto) E "jump": a pé o
+ * PlayerController pula; em diálogo/veículo o pulo é ignorado e só o "advance" vale. Enter só avança.
+ */
+const DEFAULT_BINDINGS: Record<string, GameAction | readonly GameAction[]> = {
   KeyW: "forward",
   ArrowUp: "forward",
   KeyS: "back",
@@ -40,7 +46,7 @@ const DEFAULT_BINDINGS: Record<string, GameAction> = {
   KeyC: "crouchToggle",
   KeyE: "interact",
   Escape: "pause",
-  Space: "advance",
+  Space: ["advance", "jump"],
   Enter: "advance",
   Digit1: "choice1",
   Digit2: "choice2",
@@ -51,7 +57,13 @@ const DEFAULT_BINDINGS: Record<string, GameAction> = {
   KeyI: "inventory",
   KeyH: "heal",
   KeyF: "lights",
+  KeyQ: "dodge",
 };
+
+function actionsOf(binding: GameAction | readonly GameAction[] | undefined): readonly GameAction[] {
+  if (binding === undefined) return [];
+  return typeof binding === "string" ? [binding] : binding;
+}
 
 /**
  * Gerenciador de entrada: teclado, mouse (pointer lock) e roda.
@@ -64,6 +76,8 @@ export class InputManager {
   readonly onWheel = new TypedEvent<number>();
 
   private held = new Set<GameAction>();
+  /** apertos (bordas de descida) ainda não consumidos — pulo/esquiva são lidos por quadro com consumePress */
+  private presses = new Map<GameAction, number>();
   /** Eixo analógico (joystick virtual/gamepad): x direita, y frente, módulo ≤ 1. */
   private analogX = 0;
   private analogY = 0;
@@ -76,21 +90,38 @@ export class InputManager {
   enabled = true;
 
   private readonly keyDown = (e: KeyboardEvent) => {
-    const action = this.bindings[e.code];
-    if (!action) return;
+    const actions = actionsOf(this.bindings[e.code]);
+    if (actions.length === 0) return;
     // Evita rolagem/atalhos do navegador nas teclas de jogo (Tab, Space, setas).
     if (e.code === "Tab" || e.code === "Space" || e.code.startsWith("Arrow")) e.preventDefault();
     if (e.repeat) return;
-    this.held.add(action);
-    this.onAction.emit(action);
+    for (const action of actions) {
+      this.held.add(action);
+      this.countPress(action);
+      this.onAction.emit(action);
+    }
   };
 
   private readonly keyUp = (e: KeyboardEvent) => {
-    const action = this.bindings[e.code];
-    if (!action) return;
-    this.held.delete(action);
-    this.onActionReleased.emit(action);
+    for (const action of actionsOf(this.bindings[e.code])) {
+      this.held.delete(action);
+      this.onActionReleased.emit(action);
+    }
   };
+
+  private countPress(action: GameAction): void {
+    this.presses.set(action, (this.presses.get(action) ?? 0) + 1);
+  }
+
+  /**
+   * Houve aperto de `action` desde a última leitura? Zera o contador (cada aperto vale uma vez).
+   * Com a entrada desabilitada (menus) devolve falso, mas também descarta o aperto.
+   */
+  consumePress(action: GameAction): boolean {
+    const n = this.presses.get(action) ?? 0;
+    if (n > 0) this.presses.delete(action);
+    return this.enabled && n > 0;
+  }
 
   private ignoreMouseUntil = 0;
   /** Botão esquerdo pressionado sobre a cena sem pointer lock: arrastar gira a câmera. */
@@ -139,6 +170,7 @@ export class InputManager {
   private press(action: GameAction): void {
     if (this.held.has(action)) return;
     this.held.add(action);
+    this.countPress(action);
     this.onAction.emit(action);
   }
 
@@ -188,6 +220,7 @@ export class InputManager {
 
   private readonly blur = () => {
     this.held.clear();
+    this.presses.clear();
     this.dragLook = false;
   };
 
@@ -310,6 +343,7 @@ export class InputManager {
 
   clearHeld(): void {
     this.held.clear();
+    this.presses.clear();
     this.analogX = 0;
     this.analogY = 0;
   }
@@ -319,6 +353,7 @@ export class InputManager {
     if (pressed) {
       if (!this.held.has(action)) {
         this.held.add(action);
+        this.countPress(action);
         this.onAction.emit(action);
       }
     } else if (this.held.delete(action)) {

@@ -48,8 +48,10 @@ Parâmetros opcionais na URL: `?quality=baixa|media|alta` força a qualidade gr�
 | --- | --- |
 | Mouse | Câmera (clique na cena para travar o cursor; se o navegador recusar — p. ex. dentro de um iframe — arraste com o botão esquerdo) · roda = distância |
 | W A S D / setas | Andar (a pé) · acelerar/frear/ré e virar (veículos) · empuxo e deslocamento lateral (aeromoto — a guinada segue o mouse) |
-| Shift | Correr · turbo na aeromoto |
-| C (alterna) · Ctrl (segurar) | Agachar · Ctrl = descer na aeromoto |
+| Shift | Correr (5 m/s; após ~1 s em linha reta no plano engata o **embalo**, 7,2 m/s) · turbo na aeromoto |
+| C (alterna) · Ctrl (segurar) | Agachar · **correndo: deslizar** (passa sob obstáculos baixos; Espaço no deslize emenda um pulo) · Ctrl = descer na aeromoto |
+| Espaço (a pé) | **Pular** · no ar, de novo: **pulo duplo** (tempo de coiote e buffer de pulo perdoam o aperto um pouco cedo/tarde) |
+| Q | **Esquivar**: rolamento no chão · **impulso no ar** (uma vez por salto) · recarga de 1,1 s |
 | E | Interagir (rádio, cartão, NPCs, itens) · **entrar/sair de veículos** |
 | Botão direito do mouse | Mirar (câmera no ombro; Matias encara a mira) |
 | Botão esquerdo | Atirar (um tiro por clique) |
@@ -57,7 +59,7 @@ Parâmetros opcionais na URL: `?quality=baixa|media|alta` força a qualidade gr�
 | I | Mochila (itens) |
 | H | Usar kit médico |
 | F | Faróis do veículo |
-| Espaço | Freio de mão (carros) · subir (aeromoto) · avançar fala |
+| Espaço (diálogo/veículo) | Avançar fala · freio de mão (carros) · subir (aeromoto) — nesses contextos não pula |
 | 1–4 · setas + Enter · clique | Escolher resposta |
 | Tab | Mostrar descrição da missão |
 | Esc | Pausa (salvar, opções, voltar ao menu) |
@@ -78,13 +80,13 @@ Depois de "O Carregamento", **Continuar explorando** na tela de conclusão amanh
 
 `npm run test:cap1` (depois de `npm run build`) joga o capítulo inteiro no Chromium headless.
 
-**Celular/tablet** (detectado automaticamente; `?touch=1` força, `?touch=0` desliga): joystick virtual flutuante na metade esquerda da tela (empurrar até a borda = correr), arrastar na metade direita gira a câmera, botões **E** (interagir/entrar — acende quando há algo à frente), **Agachar** (alterna), **Correr** (trava), **Pausa** e, quando Matias está armado, **Mirar** (trava), **Atirar** (segurar) e **R** (recarregar); toque curto na tela avança as falas; tocar no objetivo mostra a descrição da missão. Sem configuração salva, o celular começa em qualidade **baixa** (mude em Opções). Jogue na horizontal; o navegador tenta entrar em tela cheia ao iniciar.
+**Celular/tablet** (detectado automaticamente; `?touch=1` força, `?touch=0` desliga): joystick virtual flutuante na metade esquerda da tela (empurrar até a borda = correr), arrastar na metade direita gira a câmera, botões **E** (interagir/entrar — acende quando há algo à frente), **Agachar** (alterna; correndo, desliza), **Correr** (trava), **Pular** e **Esquivar** (só a pé), **Pausa** e, quando Matias está armado, **Mirar** (trava), **Atirar** (segurar) e **R** (recarregar); toque curto na tela avança as falas; tocar no objetivo mostra a descrição da missão. Sem configuração salva, o celular começa em qualidade **baixa** (mude em Opções). Jogue na horizontal; o navegador tenta entrar em tela cheia ao iniciar.
 
 ### Validação
 
 ```bash
 npm run typecheck         # tsc --noEmit
-npm test                  # 30 testes (Vitest): GLB, Havok headless, diálogo, missões, save, áudio, joystick
+npm test                  # testes Vitest: GLB, Havok headless, movimento de ação (pulo/esquiva/deslize), diálogo, missões, save, áudio, joystick
 npm run build
 npm run check             # os três acima
 npm run test:visual   # abre dist/ em Chromium headless (teclado + mouse), joga o fluxo e salva docs/screenshots/*.jpg
@@ -107,10 +109,12 @@ npm run assets:vehicles        # valida os GLB-fonte dos veículos (PR #1) e ger
 npm run test:vehicles          # veículos como props/visualizador (preview-veiculos.html)
 npm run test:gameplay          # fatia vertical no build: dirigir (Javali), voar (Rastro), combate (mira, tiro, recarga, dano), missão completa até a tela final
 npm run test:gameplay -- --only missao   # só combate e missão (mais rápido); --shots <pasta> salva capturas
+npm run test:gameplay -- --only movimento   # pulo, pulo duplo, esquiva + recarga, impulso no ar, embalo, deslize sob barra baixa, queda de 6 m
+python3.11 tools/blender/retarget.py --library assets-src/animations/ual-standard/standard/Unreal-Godot/UAL1_Standard.glb --target public/assets/characters/matias.glb --clips movimento --anim-only --out public/assets/characters/matias_movimento.glb   # biblioteca de movimento (só armadura + clipes)
 node tools/shot.mjs --out docs/screenshots/x.jpg --cam 24.5,2.4,3 --at 34,1.6,12.5 --player 29,0.22,7,0.9   # screenshot A/B com câmera fixa
 ```
 
-Os dados-fonte (malha hm08, targets, rig Mixamo, máscaras, olhos) são CC0 do MakeHuman, vendorizados em `tools/blender/data/makehuman/`. As animações vêm da Quaternius Universal Animation Library v3 Standard (CC0, `assets-src/animations/`); o retarget (`tools/blender/retarget.py`) alinha quadros canônicos por osso e transfere as rotações no espaço do mundo, então funciona apesar das poses de descanso e proporções diferentes. Para usar outra animação da biblioteca, acrescente-a a `GAME_CLIPS` e a `ANIMATION_CLIPS`.
+Os dados-fonte (malha hm08, targets, rig Mixamo, máscaras, olhos) são CC0 do MakeHuman, vendorizados em `tools/blender/data/makehuman/`. As animações vêm da Quaternius Universal Animation Library v3 Standard (CC0, `assets-src/animations/`); o retarget (`tools/blender/retarget.py`) alinha quadros canônicos por osso e transfere as rotações no espaço do mundo, então funciona apesar das poses de descanso e proporções diferentes. Para usar outra animação da biblioteca, acrescente-a a `GAME_CLIPS` e a `ANIMATION_CLIPS`. Os clipes do movimento de ação (pulo, aterrissagem, rolamento, embalo) ficam à parte: `MOVEMENT_CLIPS` no retarget e em `src/data/characters.ts`, exportados só com a armadura em `<personagem>_movimento.glb` (hoje só `matias_movimento.glb`) e ligados aos ossos por nome em tempo de execução (`src/player/movementClips.ts`) — os GLBs dos personagens e o manifesto não mudam.
 
 ## Docker / Easypanel
 

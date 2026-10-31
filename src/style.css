@@ -993,6 +993,22 @@ body.armed .tc-combat {
   display: flex;
 }
 
+/* botões de movimento no toque (pular/esquivar): só a pé */
+.tc-move {
+  display: none;
+}
+.touch.on-foot .tc-move {
+  display: flex;
+}
+#tc-jump {
+  right: 10px;
+  bottom: 118px;
+}
+#tc-dodge {
+  right: 164px;
+  bottom: 56px;
+}
+
 /* ---------------------------------------------------------------------------
    Capítulo 1: aba de pistas, timer de missão, indicador de furtividade, reparo, exame
    --------------------------------------------------------------------------- */
