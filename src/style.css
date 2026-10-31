@@ -992,6 +992,25 @@ body.touch-mode .subtitle {
 body.armed .tc-combat {
   display: flex;
 }
+/* armado: Atirar vira o botão grande do polegar; E encolhe e sobe; Mirar e Recarregar à esquerda */
+#tc-fire {
+  right: 0;
+  bottom: 34px;
+}
+#tc-aim {
+  right: 164px;
+  bottom: 124px;
+}
+#tc-reload {
+  right: 228px;
+  bottom: 30px;
+}
+body.armed #tc-interact {
+  width: 58px;
+  height: 58px;
+  right: 16px;
+  bottom: 186px;
+}
 
 /* botões de movimento no toque (pular/esquivar): só a pé */
 .tc-move {
