@@ -83,7 +83,7 @@ A aeromoto Rastro AV-4 sobe sem limite até o ar acabar (~100 km): a névoa da r
 - 5 materiais PBR fotográficos CC0 (ambientCG): reboco pintado, pedra portuguesa, concreto, telha metálica, ferrugem; normal + roughness + AO; texturas procedurais só para madeira, listras, manchas, casca e folhas.
 - Antes/depois com câmera idêntica: `docs/screenshots/m1/antes_hero.jpg` → `depois_hero.jpg`, `antes_lateral.jpg` → `depois_lateral.jpg`, `antes_praca.jpg` → `depois_praca.jpg`. Vídeo de 11 s andando/correndo pelo canto: `docs/videos/praca_hero.mp4` (`node tools/capture-praca.mjs`).
 - Custo: +4,7 MB de download (GLB 3,3 MB + texturas 2,3 MB − procedurais), +60 K vértices na praça, ~146 materiais/120 texturas na cena (antes 112/75). Controles, física, missões e animações intocados (34 testes + teste visual).
-- Pendente do M1.1: Custódio com armadura segmentada (cerâmica/polímero, humano) — próximo passo, no `make_character.py`.
+- Feito (30/10/2026): Custódio com armadura segmentada (cerâmica cinza-azulada, colete índigo, capacete com viseira) gerada no `make_character.py`; folha em `docs/screenshots/characters/`.
 
 ## Segurança de propriedade intelectual
 Warframe é somente referência de acabamento visual, iluminação, movimento e densidade. Não extrair modelos/texturas/músicas, nomes, ícones, armaduras ou mapas. Projetar linguagem própria coerente com o universo de EVA.
