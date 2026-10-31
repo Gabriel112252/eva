@@ -1,0 +1,231 @@
+{
+  "alta": {
+    "loadSeconds": 62,
+    "recompileSeconds": 0,
+    "shots": {
+      "01_praca_dia": {
+        "draw": 1520,
+        "frameMs": 36.4,
+        "activeMeshes": 527,
+        "postProcesses": 19,
+        "lights": 4,
+        "dusk": 0
+      },
+      "02_rua_recicladores": {
+        "draw": 1306,
+        "frameMs": 33.1,
+        "activeMeshes": 673,
+        "postProcesses": 19,
+        "lights": 4,
+        "dusk": 0
+      },
+      "03_av_maglev": {
+        "draw": 1404,
+        "frameMs": 56.9,
+        "activeMeshes": 557,
+        "postProcesses": 19,
+        "lights": 4,
+        "dusk": 0
+      },
+      "04_praca_anoitecer": {
+        "draw": 1520,
+        "frameMs": 37.4,
+        "activeMeshes": 527,
+        "postProcesses": 19,
+        "lights": 4,
+        "dusk": 1
+      },
+      "05_close_matias": {
+        "draw": 1374,
+        "frameMs": 36.3,
+        "activeMeshes": 377,
+        "postProcesses": 19,
+        "lights": 4,
+        "dusk": 0
+      },
+      "06_rua_anoitecer": {
+        "draw": 1306,
+        "frameMs": 25.8,
+        "activeMeshes": 673,
+        "postProcesses": 19,
+        "lights": 4,
+        "dusk": 1
+      }
+    },
+    "meanFrameMs": 37.7,
+    "meanDraw": 1405
+  },
+  "media": {
+    "loadSeconds": 48.4,
+    "recompileSeconds": 0,
+    "shots": {
+      "01_praca_dia": {
+        "draw": 1357,
+        "frameMs": 57.4,
+        "activeMeshes": 526,
+        "postProcesses": 11,
+        "lights": 4,
+        "dusk": 0
+      },
+      "02_rua_recicladores": {
+        "draw": 1203,
+        "frameMs": 36,
+        "activeMeshes": 672,
+        "postProcesses": 11,
+        "lights": 4,
+        "dusk": 0
+      },
+      "03_av_maglev": {
+        "draw": 1286,
+        "frameMs": 26.4,
+        "activeMeshes": 556,
+        "postProcesses": 11,
+        "lights": 4,
+        "dusk": 0
+      },
+      "04_praca_anoitecer": {
+        "draw": 1357,
+        "frameMs": 38.9,
+        "activeMeshes": 526,
+        "postProcesses": 11,
+        "lights": 4,
+        "dusk": 1
+      },
+      "05_close_matias": {
+        "draw": 1250,
+        "frameMs": 15.4,
+        "activeMeshes": 376,
+        "postProcesses": 11,
+        "lights": 4,
+        "dusk": 0
+      },
+      "06_rua_anoitecer": {
+        "draw": 1203,
+        "frameMs": 17.9,
+        "activeMeshes": 672,
+        "postProcesses": 11,
+        "lights": 4,
+        "dusk": 1
+      }
+    },
+    "meanFrameMs": 32,
+    "meanDraw": 1276
+  },
+  "baixa": {
+    "loadSeconds": 25.3,
+    "recompileSeconds": 0.1,
+    "shots": {
+      "01_praca_dia": {
+        "draw": 641,
+        "frameMs": 14.4,
+        "activeMeshes": 525,
+        "postProcesses": 1,
+        "lights": 2,
+        "dusk": 0
+      },
+      "02_rua_recicladores": {
+        "draw": 472,
+        "frameMs": 11.4,
+        "activeMeshes": 636,
+        "postProcesses": 1,
+        "lights": 2,
+        "dusk": 0
+      },
+      "03_av_maglev": {
+        "draw": 566,
+        "frameMs": 11.6,
+        "activeMeshes": 552,
+        "postProcesses": 1,
+        "lights": 2,
+        "dusk": 0
+      },
+      "04_praca_anoitecer": {
+        "draw": 641,
+        "frameMs": 16.9,
+        "activeMeshes": 526,
+        "postProcesses": 1,
+        "lights": 2,
+        "dusk": 1
+      },
+      "05_close_matias": {
+        "draw": 534,
+        "frameMs": 9.8,
+        "activeMeshes": 376,
+        "postProcesses": 1,
+        "lights": 2,
+        "dusk": 0
+      },
+      "06_rua_anoitecer": {
+        "draw": 472,
+        "frameMs": 7.8,
+        "activeMeshes": 636,
+        "postProcesses": 1,
+        "lights": 2,
+        "dusk": 1
+      }
+    },
+    "meanFrameMs": 12,
+    "meanDraw": 554
+  },
+  "notas": "alta/media: recaptura depois da correção das normais do kit (536ea1f), com um Blender de outro agente disputando os 2 núcleos; 'execucaoAnterior' = mesma build sem a correção do kit (forceNormalForward), medida com a máquina menos carregada (30/10 ~23h45). baixa: build final (a correção só vale na média/alta).",
+  "execucaoAnterior": {
+    "alta": {
+      "meanFrameMs": 30.5,
+      "shots": {
+        "01_praca_dia": {
+          "frameMs": 29.2,
+          "draw": 1520
+        },
+        "02_rua_recicladores": {
+          "frameMs": 32.6,
+          "draw": 1306
+        },
+        "03_av_maglev": {
+          "frameMs": 30.4,
+          "draw": 1404
+        },
+        "04_praca_anoitecer": {
+          "frameMs": 25.7,
+          "draw": 1520
+        },
+        "05_close_matias": {
+          "frameMs": 32.3,
+          "draw": 1374
+        },
+        "06_rua_anoitecer": {
+          "frameMs": 32.8,
+          "draw": 1304
+        }
+      }
+    },
+    "media": {
+      "meanFrameMs": 22.5,
+      "shots": {
+        "01_praca_dia": {
+          "frameMs": 24.8,
+          "draw": 1356
+        },
+        "02_rua_recicladores": {
+          "frameMs": 20.0,
+          "draw": 1203
+        },
+        "03_av_maglev": {
+          "frameMs": 28.0,
+          "draw": 1286
+        },
+        "04_praca_anoitecer": {
+          "frameMs": 27.9,
+          "draw": 1357
+        },
+        "05_close_matias": {
+          "frameMs": 19.1,
+          "draw": 1250
+        },
+        "06_rua_anoitecer": {
+          "frameMs": 15.2,
+          "draw": 1201
+        }
+      }
+    }
+  }
+}
